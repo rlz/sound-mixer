@@ -57,6 +57,7 @@ type BridgeCommand =
     | { command: "ready" }
     | { command: "setMasterEnabled"; enabled: boolean }
     | { command: "setOutputLevel"; uid: string; level: number }
+    | { command: "deleteOutputMix"; uid: string }
     | { command: "setSourceMuted"; kind: "inputDevice" | "application"; sourceID: string; muted: boolean }
     | { command: "createBus"; name: string }
     | { command: "renameBus"; id: string; name: string }
@@ -867,7 +868,7 @@ function App() {
                                     .map((output) => (
                                         <li
                                             key={output.uid}
-                                            className={`flex flex-wrap items-center gap-4 rounded-2xl border bg-slate-900 px-5 py-4 ${selectedItem === `output:${output.uid}` ? "border-sky-300" : "border-slate-800"}`}
+                                            className={`flex flex-wrap items-center gap-4 rounded-2xl border bg-slate-900 px-5 py-4 ${selectedItem === `output:${output.uid}` ? "border-sky-300" : "border-slate-800"} ${output.configured && !output.available ? "opacity-60" : ""}`}
                                         >
                                             <span
                                                 aria-hidden="true"
@@ -909,6 +910,11 @@ function App() {
                                                         {output.routeError}
                                                     </p>
                                                 )}
+                                                {output.configured && !output.available && (
+                                                    <p className="w-full text-xs text-amber-300">
+                                                        Saved mix is inactive while this device is disconnected. It will resume when the same device returns.
+                                                    </p>
+                                                )}
                                             </div>
                                             <span className="shrink-0 text-right text-xs text-slate-400">
                                                 {output.outputChannels}{" "}
@@ -917,7 +923,8 @@ function App() {
                                                     : "channels"}
                                             </span>
                                             {output.configured && (
-                                                <label className="flex min-w-48 flex-1 items-center gap-3 text-xs text-slate-300">
+                                                <>
+                                                    <label className="flex min-w-48 flex-1 items-center gap-3 text-xs text-slate-300">
                                                     <span>Master level</span>
                                                     <input
                                                         type="range"
@@ -928,7 +935,8 @@ function App() {
                                                         aria-label={`${output.name} master level`}
                                                         aria-valuetext={`${Math.round(output.level * 100)} percent`}
                                                         disabled={
-                                                            pending !== null
+                                                            pending !== null ||
+                                                            !output.available
                                                         }
                                                         onChange={(event) => {
                                                             const level =
@@ -1048,7 +1056,29 @@ function App() {
                                                         )}
                                                         %
                                                     </span>
-                                                </label>
+                                                    </label>
+                                                    <button
+                                                        type="button"
+                                                        disabled={pending !== null}
+                                                        className="text-xs text-rose-300 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
+                                                        onClick={() => {
+                                                            const confirmed = window.confirm(
+                                                                `Remove the saved mix for “${output.name}”? This removes only Sound Mixer settings; it does not remove the device.`,
+                                                            );
+                                                            if (confirmed) {
+                                                                void send(
+                                                                    `output-delete:${output.uid}`,
+                                                                    {
+                                                                        command: "deleteOutputMix",
+                                                                        uid: output.uid,
+                                                                    },
+                                                                );
+                                                            }
+                                                        }}
+                                                    >
+                                                        Remove saved mix
+                                                    </button>
+                                                </>
                                             )}
                                         </li>
                                     ))}

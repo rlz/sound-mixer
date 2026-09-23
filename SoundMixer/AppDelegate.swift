@@ -177,6 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         switch command {
         case "setMasterEnabled": return try updateMixingEnabled(body: body, store: store)
         case "setOutputLevel": return try setOutputLevel(body: body, store: store)
+        case "deleteOutputMix": return try deleteOutputMix(body: body, store: store)
         case "setSourceMuted": return try setSourceMuted(body: body, store: store)
         case "createBus": return try createBus(body: body, store: store)
         case "renameBus": return try renameBus(body: body, store: store)
@@ -203,6 +204,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
               let level = body["level"] as? Double, (0 ... 1).contains(level)
         else { throw BridgeError.invalidPayload }
         return try updateOutputLevel(store: store, uid: uid, level: level)
+    }
+
+    private func deleteOutputMix(
+        body: [String: Any], store: ConfigurationStore
+    ) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "uid"],
+              let uid = body["uid"] as? String, !uid.isEmpty
+        else { throw BridgeError.invalidPayload }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { candidate in
+            guard candidate.outputMixes.contains(where: { $0.deviceUID.rawValue == uid }) else {
+                throw BridgeError.unknownOutput
+            }
+            candidate.outputMixes.removeAll { $0.deviceUID.rawValue == uid }
+        }
     }
 
     private func setSourceMuted(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
