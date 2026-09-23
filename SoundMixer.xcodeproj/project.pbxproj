@@ -16,6 +16,11 @@
         A10000000000000000000008 /* CoreAudioProcessCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000019 /* CoreAudioProcessCatalog.swift */; };
         A10000000000000000000009 /* AudioCaptureCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001A /* AudioCaptureCoordinator.swift */; };
         A1000000000000000000000A /* StereoMixingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001B /* StereoMixingEngine.swift */; };
+        A1000000000000000000000B /* CoreAudioOutputCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001C /* CoreAudioOutputCoordinator.swift */; };
+        A1000000000000000000000C /* RealtimeStereoRingBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001D /* RealtimeStereoRingBuffer.swift */; };
+        A1000000000000000000000D /* AudioGraphRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001E /* AudioGraphRenderer.swift */; };
+        A1000000000000000000000E /* AudioRoutingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001F /* AudioRoutingCoordinator.swift */; };
+        A1000000000000000000000F /* AudioCaptureSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000027 /* AudioCaptureSessions.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -31,6 +36,11 @@
         A10000000000000000000019 /* CoreAudioProcessCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAudioProcessCatalog.swift; sourceTree = "<group>"; };
         A1000000000000000000001A /* AudioCaptureCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureCoordinator.swift; sourceTree = "<group>"; };
         A1000000000000000000001B /* StereoMixingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StereoMixingEngine.swift; sourceTree = "<group>"; };
+        A1000000000000000000001C /* CoreAudioOutputCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAudioOutputCoordinator.swift; sourceTree = "<group>"; };
+        A1000000000000000000001D /* RealtimeStereoRingBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeStereoRingBuffer.swift; sourceTree = "<group>"; };
+        A1000000000000000000001E /* AudioGraphRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioGraphRenderer.swift; sourceTree = "<group>"; };
+        A1000000000000000000001F /* AudioRoutingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRoutingCoordinator.swift; sourceTree = "<group>"; };
+        A10000000000000000000027 /* AudioCaptureSessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureSessions.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -92,7 +102,7 @@
         };
         A10000000000000000000026 /* Audio */ = {
             isa = PBXGroup;
-            children = (A10000000000000000000018 /* CoreAudioDeviceCatalog.swift */, A10000000000000000000019 /* CoreAudioProcessCatalog.swift */, A1000000000000000000001A /* AudioCaptureCoordinator.swift */,);
+            children = (A10000000000000000000018 /* CoreAudioDeviceCatalog.swift */, A10000000000000000000019 /* CoreAudioProcessCatalog.swift */, A1000000000000000000001A /* AudioCaptureCoordinator.swift */, A1000000000000000000001C /* CoreAudioOutputCoordinator.swift */, A1000000000000000000001D /* RealtimeStereoRingBuffer.swift */, A1000000000000000000001E /* AudioGraphRenderer.swift */, A1000000000000000000001F /* AudioRoutingCoordinator.swift */, A10000000000000000000027 /* AudioCaptureSessions.swift */,);
             path = Audio;
             sourceTree = "<group>";
         };
@@ -161,6 +171,11 @@
                 A10000000000000000000008 /* CoreAudioProcessCatalog.swift in Sources */,
                 A10000000000000000000009 /* AudioCaptureCoordinator.swift in Sources */,
                 A1000000000000000000000A /* StereoMixingEngine.swift in Sources */,
+                A1000000000000000000000B /* CoreAudioOutputCoordinator.swift in Sources */,
+                A1000000000000000000000C /* RealtimeStereoRingBuffer.swift in Sources */,
+                A1000000000000000000000D /* AudioGraphRenderer.swift in Sources */,
+                A1000000000000000000000E /* AudioRoutingCoordinator.swift in Sources */,
+                A1000000000000000000000F /* AudioCaptureSessions.swift in Sources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };

@@ -2,6 +2,7 @@ import CoreAudio
 import Foundation
 
 struct AudioDeviceSnapshot: Equatable, Sendable {
+    let deviceID: AudioDeviceID
     let uid: String
     let name: String
     let isAlive: Bool
@@ -58,6 +59,7 @@ final class CoreAudioDeviceCatalog {
                   let name = stringProperty(id, kAudioObjectPropertyName)
             else { return nil }
             return AudioDeviceSnapshot(
+                deviceID: id,
                 uid: uid,
                 name: name,
                 isAlive: boolProperty(id, kAudioDevicePropertyDeviceIsAlive) ?? false,

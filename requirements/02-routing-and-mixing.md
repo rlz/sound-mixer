@@ -44,6 +44,7 @@
 ## Audio requirements
 
 - Audio callbacks run without blocking operations or allocation.
+- Transfer captured audio to each output through a bounded, single-producer/single-consumer stereo queue, with one queue per source and output so each queue has one reader. A queue holds at most 32,768 frames (about 683 ms at 48 kHz); when full, capture drops incoming frames rather than waiting, and output fills unavailable frames with silence. Convert sources to the internal 48 kHz format before enqueueing and apply mono placement while rendering each mix. Queue underruns and dropped frames should be exposed to diagnostics so latency and stability can be measured.
 - Record actual sample rate, channel count, and format for each device and source. Convert incompatible streams to a common format before summing.
 - Measure latency and CPU use with a reference configuration; set acceptable values after the technical prototype.
 

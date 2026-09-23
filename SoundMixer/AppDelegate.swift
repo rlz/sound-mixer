@@ -8,22 +8,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var deviceCatalog: CoreAudioDeviceCatalog?
     private var processCatalog: CoreAudioProcessCatalog?
     private var captureCoordinator: AudioCaptureCoordinator?
+    private var audioRoutingCoordinator: AudioRoutingCoordinator?
     private var audioDevices: [AudioDeviceSnapshot] = []
     private var audioProcesses: [AudioProcessSnapshot] = []
     private var captureStates: [String: String] = [:]
 
     func applicationDidFinishLaunching(_: Notification) {
-        var configurationError: Error?
+        let configurationFailed = !loadConfiguration()
+        setupAudioServices()
+        let (window, webView) = createWindow()
+        self.window = window
+        self.webView = webView
+        guard loadInterface(in: webView, configurationFailed: configurationFailed) else {
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func loadConfiguration() -> Bool {
         do {
             let identifier = Bundle.main.bundleIdentifier ?? "com.rlz.soundmixer"
             configurationStore = try ConfigurationStore(fileURL: ConfigurationStore.defaultFileURL(bundleIdentifier: identifier))
+            return true
         } catch {
-            configurationError = error
+            return false
         }
+    }
 
+    private func setupAudioServices() {
         let deviceCatalog = CoreAudioDeviceCatalog()
         deviceCatalog.onChange = { [weak self] devices in
             self?.audioDevices = devices
+            self?.updateAudioRouting()
             self?.publishState()
         }
         self.deviceCatalog = deviceCatalog
@@ -32,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let processCatalog = CoreAudioProcessCatalog()
         processCatalog.onChange = { [weak self] processes in
             self?.audioProcesses = processes
+            self?.updateAudioRouting()
             self?.publishState()
         }
         self.processCatalog = processCatalog
@@ -43,7 +62,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             self?.publishState()
         }
         self.captureCoordinator = captureCoordinator
+        let audioRoutingCoordinator = AudioRoutingCoordinator(capture: captureCoordinator)
+        audioRoutingCoordinator.onRouteError = { [weak self] route, error in
+            DispatchQueue.main.async {
+                self?.captureStates[route] = "unavailable: \(error)"
+                self?.publishState()
+            }
+        }
+        self.audioRoutingCoordinator = audioRoutingCoordinator
+        updateAudioRouting()
+    }
 
+    private func createWindow() -> (NSWindow, WKWebView) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -59,26 +89,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         webView.configuration.userContentController.add(self, name: "soundMixer")
         webView.autoresizingMask = [.width, .height]
         window.contentView = webView
-        self.window = window
-        self.webView = webView
+        return (window, webView)
+    }
 
+    private func loadInterface(in webView: WKWebView, configurationFailed: Bool) -> Bool {
         guard let webDirectory = Bundle.main.url(forResource: "dist", withExtension: nil),
               let indexURL = URL(string: "index.html", relativeTo: webDirectory)
         else {
             showLoadError("The local interface was not found in the app bundle.")
-            window.makeKeyAndOrderFront(nil)
-            return
+            return false
         }
 
         webView.loadFileURL(indexURL, allowingReadAccessTo: webDirectory)
-        if configurationError != nil {
+        if configurationFailed {
             showLoadError(
                 "The saved configuration could not be loaded. Mixing is off and the file was preserved. " +
                     "Check or repair the configuration before editing."
             )
         }
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        return true
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
@@ -88,6 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     func applicationWillTerminate(_: Notification) {
         deviceCatalog?.stop()
         processCatalog?.stop()
+        audioRoutingCoordinator?.stop()
         captureCoordinator?.stopAll()
     }
 
@@ -112,36 +142,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
         do {
             if command == "ready" {
-                guard Set(body.keys) == ["requestId", "command"] else { throw BridgeError.invalidPayload }
-                sendToWeb(method: "onCommandResult", payload: ["requestId": requestID, "accepted": true])
-                publishState()
+                try handleReady(body: body, requestID: requestID)
                 return
             }
-            guard let store = configurationStore else { throw BridgeError.storageUnavailable }
-            let configuration: MixerConfiguration
-            switch command {
-            case "setMasterEnabled":
-                guard Set(body.keys) == ["requestId", "command", "enabled"],
-                      let enabled = body["enabled"] as? Bool
-                else { throw BridgeError.invalidPayload }
-                configuration = try store.update(discoveredDevices: discoveredDescriptors()) {
-                    $0.isEnabled = enabled
-                }
-            case "setOutputLevel":
-                guard Set(body.keys) == ["requestId", "command", "uid", "level"],
-                      let uid = body["uid"] as? String, !uid.isEmpty,
-                      let level = body["level"] as? Double, (0 ... 1).contains(level)
-                else { throw BridgeError.invalidPayload }
-                configuration = try store.update(discoveredDevices: discoveredDescriptors()) { candidate in
-                    guard let index = candidate.outputMixes.firstIndex(where: { $0.deviceUID.rawValue == uid }) else {
-                        throw BridgeError.unknownOutput
-                    }
-                    candidate.outputMixes[index].mix.level = level
-                }
-            default:
-                throw BridgeError.unknownCommand
-            }
+            let configuration = try executeCommand(command, body: body)
             sendToWeb(method: "onCommandResult", payload: ["requestId": requestID, "accepted": true])
+            updateAudioRouting()
             publishState(configuration: configuration)
         } catch {
             sendToWeb(method: "onCommandResult", payload: [
@@ -152,7 +158,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
     }
 
-    private func discoveredDescriptors() -> [AudioDeviceDescriptor] {
+    private func handleReady(body: [String: Any], requestID: String) throws {
+        guard Set(body.keys) == ["requestId", "command"] else { throw BridgeError.invalidPayload }
+        sendToWeb(method: "onCommandResult", payload: ["requestId": requestID, "accepted": true])
+        publishState()
+    }
+
+    private func executeCommand(_ command: String, body: [String: Any]) throws -> MixerConfiguration {
+        guard let store = configurationStore else { throw BridgeError.storageUnavailable }
+        switch command {
+        case "setMasterEnabled":
+            guard Set(body.keys) == ["requestId", "command", "enabled"],
+                  let enabled = body["enabled"] as? Bool
+            else { throw BridgeError.invalidPayload }
+            return try store.update(discoveredDevices: discoveredDescriptors()) { $0.isEnabled = enabled }
+        case "setOutputLevel":
+            guard Set(body.keys) == ["requestId", "command", "uid", "level"],
+                  let uid = body["uid"] as? String, !uid.isEmpty,
+                  let level = body["level"] as? Double, (0 ... 1).contains(level)
+            else { throw BridgeError.invalidPayload }
+            return try updateOutputLevel(store: store, uid: uid, level: level)
+        default:
+            throw BridgeError.unknownCommand
+        }
+    }
+
+    private func updateOutputLevel(store: ConfigurationStore, uid: String, level: Double) throws -> MixerConfiguration {
+        try store.update(discoveredDevices: discoveredDescriptors()) { candidate in
+            guard let index = candidate.outputMixes.firstIndex(where: { $0.deviceUID.rawValue == uid }) else {
+                throw BridgeError.unknownOutput
+            }
+            candidate.outputMixes[index].mix.level = level
+        }
+    }
+}
+
+private extension AppDelegate {
+    func discoveredDescriptors() -> [AudioDeviceDescriptor] {
         audioDevices.map {
             AudioDeviceDescriptor(
                 uid: DeviceUID(rawValue: $0.uid), name: $0.name, inputChannels: $0.inputChannels,
@@ -162,12 +204,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
     }
 
-    private func publishState(configuration: MixerConfiguration? = nil) {
+    func updateAudioRouting() {
+        guard let graph = configurationStore?.activeGraph else { return }
+        audioRoutingCoordinator?.update(graph: graph, devices: audioDevices, processes: audioProcesses)
+    }
+
+    func publishState(configuration: MixerConfiguration? = nil) {
         guard let configuration = configuration ?? configurationStore?.configuration else { return }
         let discovered = Dictionary(uniqueKeysWithValues: audioDevices.map { ($0.uid, $0) })
-        let savedUIDs = Set(configuration.knownDevices.map(\.uid.rawValue))
+        let state = BridgeState(
+            schemaVersion: MixerConfiguration.currentSchemaVersion,
+            isEnabled: configuration.isEnabled,
+            devices: bridgeDevices(configuration: configuration, discovered: discovered),
+            outputs: bridgeOutputs(configuration: configuration, discovered: discovered),
+            buses: configuration.buses.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) },
+            blackHoleRoutes: configuration.blackHoleRoutes.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) },
+            applications: audioProcesses.map {
+                BridgeApplication(
+                    id: $0.applicationID,
+                    name: $0.name,
+                    available: $0.isProducingOutput,
+                    captureState: captureStates[$0.applicationID] ?? "stopped"
+                )
+            },
+            inputCaptureStates: captureStates.filter { id, _ in audioDevices.contains(where: { $0.uid == id }) }
+                .map { BridgeInputCaptureState(uid: $0.key, state: $0.value) }
+        )
+        guard let data = try? JSONEncoder().encode(state),
+              let json = String(data: data, encoding: .utf8)
+        else { return }
+        webView?.evaluateJavaScript("window.soundMixerBridge?.onState(\(json))")
+    }
+
+    func bridgeDevices(configuration: MixerConfiguration, discovered: [String: AudioDeviceSnapshot]) -> [BridgeDevice] {
+        let savedUIDs = configuration.knownDevices.map(\.uid.rawValue)
         let deviceUIDs = Set(discovered.keys).union(savedUIDs).sorted()
-        let deviceStates = deviceUIDs.map { uid -> BridgeDevice in
+        return deviceUIDs.map { uid -> BridgeDevice in
             let live = discovered[uid]
             let deviceUID = DeviceUID(rawValue: uid)
             var savedAs: [String] = []
@@ -197,9 +269,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 savedAs: savedAs
             )
         }
+    }
+
+    func bridgeOutputs(configuration: MixerConfiguration, discovered: [String: AudioDeviceSnapshot]) -> [BridgeOutput] {
         let saved = Dictionary(uniqueKeysWithValues: configuration.outputMixes.map { ($0.deviceUID.rawValue, $0) })
         let discoveredOutputUIDs = audioDevices.filter { $0.outputChannels > 0 }.map(\.uid)
-        let devices = Set(discoveredOutputUIDs).union(saved.keys).sorted().map { uid -> BridgeOutput in
+        return Set(discoveredOutputUIDs).union(saved.keys).sorted().map { uid -> BridgeOutput in
             let live = discovered[uid]
             return BridgeOutput(
                 uid: uid,
@@ -210,31 +285,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 configured: saved[uid] != nil
             )
         }
-        let state = BridgeState(
-            schemaVersion: MixerConfiguration.currentSchemaVersion,
-            isEnabled: configuration.isEnabled,
-            devices: deviceStates,
-            outputs: devices,
-            buses: configuration.buses.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) },
-            blackHoleRoutes: configuration.blackHoleRoutes.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) },
-            applications: audioProcesses.map {
-                BridgeApplication(
-                    id: $0.applicationID,
-                    name: $0.name,
-                    available: $0.isProducingOutput,
-                    captureState: captureStates[$0.applicationID] ?? "stopped"
-                )
-            },
-            inputCaptureStates: captureStates.filter { id, _ in audioDevices.contains(where: { $0.uid == id }) }
-                .map { BridgeInputCaptureState(uid: $0.key, state: $0.value) }
-        )
-        guard let data = try? JSONEncoder().encode(state),
-              let json = String(data: data, encoding: .utf8)
-        else { return }
-        webView?.evaluateJavaScript("window.soundMixerBridge?.onState(\(json))")
     }
 
-    private func sendToWeb(method: String, payload: [String: Any]) {
+    func sendToWeb(method: String, payload: [String: Any]) {
         guard let webView, JSONSerialization.isValidJSONObject(payload),
               let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8)
@@ -242,7 +295,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         webView.evaluateJavaScript("window.soundMixerBridge?.\(method)(\(json))")
     }
 
-    private func showLoadError(_ message: String) {
+    func showLoadError(_ message: String) {
         guard let webView else { return }
         let label = NSTextField(labelWithString: message)
         label.alignment = .center
