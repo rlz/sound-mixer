@@ -31,9 +31,9 @@
 
 1. Откройте [SoundMixer.xcodeproj](SoundMixer.xcodeproj) в Xcode 27 или новее и запустите схему `SoundMixer` на Mac. Готовые файлы интерфейса в `Web/dist` включены в репозиторий и копируются в `.app`, поэтому для обычной чистой сборки Xcode Node.js и сеть не нужны.
 2. Для изменения интерфейса выполните `cd Web && npm ci && npm run build`, затем пересоберите приложение в Xcode. Команда обновляет `Web/dist`; собранные файлы нужно включать в коммит вместе с исходниками. Во время запуска приложение открывает только локальные файлы.
-3. Командная проверка: `xcodebuild -project SoundMixer.xcodeproj -scheme SoundMixer -configuration Debug -destination 'platform=macOS' -derivedDataPath ./DerivedData CODE_SIGNING_ALLOWED=NO build`. На машине, где `xcode-select` указывает на Command Line Tools, добавьте перед командой `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.
+3. Единая проверка: `./scripts/check.sh`. Она устанавливает закреплённые версии SwiftFormat 0.62.1 и SwiftLint 0.65.0 с проверкой SHA256, запускает их, затем выполняет `npm ci`, проверку Prettier и ESLint, сборку Web и сборку Xcode. Нужны Xcode 27 и Node.js 26.8.1. Если активны только Command Line Tools, скрипт использует `/Applications/Xcode.app`.
 
-Форматирование, линтеры и CI — следующая задача из [todo.md](todo.md).
+Для исправления форматирования запустите `.tools/bin/swiftformat SoundMixer --config .swiftformat --cache ignore` и `cd Web && npm run format`. Конфигурация задаёт четыре пробела для Swift, TypeScript, TSX, JavaScript, JSON, HTML и CSS; Tailwind-классы сортируются плагином Prettier. Версии Web-инструментов закреплены в `Web/package.json` и `Web/package-lock.json`. Те же проверки выполняет GitHub Actions на образе Xcode 27. Пока в проекте нет тестовых целей, CI проверяет форматирование, линтеры и сборки; тесты будут добавлены вместе с реализацией функций.
 
 ## Технические источники
 

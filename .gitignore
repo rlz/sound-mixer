@@ -2,3 +2,4 @@
 DerivedData/
 Web/node_modules/
 Web/.vite/
+.tools/

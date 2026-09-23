@@ -5,7 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     private var window: NSWindow?
     private var webView: WKWebView?
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func applicationDidFinishLaunching(_: Notification) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -24,7 +24,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         self.webView = webView
 
         guard let webDirectory = Bundle.main.url(forResource: "dist", withExtension: nil),
-              let indexURL = URL(string: "index.html", relativeTo: webDirectory) else {
+              let indexURL = URL(string: "index.html", relativeTo: webDirectory)
+        else {
             showLoadError("Локальный интерфейс не найден в приложении.")
             window.makeKeyAndOrderFront(nil)
             return
@@ -35,15 +36,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+    func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
         true
     }
 
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+    func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation!, withError error: Error) {
         showLoadError("Не удалось открыть локальный интерфейс: \(error.localizedDescription)")
     }
 
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+    func webView(_: WKWebView, didFail _: WKNavigation!, withError error: Error) {
         showLoadError("Не удалось загрузить локальный интерфейс: \(error.localizedDescription)")
     }
 
