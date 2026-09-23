@@ -18,9 +18,12 @@
 - The main window has two panels: output devices and virtual buses on the left, and the selected item's mix settings on the right.
 - A master “Mixing On/Off” switch with clear text state appears at the top, independently of the selected item.
 - The left panel has “Output Devices,” “Virtual Buses,” and “BlackHole Routes” groups. All physical outputs appear whether or not a mix is configured, except the BlackHole driver device itself. “BlackHole Routes” contains only virtual routes created by the user; it does not list the underlying driver device as an output. Rows select an item, and selection is distinguishable without relying on color alone.
+- Selecting an output opens its settings in the right panel, including its system name, UID, availability, channel count, route error, and configured level. Selecting a virtual bus or BlackHole route opens its settings there; its saved name is edited there and persisted after native confirmation. Physical device names are read-only.
 - During the staged interface work, only configured physical outputs expose a level slider because the native bridge currently supports only output-level changes. Bus and BlackHole level controls become available with their native edit commands; the row still shows its saved name and output availability when applicable.
 - A saved but missing output stays in the Output Devices group after restart. The user can select it, inspect its mix, and remove the saved setting. Before removal, show that this mix's rows will be deleted; the macOS device itself is not removed.
 - An add button creates an internal bus or BlackHole route. A virtual item's name can be edited inline or in its settings.
+- Bus creation and renaming use an in-interface form so name entry works consistently in WKWebView.
+- Deleting a virtual bus that is still used as a source by another mix is rejected with a validation error; remove those source rows first. Bus names are trimmed, must be non-empty, and are limited to 64 characters.
 - The right panel shows the selected item's name and type, mix source list, each source's slider, and an add-source action.
 - When adding a source, the catalog separates input devices, applications, and internal buses. Unavailable items include a reason.
 - An existing input stays in its mix row when its device is missing, including at launch. It can be removed from the mix. The interface does not offer to create a new row for a missing device.

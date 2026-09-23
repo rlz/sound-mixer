@@ -172,19 +172,70 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private func executeCommand(_ command: String, body: [String: Any]) throws -> MixerConfiguration {
         guard let store = configurationStore else { throw BridgeError.storageUnavailable }
         switch command {
-        case "setMasterEnabled":
-            guard Set(body.keys) == ["requestId", "command", "enabled"],
-                  let enabled = body["enabled"] as? Bool
-            else { throw BridgeError.invalidPayload }
-            return try store.update(discoveredDevices: discoveredDescriptors()) { $0.isEnabled = enabled }
-        case "setOutputLevel":
-            guard Set(body.keys) == ["requestId", "command", "uid", "level"],
-                  let uid = body["uid"] as? String, !uid.isEmpty,
-                  let level = body["level"] as? Double, (0 ... 1).contains(level)
-            else { throw BridgeError.invalidPayload }
-            return try updateOutputLevel(store: store, uid: uid, level: level)
+        case "setMasterEnabled": return try updateMixingEnabled(body: body, store: store)
+        case "setOutputLevel": return try setOutputLevel(body: body, store: store)
+        case "createBus": return try createBus(body: body, store: store)
+        case "renameBus": return try renameBus(body: body, store: store)
+        case "renameRoute": return try renameRoute(body: body, store: store)
+        case "deleteBus": return try deleteBus(body: body, store: store)
         default:
             throw BridgeError.unknownCommand
+        }
+    }
+
+    private func updateMixingEnabled(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "enabled"], let enabled = body["enabled"] as? Bool
+        else { throw BridgeError.invalidPayload }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { $0.isEnabled = enabled }
+    }
+
+    private func setOutputLevel(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "uid", "level"],
+              let uid = body["uid"] as? String, !uid.isEmpty,
+              let level = body["level"] as? Double, (0 ... 1).contains(level)
+        else { throw BridgeError.invalidPayload }
+        return try updateOutputLevel(store: store, uid: uid, level: level)
+    }
+
+    private func createBus(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "name"], let name = body["name"] as? String
+        else { throw BridgeError.invalidPayload }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { candidate in
+            try candidate.buses.append(VirtualBus(name: validatedName(name)))
+        }
+    }
+
+    private func renameBus(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "id", "name"],
+              let idString = body["id"] as? String, let id = UUID(uuidString: idString),
+              let name = body["name"] as? String
+        else { throw BridgeError.invalidPayload }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { candidate in
+            guard let index = candidate.buses.firstIndex(where: { $0.id == id }) else { throw BridgeError.unknownBus }
+            candidate.buses[index].name = try validatedName(name)
+        }
+    }
+
+    private func deleteBus(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "id"],
+              let idString = body["id"] as? String, let id = UUID(uuidString: idString)
+        else { throw BridgeError.invalidPayload }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { candidate in
+            guard candidate.buses.contains(where: { $0.id == id }) else { throw BridgeError.unknownBus }
+            candidate.buses.removeAll { $0.id == id }
+        }
+    }
+
+    private func renameRoute(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "id", "name"],
+              let idString = body["id"] as? String, let id = UUID(uuidString: idString),
+              let name = body["name"] as? String
+        else { throw BridgeError.invalidPayload }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { candidate in
+            guard let index = candidate.blackHoleRoutes.firstIndex(where: { $0.id == id }) else {
+                throw BridgeError.unknownRoute
+            }
+            candidate.blackHoleRoutes[index].name = try validatedName(name)
         }
     }
 
@@ -195,6 +246,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             }
             candidate.outputMixes[index].mix.level = level
         }
+    }
+
+    private func validatedName(_ name: String) throws -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.count <= 64 else { throw BridgeError.invalidName }
+        return trimmed
     }
 }
 
@@ -225,7 +282,9 @@ private extension AppDelegate {
             devices: bridgeDevices(configuration: configuration, discovered: discovered),
             outputs: bridgeOutputs(configuration: configuration, discovered: discovered),
             buses: configuration.buses.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) },
-            blackHoleRoutes: configuration.blackHoleRoutes.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) },
+            blackHoleRoutes: configuration.blackHoleRoutes.map {
+                BridgeRoute(id: $0.id.uuidString, name: $0.name, deviceUID: $0.deviceUID.rawValue)
+            },
             applications: audioProcesses.map {
                 BridgeApplication(
                     id: $0.applicationID,
@@ -313,70 +372,5 @@ private extension AppDelegate {
         label.frame = webView.bounds.insetBy(dx: 32, dy: 32)
         label.autoresizingMask = [.width, .height]
         webView.addSubview(label)
-    }
-}
-
-private struct BridgeState: Encodable {
-    let schemaVersion: Int
-    let isEnabled: Bool
-    let devices: [BridgeDevice]
-    let outputs: [BridgeOutput]
-    let buses: [BridgeNamedItem]
-    let blackHoleRoutes: [BridgeNamedItem]
-    let applications: [BridgeApplication]
-    let inputCaptureStates: [BridgeInputCaptureState]
-}
-
-private struct BridgeApplication: Encodable {
-    let id: String
-    let name: String
-    let available: Bool
-    let captureState: String
-}
-
-private struct BridgeInputCaptureState: Encodable {
-    let uid: String
-    let state: String
-}
-
-private struct BridgeDevice: Encodable {
-    let uid: String
-    let name: String
-    let discovered: Bool
-    let available: Bool
-    let inputChannels: Int
-    let outputChannels: Int
-    let savedAs: [String]
-}
-
-private struct BridgeOutput: Encodable {
-    let uid: String
-    let name: String
-    let isBlackHole: Bool
-    let available: Bool
-    let outputChannels: Int
-    let level: Double
-    let configured: Bool
-    let routeError: String?
-}
-
-private struct BridgeNamedItem: Encodable {
-    let id: String
-    let name: String
-}
-
-private enum BridgeError: LocalizedError {
-    case storageUnavailable
-    case invalidPayload
-    case unknownCommand
-    case unknownOutput
-
-    var errorDescription: String? {
-        switch self {
-        case .storageUnavailable: "Configuration storage is unavailable."
-        case .invalidPayload: "The command contains invalid values."
-        case .unknownCommand: "The command is not supported."
-        case .unknownOutput: "The output is not present in the saved configuration."
-        }
     }
 }

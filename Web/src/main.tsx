@@ -32,14 +32,18 @@ type MixerState = {
     devices: DeviceState[];
     outputs: OutputState[];
     buses: { id: string; name: string }[];
-    blackHoleRoutes: { id: string; name: string }[];
+    blackHoleRoutes: { id: string; name: string; deviceUID: string }[];
     applications: { id: string; name: string; available: boolean }[];
 };
 
 type BridgeCommand =
     | { command: "ready" }
     | { command: "setMasterEnabled"; enabled: boolean }
-    | { command: "setOutputLevel"; uid: string; level: number };
+    | { command: "setOutputLevel"; uid: string; level: number }
+    | { command: "createBus"; name: string }
+    | { command: "renameBus"; id: string; name: string }
+    | { command: "renameRoute"; id: string; name: string }
+    | { command: "deleteBus"; id: string };
 
 declare global {
     interface Window {
@@ -104,6 +108,9 @@ function App() {
     const [selectedItem, setSelectedItem] = useState<string | null>(null);
     const [pending, setPending] = useState<string | null>(null);
     const [commandError, setCommandError] = useState<string | null>(null);
+    const [busNameDraft, setBusNameDraft] = useState<string | null>(null);
+    const [editingBusId, setEditingBusId] = useState<string | null>(null);
+    const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
 
     const send = async (
         key: string,
@@ -126,6 +133,16 @@ function App() {
             setPending(null);
         }
     };
+
+    const selectedOutput = mixerState?.outputs.find(
+        (output) => selectedItem === `output:${output.uid}`,
+    );
+    const selectedBus = mixerState?.buses.find(
+        (bus) => selectedItem === `bus:${bus.id}`,
+    );
+    const selectedRoute = mixerState?.blackHoleRoutes.find(
+        (route) => selectedItem === `blackHole:${route.id}`,
+    );
 
     useEffect(() => {
         if (window.soundMixerBridge) {
@@ -208,11 +225,14 @@ function App() {
                                                 ? "true"
                                                 : undefined
                                         }
-                                        onClick={() =>
+                                        onClick={() => {
                                             setSelectedItem(
                                                 `output:${output.uid}`,
-                                            )
-                                        }
+                                            );
+                                            setBusNameDraft(null);
+                                            setEditingBusId(null);
+                                            setEditingRouteId(null);
+                                        }}
                                         className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `output:${output.uid}` ? "bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "text-slate-300 hover:bg-slate-800"}`}
                                     >
                                         <span className="min-w-0 truncate">
@@ -240,6 +260,19 @@ function App() {
                             )}
                         </ItemGroup>
                         <ItemGroup title="Virtual Buses">
+                            <button
+                                type="button"
+                                disabled={pending !== null}
+                                onClick={() => {
+                                    setEditingBusId(null);
+                                    setEditingRouteId(null);
+                                    setSelectedItem("bus:new");
+                                    setBusNameDraft("New Bus");
+                                }}
+                                className="w-full rounded-lg px-3 py-2 text-left text-sm text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
+                            >
+                                + Add virtual bus
+                            </button>
                             {mixerState?.buses.map((bus) => (
                                 <button
                                     key={bus.id}
@@ -249,14 +282,50 @@ function App() {
                                             ? "true"
                                             : undefined
                                     }
-                                    onClick={() =>
-                                        setSelectedItem(`bus:${bus.id}`)
-                                    }
+                                    onClick={() => {
+                                        setSelectedItem(`bus:${bus.id}`);
+                                        setBusNameDraft(bus.name);
+                                        setEditingBusId(bus.id);
+                                        setEditingRouteId(null);
+                                    }}
                                     className={`w-full rounded-lg px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `bus:${bus.id}` ? "bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "text-slate-300 hover:bg-slate-800"}`}
                                 >
                                     {bus.name}
                                 </button>
                             ))}
+                            {mixerState?.buses.map(
+                                (bus) =>
+                                    selectedItem === `bus:${bus.id}` && (
+                                        <div
+                                            key={`${bus.id}:actions`}
+                                            className="flex gap-2 px-2 pb-2"
+                                        >
+                                            <button
+                                                type="button"
+                                                disabled={pending !== null}
+                                                className="text-xs text-rose-300 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
+                                                onClick={() => {
+                                                    if (
+                                                        window.confirm(
+                                                            `Delete “${bus.name}”? Mixes that use this bus will prevent deletion.`,
+                                                        )
+                                                    ) {
+                                                        void send(
+                                                            `bus-delete:${bus.id}`,
+                                                            {
+                                                                command:
+                                                                    "deleteBus",
+                                                                id: bus.id,
+                                                            },
+                                                        );
+                                                    }
+                                                }}
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    ),
+                            )}
                             {mixerState?.buses.length === 0 && (
                                 <p className="px-3 text-sm text-slate-500">
                                     No virtual buses.
@@ -273,9 +342,14 @@ function App() {
                                             ? "true"
                                             : undefined
                                     }
-                                    onClick={() =>
-                                        setSelectedItem(`blackHole:${route.id}`)
-                                    }
+                                    onClick={() => {
+                                        setSelectedItem(
+                                            `blackHole:${route.id}`,
+                                        );
+                                        setBusNameDraft(route.name);
+                                        setEditingRouteId(route.id);
+                                        setEditingBusId(null);
+                                    }}
                                     className={`w-full rounded-lg px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `blackHole:${route.id}` ? "bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "text-slate-300 hover:bg-slate-800"}`}
                                 >
                                     {route.name}
@@ -292,25 +366,116 @@ function App() {
                         <div className="mb-6 flex items-end justify-between gap-4">
                             <div>
                                 <h1 className="text-3xl font-semibold tracking-tight">
-                                    Output Devices
+                                    {selectedOutput?.name ??
+                                        selectedBus?.name ??
+                                        selectedRoute?.name ??
+                                        "Settings"}
                                 </h1>
                                 <p className="mt-2 text-sm text-slate-400">
-                                    Core Audio outputs detected by this Mac
+                                    {selectedOutput
+                                        ? "Output device settings"
+                                        : selectedBus
+                                          ? "Virtual bus settings"
+                                          : selectedRoute
+                                            ? "BlackHole route settings"
+                                            : "Select an output or virtual item to view its settings."}
                                 </p>
                             </div>
                             <span className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">
-                                {mixerState
-                                    ? `${mixerState.outputs.filter((output) => !output.isBlackHole).length} devices`
-                                    : "Connecting…"}
+                                {selectedOutput
+                                    ? `${selectedOutput.outputChannels} channels`
+                                    : selectedRoute
+                                      ? `Device ${selectedRoute.deviceUID}`
+                                      : "Sound Mixer"}
                             </span>
                         </div>
 
-                        {!mixerState ? (
+                        {(selectedBus ||
+                            selectedRoute ||
+                            selectedItem === "bus:new") && (
+                            <section
+                                className="mb-5 rounded-2xl border border-slate-800 bg-slate-900 p-5"
+                                aria-label="Virtual item settings"
+                            >
+                                <form
+                                    className="space-y-3"
+                                    onSubmit={(event) => {
+                                        event.preventDefault();
+                                        if (editingRouteId) {
+                                            void send("route-rename", {
+                                                command: "renameRoute",
+                                                id: editingRouteId,
+                                                name: busNameDraft ?? "",
+                                            });
+                                        } else if (editingBusId) {
+                                            void send("bus-rename", {
+                                                command: "renameBus",
+                                                id: editingBusId,
+                                                name: busNameDraft ?? "",
+                                            });
+                                        } else {
+                                            void send("bus-create", {
+                                                command: "createBus",
+                                                name: busNameDraft ?? "",
+                                            });
+                                        }
+                                    }}
+                                >
+                                    <label
+                                        htmlFor="selected-virtual-name"
+                                        className="block text-sm font-medium text-slate-200"
+                                    >
+                                        {selectedRoute
+                                            ? "Route name"
+                                            : "Virtual bus name"}
+                                    </label>
+                                    <input
+                                        id="selected-virtual-name"
+                                        maxLength={64}
+                                        required
+                                        value={
+                                            busNameDraft ??
+                                            selectedBus?.name ??
+                                            selectedRoute?.name ??
+                                            ""
+                                        }
+                                        onChange={(event) =>
+                                            setBusNameDraft(
+                                                event.currentTarget.value,
+                                            )
+                                        }
+                                        className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
+                                    />
+                                    {selectedRoute && (
+                                        <p className="font-mono text-xs text-slate-500">
+                                            Core Audio UID:{" "}
+                                            {selectedRoute.deviceUID}
+                                        </p>
+                                    )}
+                                    <button
+                                        type="submit"
+                                        disabled={pending !== null}
+                                        className="rounded-lg bg-sky-300 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
+                                    >
+                                        Save name
+                                    </button>
+                                </form>
+                            </section>
+                        )}
+
+                        {selectedBus ||
+                        selectedRoute ||
+                        selectedItem === "bus:new" ? null : !mixerState ? (
                             <div
                                 role="status"
                                 className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-400"
                             >
                                 Waiting for the native device snapshot…
+                            </div>
+                        ) : !selectedOutput ? (
+                            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-300">
+                                Select an output device from the left to open
+                                its settings.
                             </div>
                         ) : mixerState.outputs.every(
                               (output) => output.isBlackHole,
@@ -324,7 +489,11 @@ function App() {
                                 aria-label="Core Audio output devices"
                             >
                                 {mixerState.outputs
-                                    .filter((output) => !output.isBlackHole)
+                                    .filter(
+                                        (output) =>
+                                            !output.isBlackHole &&
+                                            output.uid === selectedOutput?.uid,
+                                    )
                                     .map((output) => (
                                         <li
                                             key={output.uid}
