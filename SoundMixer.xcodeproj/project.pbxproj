@@ -9,6 +9,7 @@
         A10000000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000011 /* AppDelegate.swift */; };
         A10000000000000000000002 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* main.swift */; };
         A10000000000000000000003 /* dist in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* dist */; };
+        A10000000000000000000004 /* MixerConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000015 /* MixerConfiguration.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -17,6 +18,7 @@
         A10000000000000000000012 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
         A10000000000000000000013 /* dist */ = {isa = PBXFileReference; lastKnownFileType = folder; path = dist; sourceTree = "<group>"; };
         A10000000000000000000014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+        A10000000000000000000015 /* MixerConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MixerConfiguration.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -34,6 +36,7 @@
             children = (
                 A10000000000000000000011 /* AppDelegate.swift */,
                 A10000000000000000000012 /* main.swift */,
+                A10000000000000000000024 /* Domain */,
                 A10000000000000000000014 /* Info.plist */,
             );
             path = SoundMixer;
@@ -53,6 +56,14 @@
                 A10000000000000000000010 /* SoundMixer.app */,
             );
             name = Products;
+            sourceTree = "<group>";
+        };
+        A10000000000000000000024 /* Domain */ = {
+            isa = PBXGroup;
+            children = (
+                A10000000000000000000015 /* MixerConfiguration.swift */,
+            );
+            path = Domain;
             sourceTree = "<group>";
         };
 /* End PBXGroup section */
@@ -113,6 +124,7 @@
             files = (
                 A10000000000000000000001 /* AppDelegate.swift in Sources */,
                 A10000000000000000000002 /* main.swift in Sources */,
+                A10000000000000000000004 /* MixerConfiguration.swift in Sources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };

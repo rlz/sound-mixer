@@ -1,5 +1,6 @@
 .DS_Store
 DerivedData/
+.build/
 Web/node_modules/
 Web/.vite/
 .tools/

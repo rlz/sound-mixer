@@ -1,5 +1,6 @@
 included:
     - SoundMixer
+    - Tests
 excluded:
     - DerivedData
 opt_in_rules:

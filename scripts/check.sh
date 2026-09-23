@@ -10,8 +10,9 @@ if [[ "$(xcode-select -p)" == "/Library/Developer/CommandLineTools" ]] &&
 fi
 
 "$root/scripts/install-swift-tools.sh"
-"$root/.tools/bin/swiftformat" SoundMixer --lint --cache ignore --config .swiftformat
+"$root/.tools/bin/swiftformat" SoundMixer Tests --lint --cache ignore --config .swiftformat
 "$root/.tools/bin/swiftlint" lint --strict --no-cache --config .swiftlint.yml
+swift test --disable-sandbox
 
 cd Web
 npm ci
