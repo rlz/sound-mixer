@@ -1,4 +1,4 @@
-name: Проверка
+name: Checks
 
 on:
     push:
@@ -14,5 +14,5 @@ jobs:
                   node-version: 26.8.1
                   cache: npm
                   cache-dependency-path: Web/package-lock.json
-            - name: Форматирование, линтеры и сборка
+            - name: Formatting, linting, and build
               run: ./scripts/check.sh

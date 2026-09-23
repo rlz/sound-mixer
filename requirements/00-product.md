@@ -1,40 +1,40 @@
-# 00. Область продукта
+# 00. Product Scope
 
-## Цель
+## Goal
 
-Пользователь управляет несколькими независимыми аудиомиксами на Mac: собирает источники, задает уровни и отправляет результат на физические выходы, во внутренние виртуальные шины или в каналы BlackHole.
+A user manages several independent audio mixes on a Mac: selects sources, sets levels, and sends the result to physical outputs, internal virtual buses, or BlackHole channels.
 
-## Термины
+## Terms
 
-- **Реальный выход** — доступное системе устройство Core Audio с выходными каналами: динамики, наушники, USB интерфейс и другие, включая установленные виртуальные драйверы.
-- **Внутренняя виртуальная шина** — созданный пользователем узел графа микширования, существующий только в Sound Mixer.
-- **Маршрут BlackHole** — созданный пользователем выход микшера, связанный с конкретным установленным устройством BlackHole и выбранными выходными каналами.
-- **Источник** — устройство захвата звука, аудио конкретного приложения или внутренняя виртуальная шина, добавленные в микс.
-- **Общая громкость** — программный коэффициент усиления микса выбранного выхода или шины. Она не меняет системную громкость устройства.
-- **Общий переключатель** — состояние всего аудиотракта Sound Mixer: включен или выключен. Оно сохраняется между запусками.
+- **Physical output** — a Core Audio device available to the system with output channels, such as speakers, headphones, a USB interface, or an installed virtual driver.
+- **Internal virtual bus** — a user-created mixing graph node that exists only in Sound Mixer.
+- **BlackHole route** — a user-created mixer output tied to a specific installed BlackHole device and selected output channels.
+- **Source** — an audio input device, audio from a particular application, or an internal virtual bus added to a mix.
+- **Master volume** — a software gain for the selected output or bus mix. It does not change the device's system volume.
+- **Master switch** — the on/off state of Sound Mixer's entire audio pipeline. It persists across launches.
 
-## Пользовательские сценарии
+## User scenarios
 
-1. Пользователь видит все доступные выходные устройства и выбирает одно для настройки микса.
-2. Пользователь добавляет микрофон и звук приложения в микс наушников, задавая независимую громкость каждому источнику.
-3. Пользователь создает шину «Стрим», переименовывает ее и добавляет как источник в несколько выходных миксов.
-4. Пользователь создает маршрут BlackHole, выбирает один канал или стереопару и направляет туда отдельный микс.
-5. Пользователь отключает устройство или отзывает разрешение; приложение сохраняет конфигурацию и ясно показывает, какие источники сейчас недоступны.
-6. Пользователь выключает микширование одним действием; обычный звук macOS продолжает воспроизводиться. После завершения приложения звук также работает обычным образом.
-7. Пользователь перезапускает Sound Mixer и получает сохраненные названия, маршруты, уровни, каналы и положение общего переключателя.
-8. Пользователь запускает Sound Mixer без ранее настроенного устройства. Сохраненный выход, вход или маршрут BlackHole виден как недоступный и может быть удален. При возвращении устройства с тем же UID допустимые маршруты возобновляются автоматически, если микширование включено.
+1. The user sees all available output devices and selects one to configure its mix.
+2. The user adds a microphone and application audio to a headphone mix, setting an independent volume for each source.
+3. The user creates a bus named “Stream,” renames it, and adds it as a source to several output mixes.
+4. The user creates a BlackHole route, selects one channel or a stereo pair, and sends a separate mix there.
+5. The user disconnects a device or revokes a permission; the app preserves the configuration and clearly shows which sources are unavailable.
+6. The user turns off mixing in one action; normal macOS audio continues playing. Audio also behaves normally after the app exits.
+7. The user relaunches Sound Mixer and gets the saved names, routes, levels, channels, and master switch state.
+8. The user starts Sound Mixer without a previously configured device. The saved output, input, or BlackHole route appears as unavailable and can be removed. When a device with the same UID returns, valid routes resume automatically if mixing is on.
 
-## Первая версия
+## First release
 
-- Один локальный пользователь и одна локальная конфигурация.
-- Интерактивное управление миксами в реальном времени; автоматическое сохранение каждого принятого изменения и восстановление настроек между запусками.
-- Ручное добавление источников в каждый микс. Одна и та же шина или источник может участвовать в нескольких допустимых миксах.
-- Без записи в файл, сетевого вещания, плагинов обработки звука и создания собственного системного аудиодрайвера.
+- One local user and one local configuration.
+- Interactive control of mixes in real time, automatic saving of every accepted change, and restoration of settings across launches.
+- Manual addition of sources to each mix. The same bus or source may participate in multiple valid mixes.
+- No file recording, network broadcasting, audio effect plugins, or custom system audio driver.
 
-## Решения, которые надо подтвердить прототипом
+## Decisions requiring prototype verification
 
-- Способ захвата аудио отдельных приложений, доступность процессов и точное поведение их звука при маршрутизации через process taps.
-- Работа нескольких выходов с разными тактовыми частотами: выбор преобразования частоты и синхронизации после измерений.
-- Ограничения конкретных устройств по формату и независимости каналов; интерфейс должен показывать фактически доступные каналы.
+- How to capture audio from individual applications, which processes are available, and precisely how their audio behaves when routed through process taps.
+- How multiple outputs with different clocks work: choose sample-rate conversion and synchronization after measurement.
+- Device-specific format and channel-independence limits; the interface must show channels that are actually available.
 
-Эти пункты являются техническими проверками в начале разработки, а не обещанием конкретного поведения системы без проверки на поддерживаемой macOS.
+These are technical checks early in development, not promises of specific system behavior before verification on a supported macOS version.

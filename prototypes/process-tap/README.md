@@ -1,6 +1,6 @@
-# Проверка Core Audio process taps
+# Core Audio Process Tap Verification
 
-Прототип перечисляет Core Audio process objects, захватывает стереозвук одного процесса по PID и измеряет пик. Он создает приватный tap с `muteBehavior = .unmuted`, приватное aggregate device и входной IOProc. Системный выход и громкость не меняются. При завершении захвата IOProc, aggregate device и tap удаляются в обратном порядке.
+The prototype lists Core Audio process objects, captures stereo audio from one process by PID, and measures peak level. It creates a private tap with `muteBehavior = .unmuted`, a private aggregate device, and an input IOProc. It does not change the system output or volume. On capture shutdown, it removes the IOProc, aggregate device, and tap in reverse order.
 
 ```bash
 bash prototypes/process-tap/run.sh list
@@ -11,32 +11,32 @@ bash prototypes/process-tap/lifecycle.sh
 SOUND_MIXER_LISTENING_MODE=1 bash prototypes/process-tap/lifecycle.sh
 ```
 
-Запустите звук в нужном приложении, найдите PID в `list` и начните `capture`. PID прототипа запрещен. Если процесс отсутствует в Core Audio, начните воспроизведение и повторите список. Для захвата может потребоваться разрешение macOS **System Audio Recording** процессу, запускающему прототип. Основное приложение уже содержит `NSAudioCaptureUsageDescription`; поведение первого запроса и отказа нужно отдельно проверить в подписанной сборке приложения.
+Play audio in the target application, find its PID with `list`, and start `capture`. The prototype rejects its own PID. If the process does not appear in Core Audio, start playback and list again. Capture may require macOS **System Audio Recording** permission for the process running the prototype. The main app already includes `NSAudioCaptureUsageDescription`; test the first prompt and denial separately in a signed app build.
 
-`cycle` останавливает захват и уничтожает IOProc, приватное aggregate device и tap, затем по UID проверяет отсутствие ресурсов и неизменность системного выхода. `lifecycle.sh` создает тихий тестовый сигнал и запускает `afplay`, проверяет `cycle`, принудительно завершает только прототип сигналом `SIGKILL` и повторно захватывает тот же процесс. Сценарий должен выполняться на Mac с доступом к аудиослужбе; в ограниченной среде Core Audio возвращает пустой список и системный выход `0`. Во время сценария можно прослушать системный выход: тестовый звук должен продолжаться при выключении и после `SIGKILL`.
+`cycle` stops capture, destroys the IOProc, private aggregate device, and tap, then checks by UID that these resources are gone and the system output is unchanged. `lifecycle.sh` creates a quiet test signal and starts `afplay`, checks `cycle`, forcibly kills only the prototype with `SIGKILL`, and captures the same process again. Run this scenario on a Mac with access to audio services; in the restricted environment, Core Audio returns an empty process list and system output `0`. You can listen to the system output during the scenario: the test sound should continue when capture stops and after `SIGKILL`.
 
-Для слушательской проверки `SOUND_MIXER_LISTENING_MODE=1` повышает уровень тестового тона и выводит этапы проверки. Тон должен оставаться непрерывным до завершения сценария; скрипт не меняет системную громкость.
+For a listening check, `SOUND_MIXER_LISTENING_MODE=1` raises the test tone level and prints the verification stages. The tone should remain continuous through the scenario; the script does not change system volume.
 
-Бинарный файл собирается в `prototypes/process-tap/.build/`. Для линтера и форматирования используется конфигурация из `prototypes/core-audio/.swiftformat`.
+The binary is built in `prototypes/process-tap/.build/`. Linting and formatting use `prototypes/core-audio/.swiftformat`.
 
-## Проверено 23 сентября 2026 года
+## Verified on September 23, 2026
 
-Среда: macOS 27.0, Xcode 27.0, MacBook Air. Для доступа к аудиослужбе прототип запускался вне ограниченной среды команд. В ограниченной среде список process objects был пустым; при разрешенном доступе перечислены PID, AudioObjectID, bundle ID и состояние выхода для 25 процессов. Это список процессов, подключенных к Core Audio, а не каталог всех запущенных приложений.
+Environment: macOS 27.0, Xcode 27.0, MacBook Air. The prototype ran outside the restricted command environment to access audio services. In the restricted environment, the process-object list was empty; with access granted, it listed PID, AudioObjectID, bundle ID, and output state for 25 processes. This is a list of processes connected to Core Audio, not a catalog of all running applications.
 
-- `AudioHardwareCreateProcessTap` с `CATapDescription(stereoMixdownOfProcesses: [process])` и `muteBehavior = .unmuted` создал tap одного `afplay`. Приватное aggregate device с `kAudioAggregateDeviceTapListKey` и входной `AudioDeviceIOProc` за 4 секунды получили 190 464 кадра при воспроизведении тихого тона 440 Гц; пик Float32 составил 0,02136. Формат проверен перед чтением: стерео Float32 PCM, 48 кГц.
-- При одновременном воспроизведении тона другим `afplay` tap процесса, воспроизводившего тишину, получил 191 488 кадров с пиком 0. Это подтверждает отсутствие подмешивания другого процесса в данном тесте. Команда `self-check` подтвердила отказ от захвата собственного PID.
-- Все вызовы уничтожения IOProc, aggregate device и tap вернули `noErr`. Разрешение на запись системного аудио в этой среде уже позволяло захват; первый системный запрос, отказ и повторное предоставление разрешения не проверялись.
+- `AudioHardwareCreateProcessTap` with `CATapDescription(stereoMixdownOfProcesses: [process])` and `muteBehavior = .unmuted` created a tap for one `afplay` process. Over 4 seconds, a private aggregate device with `kAudioAggregateDeviceTapListKey` and an input `AudioDeviceIOProc` received 190,464 frames while a quiet 440 Hz tone played; the Float32 peak was 0.02136. The format was checked before reading: stereo Float32 PCM, 48 kHz.
+- While another `afplay` played a tone, the tap for a process playing silence received 191,488 frames with a peak of 0. This confirms no audio from the other process leaked into the capture in this test. `self-check` confirmed rejection of the prototype's own PID.
+- All IOProc, aggregate-device, and tap destruction calls returned `noErr`. System-audio recording permission already allowed capture in this environment; the first system prompt, denial, and subsequent permission grant were not tested.
 
-Процессный tap должен использовать явный список выбранных process objects и не включать процесс Sound Mixer. Для каждого источника требуется собственное состояние доступности и ошибки. Нельзя заменять недоступный процесс глобальным tap. Звук выбранного процесса по этому API может зависеть от его фактического аудиомаршрута и системных ограничений; прототип проверил только `afplay` и текущий выход.
+A process tap must use an explicit list of selected process objects and exclude the Sound Mixer process. Each source needs its own availability and error state. Do not replace an unavailable process with a global tap. Audio from a selected process through this API may depend on its actual audio route and system limitations; the prototype checked only `afplay` and the current output.
 
-## Проверка жизненного цикла 23 сентября 2026 года
+## Lifecycle verification on September 23, 2026
 
-На том же Mac команда `lifecycle.sh` прошла: при выключении захвата уничтожение IOProc, aggregate device и tap вернуло `noErr`; поиск приватных ресурсов по UID вернул `kAudioObjectUnknown`; системный выход остался `108`. Процесс `afplay` продолжал работать. После `SIGKILL` прототипа новый tap того же `afplay` получил около 95 тыс. кадров с пиком 0,001526 при 48 кГц, а системный выход остался `108`. Повторный tap получил те же локальные AudioObjectID (`179` и `180`), что и tap до завершения.
+On the same Mac, `lifecycle.sh` passed: when capture stopped, destruction of the IOProc, aggregate device, and tap returned `noErr`; lookup of private resources by UID returned `kAudioObjectUnknown`; system output remained `108`. The `afplay` process kept running. After killing the prototype with `SIGKILL`, a new tap for the same `afplay` received about 95,000 frames with a 0.001526 peak at 48 kHz, and system output remained `108`. The new tap received the same local AudioObjectIDs (`179` and `180`) as the tap before termination.
 
-При первом прогоне после `SIGKILL` немедленный повторный захват один раз не нашел только что созданное aggregate device по UID; при следующем прогоне повторный захват прошел с первой попытки. Сценарий допускает до десяти повторных попыток с интервалом в секунду и явно сообщает об ошибке, если восстановление не удалось.
+On the first run after `SIGKILL`, immediate recapture once failed to find the newly created aggregate device by UID; on the next run, recapture worked on the first attempt. The scenario allows up to ten retries one second apart and reports an explicit error if recovery fails.
 
-Приватные tap и aggregate device другого процесса не видны через системные списки и перевод UID. Поэтому отсутствие осиротевшего ресурса после `SIGKILL` нельзя доказать таким запросом напрямую; успешное создание нового tap и захват звука подтверждают восстановление работы в проверенном сценарии. Акустическую слышимость на физическом выходе автоматический тест не измеряет; ее нужно подтвердить прослушиванием на Mac вместе с приемочными проверками приложения.
+Another process cannot see private taps and aggregate devices through system lists or UID translation. Their absence after `SIGKILL` therefore cannot be proved directly by such a query; creating a new tap and capturing audio confirms operational recovery in the tested scenario. The automated test does not measure audibility on the physical output; confirm it by listening on a Mac during app acceptance checks.
 
-Слушательская проверка 23 сентября 2026 года на том же Mac: `SOUND_MIXER_LISTENING_MODE=1` воспроизвел тон 440 Гц через системный выход Core Audio `107`. Слушатель подтвердил непрерывный звук при штатном отключении захвата, после `SIGKILL` прототипа и во время повторного захвата. Скрипт подтвердил, что `afplay` оставался активным, системный выход не изменился, а новый tap получил 95 232 кадра с пиком 0,04578 с первой попытки. Это подтверждает слышимость в проверенном сценарии прототипа; приемочные проверки готового приложения остаются отдельной задачей.
+A listening check on the same Mac on September 23, 2026 used `SOUND_MIXER_LISTENING_MODE=1` to play a 440 Hz tone through Core Audio system output `107`. A listener confirmed uninterrupted sound when capture stopped normally, after the prototype was killed with `SIGKILL`, and during recapture. The script confirmed that `afplay` remained active, system output did not change, and a new tap received 95,232 frames with a 0.04578 peak on the first attempt. This confirms audibility in the tested prototype scenario; acceptance testing of the finished app remains a separate task.
 
-Справочник: [Apple, Capturing system audio with Core Audio taps](https://developer.apple.com/documentation/CoreAudio/capturing-system-audio-with-core-audio-taps).
+Reference: [Apple, Capturing system audio with Core Audio taps](https://developer.apple.com/documentation/CoreAudio/capturing-system-audio-with-core-audio-taps).

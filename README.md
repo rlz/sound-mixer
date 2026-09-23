@@ -1,45 +1,45 @@
 # Sound Mixer
 
-Звуковой микшер для современных версий macOS. Приложение собирает звук с устройств ввода, отдельных приложений и внутренних виртуальных шин, смешивает его с независимыми уровнями громкости и направляет на реальные устройства вывода или в выбранные каналы BlackHole.
+Sound Mixer is an audio mixer for modern macOS versions. It collects audio from input devices, individual applications, and internal virtual buses, mixes them with independent volume levels, and routes the result to physical output devices or selected BlackHole channels.
 
-## Статус
+## Status
 
-Готов каркас приложения: окно AppKit открывает локальный интерфейс React через WKWebView. Аудиотракт, устройства и управление миксами пока не реализованы. Порядок реализации и критерии готовности описаны в [todo.md](todo.md).
+The application scaffold is ready: an AppKit window loads the local React interface through WKWebView. The audio pipeline, device support, and mix controls have not been implemented yet. The implementation order and acceptance criteria are in [todo.md](todo.md).
 
-## Как будет работать микшер
+## How the mixer will work
 
-- Слева показаны все доступные выходы Core Audio, внутренние виртуальные шины и созданные маршруты BlackHole. У каждого выхода или шины есть ползунок общей громкости.
-- Пользователь может создавать и переименовывать внутренние виртуальные шины. Они доступны только в Sound Mixer и не появляются как системные устройства macOS.
-- Для маршрута BlackHole пользователь выбирает установленное устройство драйвера и его выходные каналы. Если драйвер отсутствует, приложение объясняет, как его установить, и не создает неработающий маршрут.
-- Справа для выбранного выхода или шины настраивается микс: источники ввода, приложения и другие виртуальные шины. У каждого источника собственная громкость. Моно источник можно направить в оба стереоканала.
-- Невозможные маршруты, в том числе циклы между виртуальными шинами, блокируются до применения.
-- Общий переключатель включает и выключает весь аудиотракт микшера. При выключении и после завершения приложения обычное воспроизведение macOS продолжает работать; настройки сохраняются автоматически и восстанавливаются при следующем запуске.
-- Если настроенное устройство отсутствует при запуске, его настройки и строки миксов остаются видимыми с пометкой о недоступности и могут быть удалены. Возвращение устройства с тем же UID возобновляет допустимые маршруты при включенном микшировании.
+- The left panel lists available Core Audio outputs, internal virtual buses, and configured BlackHole routes. Each output or bus has a master volume slider.
+- Users can create and rename internal virtual buses. These buses exist only in Sound Mixer and do not appear as macOS system devices.
+- For a BlackHole route, users select an installed BlackHole device and its output channels. If BlackHole is missing, the app explains how to install it and does not create a nonfunctional route.
+- The right panel configures the mix for the selected output or bus using input devices, applications, and other virtual buses as sources. Each source has its own volume control. A mono source can be sent to both stereo channels.
+- Invalid routes, including cycles between virtual buses, are rejected before they are applied.
+- A master switch turns the mixer's entire audio pipeline on or off. Normal macOS playback continues when mixing is off and after Sound Mixer exits. Settings are saved automatically and restored on the next launch.
+- If a configured device is missing at launch, its settings and mix rows remain visible with an unavailable status and can be removed. If a device with the same UID returns, valid routes resume when mixing is on.
 
-Подробности: [область продукта](requirements/00-product.md), [устройства](requirements/01-devices.md), [маршрутизация](requirements/02-routing-and-mixing.md), [интерфейс](requirements/03-interface.md), [интеграция с macOS](requirements/04-macos-integration.md), [качество и приемка](requirements/05-quality-and-acceptance.md).
+See the detailed requirements for [product scope](requirements/00-product.md), [devices](requirements/01-devices.md), [routing and mixing](requirements/02-routing-and-mixing.md), [interface](requirements/03-interface.md), [macOS integration](requirements/04-macos-integration.md), and [quality and acceptance](requirements/05-quality-and-acceptance.md).
 
-## Технологии и устройство проекта
+## Technology and project structure
 
-- **Swift** и **Core Audio**: обнаружение устройств, захват, граф маршрутов, смешивание и вывод звука.
-- **AppKit + WKWebView**: окно macOS и контейнер для интерфейса.
-- **TypeScript + React + Tailwind CSS**: интерфейс и состояние отображения. Аудиообработка и долгоживущая конфигурация принадлежат Swift части.
-- **Font Awesome Free**: SVG иконки интерфейса включаются в локальную React сборку без CDN.
-- Типизированный обмен сообщениями между Swift и WebKit; изменения настроек подтверждаются нативной частью и отражаются в интерфейсе.
-- Версионированная локальная конфигурация в Application Support автоматически сохраняет маршруты, уровни, имена, выбранные каналы и положение общего переключателя; исходный звук не сохраняется.
+- **Swift** and **Core Audio** handle device discovery, capture, the routing graph, mixing, and audio output.
+- **AppKit + WKWebView** provide the macOS window and host the interface.
+- **TypeScript + React + Tailwind CSS** provide the interface and view state. Audio processing and persistent configuration remain in Swift.
+- **Font Awesome Free** SVG icons are bundled with the local React build, without a CDN.
+- Swift and WebKit communicate through typed messages. The native side confirms settings changes, which are then reflected in the interface.
+- Versioned local configuration in Application Support automatically stores routes, levels, names, selected channels, and the master switch state. It does not store source audio.
 
-Целевая платформа первой версии: **macOS 15 и новее**. Каркас проверен с **Xcode 27.0 / macOS SDK 27.0**, Node.js 26.8.1 и npm 12.0.2. Для захвата звука приложений планируются Core Audio process taps; функция зависит от системного разрешения на запись системного аудио. BlackHole устанавливается пользователем отдельно.
+The first version targets **macOS 15 and later**. The scaffold has been verified with **Xcode 27.0 / macOS SDK 27.0**, Node.js 26.8.1, and npm 12.0.2. Core Audio process taps are planned for application audio capture; this feature depends on permission to record system audio. Users install BlackHole separately.
 
-## Разработка
+## Development
 
-1. Откройте [SoundMixer.xcodeproj](SoundMixer.xcodeproj) в Xcode 27 или новее и запустите схему `SoundMixer` на Mac. Готовые файлы интерфейса в `Web/dist` включены в репозиторий и копируются в `.app`, поэтому для обычной чистой сборки Xcode Node.js и сеть не нужны.
-2. Для изменения интерфейса выполните `cd Web && npm ci && npm run build`, затем пересоберите приложение в Xcode. Команда обновляет `Web/dist`; собранные файлы нужно включать в коммит вместе с исходниками. Во время запуска приложение открывает только локальные файлы.
-3. Единая проверка: `./scripts/check.sh`. Она устанавливает закреплённые версии SwiftFormat 0.62.1 и SwiftLint 0.65.0 с проверкой SHA256, запускает их, затем выполняет `npm ci`, проверку Prettier и ESLint, сборку Web и сборку Xcode. Нужны Xcode 27 и Node.js 26.8.1. Если активны только Command Line Tools, скрипт использует `/Applications/Xcode.app`.
+1. Open [SoundMixer.xcodeproj](SoundMixer.xcodeproj) in Xcode 27 or later and run the `SoundMixer` scheme on a Mac. Built interface files in `Web/dist` are committed to the repository and copied into the `.app`, so a normal clean Xcode build does not require Node.js or network access.
+2. To change the interface, run `cd Web && npm ci && npm run build`, then rebuild the app in Xcode. This updates `Web/dist`; commit the built files alongside the source changes. At runtime, the app loads only local files.
+3. Run all checks with `./scripts/check.sh`. It installs the pinned SwiftFormat 0.62.1 and SwiftLint 0.65.0 releases after verifying their SHA256 checksums, runs them, then runs `npm ci`, Prettier and ESLint checks, the Web build, and the Xcode build. Xcode 27 and Node.js 26.8.1 are required. If only Command Line Tools are active, the script uses `/Applications/Xcode.app`.
 
-Для исправления форматирования запустите `.tools/bin/swiftformat SoundMixer --config .swiftformat --cache ignore` и `cd Web && npm run format`. Конфигурация задаёт четыре пробела для Swift, TypeScript, TSX, JavaScript, JSON, HTML и CSS; Tailwind-классы сортируются плагином Prettier. Версии Web-инструментов закреплены в `Web/package.json` и `Web/package-lock.json`. Те же проверки выполняет GitHub Actions на образе Xcode 27. Пока в проекте нет тестовых целей, CI проверяет форматирование, линтеры и сборки; тесты будут добавлены вместе с реализацией функций.
+To fix formatting, run `.tools/bin/swiftformat SoundMixer --config .swiftformat --cache ignore` and `cd Web && npm run format`. The configuration uses four spaces for Swift, TypeScript, TSX, JavaScript, JSON, HTML, and CSS; the Prettier plugin sorts Tailwind classes. Web tool versions are pinned in `Web/package.json` and `Web/package-lock.json`. GitHub Actions runs the same checks with the Xcode 27 image. There are no test targets yet, so CI currently checks formatting, linting, and builds; tests will be added as features are implemented.
 
-## Технические источники
+## Technical references
 
 - [Apple: Capturing system audio with Core Audio taps](https://developer.apple.com/documentation/CoreAudio/capturing-system-audio-with-core-audio-taps)
-- [Apple: AudioHardwareSystem и список устройств](https://developer.apple.com/documentation/coreaudio/audiohardwaresystem)
-- [Apple: разрешения на захват аудио в macOS](https://developer.apple.com/documentation/bundleresources/requesting-authorization-for-media-capture-on-macos)
-- [BlackHole: официальный репозиторий](https://github.com/ExistentialAudio/BlackHole)
+- [Apple: AudioHardwareSystem and device discovery](https://developer.apple.com/documentation/coreaudio/audiohardwaresystem)
+- [Apple: Requesting authorization for media capture on macOS](https://developer.apple.com/documentation/bundleresources/requesting-authorization-for-media-capture-on-macos)
+- [BlackHole: official repository](https://github.com/ExistentialAudio/BlackHole)

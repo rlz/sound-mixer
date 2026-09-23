@@ -1,6 +1,6 @@
-# Проверка вывода в каналы BlackHole
+# BlackHole Channel Output Verification
 
-Прототип перечисляет устройства Core Audio по UID и числу входных и выходных каналов. Команда `probe` создает HAL Output AudioUnit с клиентским форматом Float32 interleaved на **полное число выходных каналов** устройства. Callback сначала обнуляет весь буфер, затем записывает тихий тон 440 Гц с амплитудой 0,02 только в выбранный один канал или два различных канала. Если число входных каналов совпадает с числом выходных, второй HAL AudioUnit читает вход и проверяет пиковый уровень каждого канала. Системный выход и аппаратная громкость не меняются.
+The prototype lists Core Audio devices by UID and input/output channel count. The `probe` command creates a HAL Output AudioUnit with an interleaved Float32 client format covering the device's **full output channel count**. Its callback zeros the whole buffer, then writes a quiet 440 Hz tone with amplitude 0.02 to either one selected channel or two distinct channels. If input and output channel counts match, a second HAL AudioUnit reads the input and checks each channel's peak level. The system output and hardware volume are not changed.
 
 ```bash
 bash prototypes/channel-routing/run.sh list
@@ -8,16 +8,16 @@ bash prototypes/channel-routing/run.sh probe BlackHole64ch_UID 3,4 3
 bash prototypes/channel-routing/run.sh probe BlackHole64ch_UID 17 2
 ```
 
-UID и число каналов в примере относятся только к проверенному Mac. Номера каналов в команде начинаются с 1; внутри callback используются индексы с 0. Допускается один канал для моно маршрута или два различных канала для стереомаршрута. Диапазон проверяется по фактическому числу каналов устройства до запуска AudioUnit. Для устройства без соответствующего входа прототип подтверждает работу выходного callback, но не может измерить физический сигнал.
+The example UID and channel count belong only to the tested Mac. Command channel numbers start at 1; callback indices start at 0. A mono route uses one channel, and a stereo route uses two distinct channels. Before starting the AudioUnit, the prototype checks the requested range against the device's actual channel count. For a device without a corresponding input, the prototype verifies the output callback but cannot measure the physical signal.
 
-Прототип пишет во все каналы **одного** устройства одним выходным AudioUnit. Для нескольких маршрутов на одно устройство рабочий движок должен собрать их отсчеты в одном полном буфере. Пересекающиеся назначения каналов проверяются до запуска графа. Базовый микс устройства BlackHole пока резервирует все его каналы; хотя этот прототип доказывает возможность выбрать подмножество, поведение выбора каналов для базового микса отдельно не задано в интерфейсе.
+The prototype writes all channels of **one** device through one output AudioUnit. For several routes to the same device, the production engine must combine their samples in one full buffer. Overlapping channel assignments are checked before starting the graph. The base mix for a BlackHole device currently reserves every channel; although this prototype proves subset selection is possible, the interface does not yet specify channel-selection behavior for the base mix.
 
-## Проверено 23 сентября 2026 года
+## Verified on September 23, 2026
 
-Среда: macOS 27.0, Xcode 27.0, BlackHole 64ch (`BlackHole64ch_UID`), 64 входных и 64 выходных канала, 48 кГц. Для доступа к аудиослужбе прототип запускался вне ограниченной среды команд. До замены установленного варианта BlackHole этот Mac показывал BlackHole 2ch; поэтому пример UID не является постоянным для всех установок.
+Environment: macOS 27.0, Xcode 27.0, BlackHole 64ch (`BlackHole64ch_UID`), 64 input and 64 output channels, 48 kHz. The prototype ran outside the restricted command environment to access audio services. Before the installed BlackHole variant was replaced, this Mac showed BlackHole 2ch; the example UID is therefore not constant across installations.
 
-- Стереопара 3–4: выходной callback обработал 144 384 кадра за 3 секунды. Вход BlackHole получил 145 920 кадров; пик каналов 3 и 4 равен 0,02, все остальные 62 канала — 0.
-- Стереопара 63–64: выходной callback обработал 96 256 кадров за 2 секунды. Вход получил 98 304 кадра; пик каналов 63 и 64 равен 0,02, остальные каналы — 0. Это проверяет верхнюю границу диапазона.
-- Моно канал 17: выходной callback обработал 96 256 кадров за 2 секунды. Вход получил 98 304 кадра; пик канала 17 равен 0,02, остальные каналы — 0.
+- Stereo pair 3–4: the output callback processed 144,384 frames in 3 seconds. The BlackHole input received 145,920 frames; channels 3 and 4 peaked at 0.02, and all other 62 channels at 0.
+- Stereo pair 63–64: the output callback processed 96,256 frames in 2 seconds. The input received 98,304 frames; channels 63 and 64 peaked at 0.02, and the others at 0. This checks the upper bound of the channel range.
+- Mono channel 17: the output callback processed 96,256 frames in 2 seconds. The input received 98,304 frames; channel 17 peaked at 0.02, and the others at 0.
 
-Проверка подтверждает запись и петлевой захват выбранных каналов BlackHole 64ch. Она не измеряет задержку, аппаратную слышимость, одновременное смешивание нескольких маршрутов и поведение при отключении устройства или смене его формата. Эти случаи остаются в задачах движка и приемки.
+This verifies writing to and loopback capture from selected BlackHole 64ch channels. It does not measure latency, audible hardware output, simultaneous mixing of several routes, or behavior on device disconnection or format change. Those cases remain in the engine and acceptance tasks.

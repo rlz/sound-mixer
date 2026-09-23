@@ -1,51 +1,51 @@
-# 02. Маршрутизация и смешивание
+# 02. Routing and Mixing
 
-## Состав микса
+## Mix contents
 
-- После выбора элемента слева пользователь видит его микс справа и может добавить источник из доступных устройств ввода, приложений с доступным аудиовыходом и внутренних виртуальных шин.
-- Каждый источник внутри микса имеет собственный уровень 0–100 %, возможность удаления и состояние доступности. Одному источнику соответствует не более одной строки в одном миксе.
-- Источники могут одновременно входить в несколько разных миксов. Повторный захват одного источника по возможности разделяется движком, чтобы не создавать несогласованные копии.
-- При недоступном источнике маршрут сохраняется, но он не дает звука и помечается в интерфейсе.
-- Сохраненный входной источник отображается в строке микса и может быть удален, даже если его устройство отсутствовало уже при запуске. Его возвращение с тем же UID возобновляет захват после повторной проверки формата и разрешения.
+- After selecting an item on the left, the user sees its mix on the right and can add sources from available input devices, applications with available audio output, and internal virtual buses.
+- Each source in a mix has its own 0–100% level, a removal action, and an availability state. A source has at most one row in a given mix.
+- Sources can participate in several mixes at once. Where possible, the engine shares capture of the same source to avoid inconsistent copies.
+- An unavailable source remains in its route but contributes no audio and is marked in the interface.
+- A saved input source stays visible as a mix row and can be removed even if its device was missing at launch. The same UID resumes capture after format and permission checks when it returns.
 
-## Каналы и уровни
+## Channels and levels
 
-- Внутренняя базовая схема микса первой версии — стерео. Для моно входа пользователь может выбрать направление в левый канал, правый канал или дублирование в оба канала.
-- Для моно входов по умолчанию используется дублирование в левый и правый каналы без изменения уровня каждого канала. Выбранное направление сохраняется для конкретной строки микса.
-- Стерео источники сохраняют левый и правый каналы. Обработка источников с большим числом каналов требует явной схемы отображения каналов; без нее источник помечается как неподдерживаемый, а не смешивается неявно.
-- Сумма источников может превысить 0 dBFS. Перед выводом движок защищает результат от числового переполнения и слышимого клиппинга; конкретный алгоритм выбирается и проверяется аудиотестами.
-- Изменение уровня не должно создавать щелчков: движок сглаживает переход между старым и новым коэффициентом.
+- The first release uses stereo as its internal base mix layout. For a mono input, the user can select left, right, or both output channels.
+- Mono inputs default to duplication into left and right channels without changing the level of either channel. The selected placement is saved for that mix row.
+- Stereo sources retain left and right channels. Sources with more channels require an explicit channel map; without one, the source is marked unsupported rather than mixed implicitly.
+- The sum of sources can exceed 0 dBFS. Before output, the engine protects the result from numeric overflow and audible clipping; the specific algorithm is selected and verified with audio tests.
+- Level changes must not click: the engine smooths the transition from the old gain to the new gain.
 
-## Схема конфигурации и миграция
+## Configuration schema and migration
 
-- Корень содержит `schemaVersion: 1`, `isEnabled`, массивы `outputMixes`, `buses` и `blackHoleRoutes`. Новая конфигурация начинается с выключенного аудиотракта и пустых миксов.
-- Выходной микс ссылается на устройство по UID Core Audio. Шина и маршрут BlackHole имеют собственные UUID; их названия служат только для отображения и могут совпадать.
-- Маршрут BlackHole хранит UID устройства и `channels` с `mode: mono` и одним номером либо `mode: stereo` и упорядоченной парой номеров левого и правого каналов. Номера каналов — пользовательские, начиная с 1. Шина не хранит UID устройства и не становится системным выходом.
-- Каждый микс хранит общий уровень `level` и строки `inputs`. Строка хранит ссылку источника, уровень `level` и направление моно входа `monoPlacement` (`left`, `right`, `both`). Уровни представлены числами от 0 до 1; проверка диапазона относится к валидации конфигурации.
-- Ссылка источника имеет метку `kind` и `id`: `inputDevice` с UID Core Audio, `application` с bundle identifier приложения или `bus` с UUID шины. Процессный ID не сохраняется: при запуске приложение заново сопоставляет bundle identifier с доступным процессом. Приложения без стабильного bundle identifier не сохраняются как источник в первой версии.
-- Текущие имена устройств и приложений, доступность, разрешения, частота дискретизации и число каналов относятся к наблюдаемому состоянию. При исчезновении устройства или приложения ссылка остаётся в файле. Планируемая схема v2 добавляет массив `knownDevices` с полями `uid` и необязательным `lastKnownName` для UID, на которые ссылаются выходные миксы, входы и маршруты BlackHole. Записи уникальны по UID; имя не участвует в идентификации или проверке доступности. Миграция v1 сохраняет все маршруты и заполняет имя при первом обнаружении устройства, до этого интерфейс показывает UID.
-- Декодирование отклоняет неизвестный тип источника, неверный UUID шины и несовпадающее с режимом количество каналов. Семантическая валидация ссылок, циклов, диапазонов и конфликтов каналов выполняется отдельным шагом до применения конфигурации.
-- При чтении файла отсутствие устройства не считается ошибкой структуры или графа и не удаляет ссылку. Отсутствующие устройства учитываются на отдельном этапе сопоставления сохраненных UID с обнаруженными устройствами. Метаданные имени удаляются вместе с последней ссылкой на UID.
+- The root contains `schemaVersion: 1`, `isEnabled`, and the `outputMixes`, `buses`, and `blackHoleRoutes` arrays. A new configuration starts with the audio pipeline off and empty mixes.
+- An output mix refers to a device by Core Audio UID. Buses and BlackHole routes have their own UUIDs; names are for display only and may be duplicated.
+- A BlackHole route stores a device UID and `channels` with either `mode: mono` and one channel number, or `mode: stereo` and an ordered pair of left and right channel numbers. User-facing channel numbers start at 1. A bus stores no device UID and does not become a system output.
+- Each mix stores a master `level` and `inputs` rows. A row stores a source reference, `level`, and `monoPlacement` (`left`, `right`, `both`). Levels are numbers from 0 to 1; range checks belong to configuration validation.
+- A source reference has `kind` and `id`: `inputDevice` with a Core Audio UID, `application` with an application bundle identifier, or `bus` with a bus UUID. Process IDs are not persisted: at launch, the app matches bundle identifiers to available processes again. Applications without stable bundle identifiers cannot be saved as sources in the first release.
+- Current device and application names, availability, permissions, sample rates, and channel counts belong to observed state. When a device or application disappears, its reference remains in the file. The planned v2 schema adds a `knownDevices` array with `uid` and optional `lastKnownName` for UIDs referenced by output mixes, inputs, and BlackHole routes. Entries are unique by UID; the name does not identify the device or establish availability. Migration from v1 preserves all routes and fills in the name when the device is first discovered; until then, the interface shows the UID.
+- Decoding rejects unknown source kinds, invalid bus UUIDs, and channel counts that do not match the route mode. A separate semantic validation step checks references, cycles, ranges, and channel conflicts before applying configuration.
+- When reading the file, a missing device is not a structural or graph error and does not remove its reference. Missing devices are handled in a separate step that matches saved UIDs to discovered devices. Name metadata is removed with the last reference to its UID.
 
-## Граф маршрутов
+## Route graph
 
-- Внутренние шины образуют ориентированный граф. Ссылка шины на саму себя или цикл через другие шины запрещены.
-- Из графа исключается обратная подача выходного сигнала Sound Mixer в захват того же приложения. Поведение process taps проверяется прототипом до включения приложения в каталог источников.
-- Перед сменой активной конфигурации проверяем структуру графа и статические ограничения каналов; текущую доступность устройства оцениваем отдельно для запуска каждого тракта. Ошибка изменения не ломает уже работающий микс, а отсутствие устройства не мешает редактировать или удалять сохраненный маршрут.
-- У одного устройства BlackHole не могут одновременно работать микс базовой строки реального выхода и маршрут, использующий хотя бы один из зарезервированных им каналов.
-- При переключении устройства, смене формата или потере источника аудио возобновляется после восстановления условий без ручного пересоздания микса.
-- После запуска и каждого изменения списка Core Audio сопоставляем сохраненные UID с обнаруженными устройствами. Пока устройство отсутствует, зависимые захват или вывод остановлены, остальные допустимые маршруты работают. При возврате того же UID перестраиваем только затронутый тракт после проверки формата, каналов, конфликтов и разрешений; при неуспехе показываем конкретную причину и сохраняем настройку.
+- Internal buses form a directed graph. A bus cannot reference itself or participate in a cycle through other buses.
+- Prevent feedback from Sound Mixer's output into capture of the same application. Verify process-tap behavior with a prototype before adding applications to the source catalog.
+- Before changing active configuration, validate graph structure and static channel constraints; assess current device availability separately when starting each pipeline. A failed change does not break an active mix, and a missing device does not prevent editing or deleting a saved route.
+- A BlackHole device cannot simultaneously run its base physical-output-row mix and a route that uses any channel reserved by that mix.
+- After a device switch, format change, or source loss, audio resumes when conditions recover without manual recreation of the mix.
+- After launch and every Core Audio device-list change, match saved UIDs to discovered devices. While a device is missing, dependent capture or output is stopped and other valid routes keep working. When the same UID returns, rebuild only affected pipelines after checking format, channels, conflicts, and permissions; if that fails, show the specific reason and keep the setting.
 
-## Требования к звуку
+## Audio requirements
 
-- Аудио callback выполняется без блокирующих операций и выделения памяти.
-- Для каждого устройства и источника фиксируются фактические частота дискретизации, число каналов и формат. Несовместимые потоки преобразуются в согласованный формат до суммирования.
-- Задержка и потребление процессора измеряются на контрольной конфигурации; допустимые значения фиксируются после технического прототипа.
+- Audio callbacks run without blocking operations or allocation.
+- Record actual sample rate, channel count, and format for each device and source. Convert incompatible streams to a common format before summing.
+- Measure latency and CPU use with a reference configuration; set acceptable values after the technical prototype.
 
-## Общий переключатель и жизненный цикл
+## Master switch and lifecycle
 
-- Переключатель действует на все выходы и виртуальные шины сразу. В положении «Выключено» Sound Mixer прекращает свой захват, смешивание и вывод; настройки остаются доступными для редактирования.
-- При повторном включении нативная часть проверяет сохраненный граф, устройства и разрешения, затем запускает доступные маршруты. Недоступные маршруты остаются в конфигурации со статусом ошибки.
-- Само подключение устройства не включает общий переключатель. Если он выключен, элемент становится доступным для настройки, но захват и вывод не запускаются.
-- При завершении приложения его аудиотракт останавливается, созданные им taps и aggregate devices освобождаются. Звук сторонних приложений должен продолжить обычное воспроизведение через системный выход.
-- Sound Mixer не меняет системное устройство вывода и аппаратную громкость. Если пользователь самостоятельно направил системный звук в BlackHole, поведение этого системного маршрута после выхода Sound Mixer определяется настройками macOS и BlackHole.
+- The switch controls all outputs and virtual buses at once. In the Off state, Sound Mixer stops its capture, mixing, and output; settings remain editable.
+- When switched back on, the native side checks the saved graph, devices, and permissions, then starts available routes. Unavailable routes remain in configuration with an error state.
+- Connecting a device does not turn on the master switch. When it is off, the item becomes configurable but capture and output do not start.
+- On app exit, its audio pipeline stops and its taps and aggregate devices are released. Other applications must continue normal playback through the system output.
+- Sound Mixer does not change the system output device or hardware volume. If a user independently routes system audio into BlackHole, macOS and BlackHole settings determine that route's behavior after Sound Mixer exits.

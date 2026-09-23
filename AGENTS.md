@@ -1,41 +1,41 @@
-# Правила разработки Sound Mixer
+# Sound Mixer Development Rules
 
-Этот файл относится ко всему репозиторию. Приоритет у требований пользователя и файлов `requirements/`.
+These rules apply to the entire repository. User requirements and files in `requirements/` take precedence.
 
-## Назначение и границы
+## Purpose and scope
 
-- Реализуем настольное приложение для macOS 15+ на Swift, AppKit и WKWebView. React, TypeScript и Tailwind отвечают за интерфейс. Обработка аудио остается в нативной части.
-- Не называем внутреннюю виртуальную шину системным устройством. Только маршрут через установленный BlackHole связан с устройством Core Audio.
-- Не обещаем перехват всего звука приложения или управление системной громкостью там, где macOS или устройство этого не поддерживают. Ошибки и ограничения показываем явно.
-- При изменении поведения обновляем соответствующие требования и `todo.md`.
+- Build a desktop app for macOS 15+ with Swift, AppKit, and WKWebView. React, TypeScript, and Tailwind provide the interface. Audio processing stays native.
+- Do not describe an internal virtual bus as a system device. Only a route through an installed BlackHole driver is associated with a Core Audio device.
+- Do not promise capture of all audio from an application or control of system volume where macOS or the device does not support it. Show errors and limitations clearly.
+- When behavior changes, update the relevant requirements and `todo.md`.
 
-## Структура и архитектура
+## Structure and architecture
 
-- Разделяем доменную модель маршрутов, адаптеры Core Audio, движок аудио, хранение конфигурации, мост WKWebView и React интерфейс.
-- Идентифицируем реальные устройства по стабильному UID Core Audio, а внутренние шины и маршруты по собственному UUID. Имя не используется как идентификатор.
-- Для графа микширования проверяем существование источников, совместимость каналов и отсутствие циклов до применения конфигурации.
-- Не выполняем выделение памяти, файловые операции, логирование, блокирующие вызовы и обращения к WebKit внутри аудио callback. Настройки передаем в движок подготовленными снимками.
-- Мост WebKit принимает только известные сообщения с проверкой типа и диапазонов значений. Интерфейс не обращается к Core Audio напрямую.
-- Конфигурация хранится локально, имеет версию схемы и безопасную миграцию. Секреты и аудиоданные в ней не сохраняются.
-- Общий переключатель и завершение приложения останавливают захват и вывод Sound Mixer, освобождают созданные приложением taps и другие аудиоресурсы. Не оставляем после выхода изменений системного выхода или громкости.
-- Каждое успешно принятое изменение автоматически сохраняем атомарно; при запуске сначала читаем и проверяем конфигурацию, затем восстанавливаем аудиограф согласно сохраненному положению переключателя.
+- Keep the route domain model, Core Audio adapters, audio engine, configuration storage, WKWebView bridge, and React interface separate.
+- Identify physical devices by stable Core Audio UID and internal buses and routes by their own UUID. Do not use names as identifiers.
+- Validate source existence, channel compatibility, and absence of cycles before applying a mixing graph configuration.
+- Do not allocate memory, access files, log, block, or call WebKit inside an audio callback. Pass prepared snapshots of settings to the engine.
+- The WebKit bridge accepts only known messages after validating types and value ranges. The interface does not access Core Audio directly.
+- Store configuration locally with a schema version and safe migration. Do not store secrets or audio data in it.
+- The master switch and app termination stop Sound Mixer capture and output and release app-created taps and other audio resources. Do not leave changes to system output or volume after exit.
+- Save every accepted change automatically and atomically. At launch, read and validate the configuration before restoring the audio graph according to the saved master switch state.
 
-## Стиль
+## Style
 
-- Четыре пробела для отступов в Swift, TypeScript, TSX, JavaScript, JSON, конфигурационных файлах и блоках кода Markdown. Табуляцию не используем.
-- Swift форматируем SwiftFormat, проверяем SwiftLint; TypeScript и TSX форматируем Prettier, проверяем ESLint. Для Tailwind используем сортировку классов через Prettier plugin.
-- Конкретные версии инструментов и конфигурации фиксируем вместе с исходниками. CI выполняет проверку форматирования, линтеры, тесты и сборку.
-- Пишем понятные имена, короткие функции и комментарии к причинам сложных решений. Не добавляем комментарии, которые повторяют код.
-- Пользовательский интерфейс и системные сообщения приложения ведем на английском по умолчанию; документацию — на русском. Имена типов, файлов, методов и API в коде пишем на английском.
+- Use four spaces for indentation in Swift, TypeScript, TSX, JavaScript, JSON, configuration files, and Markdown code blocks. Do not use tabs.
+- Format Swift with SwiftFormat and lint it with SwiftLint; format TypeScript and TSX with Prettier and lint them with ESLint. Sort Tailwind classes with the Prettier plugin.
+- Pin tool versions and configuration in the repository. CI checks formatting, linting, tests, and builds.
+- Use clear names, short functions, and comments that explain the reasons behind complex decisions. Do not add comments that merely repeat the code.
+- Write the interface, app system messages, and all repository documentation in English. Use English names for types, files, methods, and APIs.
 
-## Проверка изменений
+## Verification
 
-- Для аудиодвижка проверяем уровень сигнала, моно в стерео, маршруты, защиту от циклов и смену устройства.
-- Для интеграции проверяем подключение и отключение устройств, отказ в разрешениях, отсутствие BlackHole, общий переключатель, выход из приложения и восстановление сохраненной конфигурации.
-- Для интерфейса проверяем редактирование названий, доступность с клавиатуры, видимые состояния ошибок и синхронизацию ползунков с нативным состоянием.
-- Если нужное устройство или разрешение недоступно в среде разработки, отмечаем, какая часть проверена автоматически и что остается для ручной проверки на Mac.
+- For the audio engine, test signal level, mono to stereo mapping, routes, cycle prevention, and device changes.
+- For integration, test device connection and disconnection, permission denial, missing BlackHole, the master switch, app exit, and restoration of saved configuration.
+- For the interface, test name editing, keyboard accessibility, visible error states, and synchronization of sliders with native state.
+- If a required device or permission is unavailable in the development environment, state what was checked automatically and what still needs manual verification on a Mac.
 
-## Работа с задачами
+## Working on tasks
 
-- Берем задачи из `todo.md` по зависимостям, обновляем статус после выполнения и не помечаем задачу выполненной без ее критерия приемки.
-- Новые решения по неуточненным сценариям записываем в требования перед реализацией.
+- Take tasks from `todo.md` in dependency order, update their status after completion, and do not mark a task complete without meeting its acceptance criterion.
+- Document decisions for unspecified scenarios in the requirements before implementing them.

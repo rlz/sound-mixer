@@ -1,26 +1,26 @@
-# 05. Качество и приемка
+# 05. Quality and Acceptance
 
-## Критерии готовности первой версии
+## First-release acceptance criteria
 
-1. После запуска отображаются все доступные выходы Core Audio, включая устройства, подключенные после запуска. Сохраненные выходы, входы в миксах и маршруты BlackHole остаются видимыми как недоступные, даже если устройство исчезло до запуска; их можно удалить. После возврата устройства с тем же UID и включенном микшировании допустимый тракт возобновляется без ручной настройки.
-2. Пользователь создает, переименовывает и удаляет внутреннюю шину; ее можно включить в микс другого выхода, но нельзя выбрать как системное устройство macOS.
-3. При установленном BlackHole пользователь создает маршрут с выбранной парой каналов. Конфликтующие и исчезнувшие каналы обнаруживаются до вывода звука.
-4. Пользователь добавляет в микс устройство ввода, доступное приложение и внутреннюю шину. Каждый источник и итоговый микс имеют независимый уровень, изменения слышны во время воспроизведения.
-5. Моно сигнал можно направить в левый, правый или оба канала; режим сохраняется после перезапуска.
-6. Циклические ссылки между шинами отклоняются с понятной ошибкой, уже активный микс продолжает работать.
-7. Отказ в разрешении, отсутствие драйвера и отключение устройства не приводят к падению приложения; состояние отображается и восстанавливается после устранения причины.
-8. Общий переключатель останавливает и возобновляет все миксы. При выключенном микшировании обычный звук других приложений продолжает играть через системный выход.
-9. После штатного завершения Sound Mixer обычный звук других приложений работает; созданные приложением taps и аудиоресурсы освобождены. Поведение после аварийного завершения проверено отдельно.
-10. Каждое принятое изменение конфигурации автоматически сохраняется без кнопки «Сохранить». После перезапуска восстанавливаются названия, маршруты, каналы, уровни и состояние общего переключателя: ранее выключенное остается выключенным, ранее включенное запускает доступные маршруты после проверки. Ошибочный или устаревший файл не запускает опасный маршрут.
-11. Управление доступно с клавиатуры и VoiceOver; темная тема и увеличенный системный текст не скрывают основные действия.
-12. Сборка, тесты, проверка форматирования и линтеры проходят в CI на поддерживаемой версии Xcode.
+1. After launch, every available Core Audio output appears, including devices connected later. Saved outputs, inputs in mixes, and BlackHole routes remain visible as unavailable even if their devices disappeared before launch; they can be removed. When a device with the same UID returns while mixing is on, valid audio resumes without manual configuration.
+2. The user can create, rename, and delete an internal bus and add it to another output's mix, but cannot select it as a macOS system device.
+3. With BlackHole installed, the user can create a route using a selected channel pair. Conflicting or missing channels are detected before audio output starts.
+4. The user can add an input device, an available application, and an internal bus to a mix. Each source and the resulting mix have independent levels; changes are audible during playback.
+5. Mono audio can be sent to the left, right, or both channels, and the mode persists after restart.
+6. Cyclic bus references are rejected with a clear error while the active mix keeps working.
+7. Permission denial, a missing driver, and device disconnection do not crash the app; their states appear and recover when the cause is resolved.
+8. The master switch stops and resumes all mixes. While mixing is off, normal audio from other apps continues through the system output.
+9. After a normal Sound Mixer exit, other apps' audio works and app-created taps and audio resources are released. Crash behavior is checked separately.
+10. Every accepted configuration change is saved automatically without a Save button. After restart, names, routes, channels, levels, and master switch state are restored: a previously Off state stays off; a previously On state starts available routes after validation. A corrupt or outdated file does not start an unsafe route.
+11. Controls work with keyboard and VoiceOver; dark mode and larger system text do not hide primary actions.
+12. Build, tests, formatting checks, and linters pass in CI with a supported Xcode version.
 
-## Проверки
+## Verification
 
-- Автоматические тесты: модели и валидация графа, уровни и каналы аудиодвижка, миграция конфигурации, атомарное сохранение, состояние общего переключателя, типы сообщений моста, основные действия интерфейса; сопоставление сохраненных и обнаруженных UID, отсутствие устройства при старте, удаление недоступной настройки, повторное подключение с тем же и другим UID, несовместимые каналы и выключенное микширование.
-- Ручные проверки на Mac: встроенные динамики, внешнее устройство вывода, микрофон, звук отдельного приложения, BlackHole с несколькими каналами, подключение и отключение устройств, отзыв разрешений, выключение микширования, штатный и аварийный выход, перезапуск после каждого изменения настроек. Отдельно проверяем запуск без ранее настроенного выхода, входа и BlackHole; удаление каждого недоступного элемента; подключение того же устройства при включенном и выключенном микшировании.
-- Во время аудиопроверок измеряем задержку, пропуски буферов и нагрузку CPU на заранее записанной контрольной конфигурации. Целевые пороги устанавливаем после прототипа и фиксируем в этом файле.
+- Automated tests: models and graph validation, audio-engine levels and channels, configuration migration, atomic saves, master switch state, bridge message types, and primary interface actions; matching saved and discovered UIDs, missing devices at launch, removal of unavailable settings, reconnection with the same or a different UID, incompatible channels, and disabled mixing.
+- Manual Mac checks: built-in speakers, an external output, a microphone, audio from a single application, multichannel BlackHole, device connection and disconnection, permission revocation, disabled mixing, normal and crash exits, and restart after each setting change. Separately check startup without a previously configured output, input, and BlackHole device; removal of each unavailable item; and reconnection of the same device with mixing both on and off.
+- During audio checks, measure latency, buffer underruns, and CPU load using a predefined reference configuration. Set target thresholds after the prototype and record them here.
 
-## Ограничения приемки
+## Acceptance limits
 
-Ручные проверки, которым требуется установленный BlackHole или несколько физических устройств, нельзя считать выполненными только по результату модульных тестов. Результаты и параметры тестового Mac записываются в отчет о проверке перед выпуском.
+Manual checks requiring installed BlackHole or multiple physical devices cannot be marked complete based only on unit tests. Record results and test Mac details in a verification report before release.

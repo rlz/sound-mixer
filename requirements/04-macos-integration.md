@@ -1,40 +1,40 @@
-# 04. Интеграция с macOS
+# 04. macOS Integration
 
-## Целевая система
+## Target system
 
-Первая версия поддерживает macOS 15 и новее. Каркас собран с Xcode 27.0 и macOS SDK 27.0, минимальная версия в проекте — macOS 15.0. Приложение работает локально, без сервера. Собранные React/TypeScript/Tailwind ресурсы находятся внутри `.app` и открываются в WKWebView через `file://`; при запуске сетевое соединение не требуется. Изменения интерфейса сначала собираются командой `npm run build` в каталоге `Web`, затем включаются в сборку Xcode.
+The first release supports macOS 15 and later. The scaffold builds with Xcode 27.0 and macOS SDK 27.0; the project's minimum version is macOS 15.0. The app works locally without a server. Built React/TypeScript/Tailwind assets are bundled inside the `.app` and loaded in WKWebView through `file://`; no network connection is needed at runtime. Interface changes are first built with `npm run build` in `Web`, then included in the Xcode build.
 
 ## Core Audio
 
-- Получаем список и свойства устройств ввода и вывода через Core Audio HAL; наблюдаем за изменениями списка и свойств.
-- При старте сначала декодируем и проверяем сохраненную конфигурацию, затем читаем текущий список HAL и сопоставляем устройства по UID. Отсутствующий UID остается в конфигурации и снимке для интерфейса, но не передается в запускаемый аудиотракт. Отсутствие устройства не делает весь файл поврежденным.
-- После уведомления HAL о подключении или отключении повторно читаем список и свойства, сопоставляем UID и публикуем новое состояние. При совпадении UID и включенном общем переключателе запускаем затронутые маршруты после проверки формата, каналов и разрешений. Ошибка одного маршрута не останавливает независимые маршруты.
-- Для захвата устройств ввода и вывода на реальные устройства используем нативный аудиотракт Core Audio. До реализации выбираем и проверяем конкретные API на прототипе с двумя устройствами.
-- Прототип подтвердил перечисление через `kAudioHardwarePropertyDevices` и `AudioObjectGetPropertyData`, определение каналов через `kAudioDevicePropertyStreamConfiguration`, захват входа и два одновременных выхода через отдельные HAL Output AudioUnit. Результаты и ограничения: `prototypes/core-audio/README.md`.
-- Внутренний микс использует 48 кГц Float32. Источники и выходы с другой частотой преобразуются отдельно; для независимых часов выходов нужен контроль заполнения буфера и компенсация дрейфа. Смену клиентского формата AudioUnit применяем после остановки и повторной инициализации; смену аппаратного формата и отключение устройства обрабатываем через повторное чтение свойств и перестройку затронутого тракта.
-- Для звука отдельных приложений исследуем Core Audio process taps и соответствующие aggregate devices. По документации Apple захват через taps доступен начиная с macOS 14.2; выбранный минимум macOS 15 этому соответствует.
-- Прототип подтвердил захват одного процесса через приватный `CATapDescription` с явным process object, `AudioHardwareCreateProcessTap`, приватное aggregate device и входной IOProc. Tap оставляет обычный вывод приложения включенным (`muteBehavior = .unmuted`); захват другого процесса в контрольной проверке не наблюдался. Результаты и пределы проверки: `prototypes/process-tap/README.md`.
-- Если система не дает захватить процесс или его звук, показываем ограничение для этого приложения, а не подменяем его общесистемным миксом.
-- Настроенные выходы не становятся системными выходами автоматически. Выбор системного выхода остается действием пользователя в macOS, если отдельная функция не будет спроектирована позже.
-- При выключении микширования и штатном завершении приложения останавливаем IO, удаляем созданные процессом taps и aggregate devices и освобождаем устройства. При аварийном завершении проверяем на прототипе, что ресурсы process taps освобождаются системой и обычное воспроизведение не остается приглушенным.
-- Проверка `prototypes/process-tap/lifecycle.sh` подтвердила штатное удаление ресурсов по UID и неизменность системного выхода при выключении. После `SIGKILL` тот же сторонний процесс продолжил работу и его звук снова захватывался новым tap. Слушательская проверка 23 сентября 2026 года подтвердила непрерывный тон на системном выходе при выключении захвата и после `SIGKILL` прототипа. Приватные ресурсы завершенного процесса нельзя напрямую перечислить из другого процесса. Повторный захват после аварийного выхода может потребовать краткого ожидания очистки аудиослужбы. Готовое приложение проверяем отдельно при приемке.
+- Get input and output device lists and properties through Core Audio HAL; observe list and property changes.
+- At startup, decode and validate saved configuration first, then read the current HAL list and match devices by UID. A missing UID remains in configuration and the interface snapshot but is not passed to the running audio pipeline. A missing device does not make the whole file corrupt.
+- After HAL reports a connection or disconnection, reread the list and properties, match UIDs, and publish new state. When a UID matches and the master switch is on, start affected routes after checking format, channels, and permissions. An error in one route does not stop independent routes.
+- Use a native Core Audio pipeline to capture input devices and output to physical devices. Select and verify specific APIs in a two-device prototype before implementation.
+- The prototype confirmed enumeration with `kAudioHardwarePropertyDevices` and `AudioObjectGetPropertyData`, channel discovery with `kAudioDevicePropertyStreamConfiguration`, input capture, and two simultaneous outputs with separate HAL Output AudioUnits. Results and limitations: `prototypes/core-audio/README.md`.
+- The internal mix uses 48 kHz Float32. Convert sources and outputs with other rates separately; independent output clocks need buffer-fill control and drift compensation. Change the AudioUnit client format after stopping and reinitializing. Handle hardware-format changes and device disconnection by rereading properties and rebuilding the affected pipeline.
+- Investigate Core Audio process taps and their aggregate devices for audio from individual applications. Apple documents taps as available from macOS 14.2, which the macOS 15 minimum supports.
+- The prototype confirmed one-process capture through a private `CATapDescription` with an explicit process object, `AudioHardwareCreateProcessTap`, a private aggregate device, and an input IOProc. The tap leaves normal app output on (`muteBehavior = .unmuted`); no audio from another process was observed in a control test. Results and verification limits: `prototypes/process-tap/README.md`.
+- If the system cannot capture a process or its audio, show that limitation for the application instead of substituting a system-wide mix.
+- Configured outputs do not automatically become system outputs. Selecting a system output remains a user action in macOS unless a separate feature is designed later.
+- When mixing is turned off or the app exits normally, stop IO, remove process-created taps and aggregate devices, and release devices. For a crash, verify with a prototype that the system releases process-tap resources and normal playback is not left muted.
+- `prototypes/process-tap/lifecycle.sh` confirmed normal resource deletion by UID and an unchanged system output when turned off. After `SIGKILL`, the same external process kept running and a new tap captured its audio again. A listening check on September 23, 2026 confirmed an uninterrupted tone on system output when capture stopped and after the prototype was killed. Another process cannot directly enumerate the terminated process's private resources. Capture after a crash may need a short wait for audio-service cleanup. Test the finished app separately during acceptance.
 
-## Разрешения
+## Permissions
 
-- Запрашиваем доступ к микрофону при первом использовании входного устройства, которому он нужен. В Info.plist включаем `NSMicrophoneUsageDescription`.
-- Для process taps включаем `NSAudioCaptureUsageDescription` и запрашиваем системное разрешение на запись аудио при запуске соответствующего источника.
-- Отказ не блокирует работу остальных маршрутов; интерфейс объясняет, какие именно источники недоступны.
-- Не просим доступ к экрану ради аудио, пока выбранный и проверенный API этого не требует.
+- Request microphone access on first use of an input device that needs it. Include `NSMicrophoneUsageDescription` in Info.plist.
+- For process taps, include `NSAudioCaptureUsageDescription` and request system-audio recording permission when starting the relevant source.
+- Denial does not block other routes; the interface explains exactly which sources are unavailable.
+- Do not request screen access just for audio unless the selected and verified API requires it.
 
 ## BlackHole
 
-- BlackHole является внешним драйвером. Определяем установленный экземпляр и его фактическое число выходных каналов через Core Audio.
-- Доступные варианты сборки BlackHole могут иметь разное число каналов; интерфейс не предполагает фиксированную схему.
-- Для выбранных каналов используем один HAL Output AudioUnit на устройство и клиентский Float32 interleaved буфер по полному числу его выходных каналов. Незаполненные каналы обнуляем; независимые маршруты собираем в этот буфер до вывода. Петлевой тест BlackHole 64ch подтвердил моно канал 17 и стереопары 3–4 и 63–64 без сигнала в остальных каналах; результаты и код — в `prototypes/channel-routing/`.
-- Конфликт маршрутов по каналам выявляем до запуска. Когда устройство исчезло, оставляем сохраненную настройку, но не выводим в отсутствующие каналы.
-- Установка драйвера выполняется пользователем по [официальной инструкции BlackHole](https://github.com/ExistentialAudio/BlackHole#installation-instructions).
+- BlackHole is an external driver. Discover installed instances and their actual output channel counts through Core Audio.
+- Available BlackHole builds may have different channel counts; the interface must not assume a fixed layout.
+- For selected channels, use one HAL Output AudioUnit per device with a full-output-channel, interleaved Float32 client buffer. Zero unused channels and combine independent routes in that buffer before output. A BlackHole 64ch loopback test confirmed mono channel 17 and stereo pairs 3–4 and 63–64 without signal in the other channels; results and code are in `prototypes/channel-routing/`.
+- Detect route channel conflicts before startup. If a device disappears, keep its saved setting but do not output to missing channels.
+- Users install the driver using the [official BlackHole instructions](https://github.com/ExistentialAudio/BlackHole#installation-instructions).
 
-## Источники
+## Sources
 
 - [Apple: Capturing system audio with Core Audio taps](https://developer.apple.com/documentation/CoreAudio/capturing-system-audio-with-core-audio-taps)
 - [Apple: AudioHardwareSystem](https://developer.apple.com/documentation/coreaudio/audiohardwaresystem)

@@ -22,7 +22,7 @@ install_tool() {
     local binary
     binary="$(find "$temporary_dir/unpacked" -type f -name "$name" -print -quit)"
     if [[ -z "$binary" ]]; then
-        echo "Исполняемый файл $name не найден в архиве" >&2
+        echo "Executable $name not found in the archive" >&2
         exit 1
     fi
     cp "$binary" "$target"
