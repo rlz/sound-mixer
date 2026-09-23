@@ -1,0 +1,4 @@
+.DS_Store
+DerivedData/
+Web/node_modules/
+Web/.vite/
