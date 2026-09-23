@@ -32,6 +32,7 @@
 ## Route graph
 
 - Internal buses form a directed graph. A bus cannot reference itself or participate in a cycle through other buses.
+- Before accepting an edit, prepare an immutable render snapshot after graph validation. The snapshot lists buses in dependency-first order so each shared bus can be rendered before its consumers. Publish the new snapshot only after the configuration transaction is accepted; a rejected validation or write keeps the prior snapshot active. The audio callback must retain a prepared snapshot for a render block and must not load or replace it through a blocking synchronization primitive.
 - Prevent feedback from Sound Mixer's output into capture of the same application. Verify process-tap behavior with a prototype before adding applications to the source catalog.
 - Before changing active configuration, validate graph structure and static channel constraints; assess current device availability separately when starting each pipeline. A failed change does not break an active mix, and a missing device does not prevent editing or deleting a saved route.
 - Static validation rejects duplicate node or source identities, empty identifiers and bus names, levels outside 0–1, missing bus references, bus cycles, invalid channel selections, and overlapping BlackHole reservations. A base mix for the same BlackHole UID reserves every channel even when that device is currently disconnected.

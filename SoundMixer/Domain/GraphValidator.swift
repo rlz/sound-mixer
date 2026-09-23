@@ -209,6 +209,40 @@ public enum GraphValidator {
     }
 }
 
+/// Immutable, validated render description. Bus order is dependency-first so a renderer
+/// can calculate each shared bus once before consuming mixes are processed.
+public struct MixGraphSnapshot: Equatable, Sendable {
+    public let configuration: MixerConfiguration
+    public let busRenderOrder: [UUID]
+
+    public init(configuration: MixerConfiguration) throws {
+        try GraphValidator.validate(configuration)
+        self.configuration = configuration
+        busRenderOrder = Self.dependencyFirstOrder(configuration.buses)
+    }
+
+    private static func dependencyFirstOrder(_ buses: [VirtualBus]) -> [UUID] {
+        let byID = Dictionary(uniqueKeysWithValues: buses.map { ($0.id, $0) })
+        var visited = Set<UUID>()
+        var order: [UUID] = []
+
+        func visit(_ id: UUID) {
+            guard visited.insert(id).inserted, let bus = byID[id] else { return }
+            for input in bus.mix.inputs {
+                if case let .bus(dependency) = input.source {
+                    visit(dependency)
+                }
+            }
+            order.append(id)
+        }
+
+        for bus in buses {
+            visit(bus.id)
+        }
+        return order
+    }
+}
+
 private enum SourceKey: Hashable {
     case inputDevice(DeviceUID)
     case application(ApplicationID)

@@ -6,6 +6,7 @@ import Foundation
 /// Owns the accepted configuration and publishes an edit only after its file is replaced.
 public final class ConfigurationStore {
     public private(set) var configuration: MixerConfiguration
+    public private(set) var activeGraph: MixGraphSnapshot
     public let fileURL: URL
 
     public init(fileURL: URL) throws {
@@ -13,10 +14,12 @@ public final class ConfigurationStore {
         if FileManager.default.fileExists(atPath: fileURL.path) {
             let data = try Data(contentsOf: fileURL)
             let restored = try JSONDecoder().decode(MixerConfiguration.self, from: data)
-            try GraphValidator.validate(restored)
+            activeGraph = try MixGraphSnapshot(configuration: restored)
             configuration = restored
         } else {
-            configuration = MixerConfiguration()
+            let initial = MixerConfiguration()
+            activeGraph = try MixGraphSnapshot(configuration: initial)
+            configuration = initial
         }
     }
 
@@ -34,13 +37,14 @@ public final class ConfigurationStore {
         var candidate = configuration
         try edit(&candidate)
         candidate.reconcileKnownDevices(with: discoveredDevices)
-        try GraphValidator.validate(candidate)
+        let candidateGraph = try MixGraphSnapshot(configuration: candidate)
         guard candidate != configuration else { return configuration }
 
         let data = try JSONEncoder().encode(candidate)
         try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: fileURL, options: .atomic)
         configuration = candidate
+        activeGraph = candidateGraph
         return configuration
     }
 }
