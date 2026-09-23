@@ -4,3 +4,5 @@ Web/node_modules/
 Web/.vite/
 .tools/
 xcuserdata/
+*.xcresult/
+*.xcarchive/
