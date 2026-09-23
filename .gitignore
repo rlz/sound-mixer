@@ -8,3 +8,4 @@ xcuserdata/
 *.xcarchive/
 prototypes/core-audio/.build/
 prototypes/process-tap/.build/
+prototypes/channel-routing/.build/
