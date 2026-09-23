@@ -22,7 +22,7 @@ Statuses: `[ ]` = not started, `[~]` = in progress, `[x]` = complete. Tasks are 
 
 ## 2. Native audio pipeline
 
-- [ ] Observe Core Audio inputs and outputs and their availability. **Done when:** the list updates without restarting, and settings are tied to UIDs.
+- [x] Observe Core Audio inputs and outputs and their availability. **Done when:** the list updates without restarting, and settings are tied to UIDs. The native device catalog observes HAL list and relevant device-property changes and publishes UID-keyed snapshots; the interface bridge will consume these snapshots in the interface task.
 - [ ] Match saved UIDs to discovered devices at launch and on every HAL change. **Done when:** a saved output, input, or BlackHole route remains unavailable if its device is missing at startup; absence does not corrupt configuration or block independent routes; the state snapshot distinguishes saved and discovered devices.
 - [ ] Capture input devices and application sources with permission handling. **Done when:** sources produce separate streams and denial appears as a source state.
 - [ ] Implement the stereo mixing engine, source and master levels, smooth level changes, and clipping protection. **Done when:** audio tests verify levels, absence of clicks, and basic stability.

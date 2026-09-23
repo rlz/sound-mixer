@@ -7,6 +7,7 @@ The first release supports macOS 15 and later. The scaffold builds with Xcode 27
 ## Core Audio
 
 - Get input and output device lists and properties through Core Audio HAL; observe list and property changes.
+- The native device catalog observes the HAL device list and each device's name, alive state, input/output stream configuration, and nominal sample rate. It publishes refreshed snapshots on the main queue; each snapshot is identified by Core Audio UID and does not treat the device name as an identifier.
 - At startup, decode and validate saved configuration first, then read the current HAL list and match devices by UID. A missing UID remains in configuration and the interface snapshot but is not passed to the running audio pipeline. A missing device does not make the whole file corrupt.
 - After HAL reports a connection or disconnection, reread the list and properties, match UIDs, and publish new state. When a UID matches and the master switch is on, start affected routes after checking format, channels, and permissions. An error in one route does not stop independent routes.
 - Use a native Core Audio pipeline to capture input devices and output to physical devices. Select and verify specific APIs in a two-device prototype before implementation.

@@ -5,6 +5,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     private var window: NSWindow?
     private var webView: WKWebView?
     private var configurationStore: ConfigurationStore?
+    private var deviceCatalog: CoreAudioDeviceCatalog?
+    private var audioDevices: [AudioDeviceSnapshot] = []
 
     func applicationDidFinishLaunching(_: Notification) {
         var configurationError: Error?
@@ -14,6 +16,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         } catch {
             configurationError = error
         }
+
+        let deviceCatalog = CoreAudioDeviceCatalog()
+        deviceCatalog.onChange = { [weak self] devices in self?.audioDevices = devices }
+        self.deviceCatalog = deviceCatalog
+        deviceCatalog.start()
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720),
