@@ -14,6 +14,7 @@
         A10000000000000000000006 /* ConfigurationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000017 /* ConfigurationStore.swift */; };
         A10000000000000000000007 /* CoreAudioDeviceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000018 /* CoreAudioDeviceCatalog.swift */; };
         A10000000000000000000008 /* CoreAudioProcessCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000019 /* CoreAudioProcessCatalog.swift */; };
+        A10000000000000000000009 /* AudioCaptureCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001A /* AudioCaptureCoordinator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,6 +28,7 @@
         A10000000000000000000017 /* ConfigurationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationStore.swift; sourceTree = "<group>"; };
         A10000000000000000000018 /* CoreAudioDeviceCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAudioDeviceCatalog.swift; sourceTree = "<group>"; };
         A10000000000000000000019 /* CoreAudioProcessCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAudioProcessCatalog.swift; sourceTree = "<group>"; };
+        A1000000000000000000001A /* AudioCaptureCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureCoordinator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -87,7 +89,7 @@
         };
         A10000000000000000000026 /* Audio */ = {
             isa = PBXGroup;
-            children = (A10000000000000000000018 /* CoreAudioDeviceCatalog.swift */, A10000000000000000000019 /* CoreAudioProcessCatalog.swift */,);
+            children = (A10000000000000000000018 /* CoreAudioDeviceCatalog.swift */, A10000000000000000000019 /* CoreAudioProcessCatalog.swift */, A1000000000000000000001A /* AudioCaptureCoordinator.swift */,);
             path = Audio;
             sourceTree = "<group>";
         };
@@ -154,6 +156,7 @@
                 A10000000000000000000006 /* ConfigurationStore.swift in Sources */,
                 A10000000000000000000007 /* CoreAudioDeviceCatalog.swift in Sources */,
                 A10000000000000000000008 /* CoreAudioProcessCatalog.swift in Sources */,
+                A10000000000000000000009 /* AudioCaptureCoordinator.swift in Sources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };

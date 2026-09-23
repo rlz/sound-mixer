@@ -7,8 +7,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var configurationStore: ConfigurationStore?
     private var deviceCatalog: CoreAudioDeviceCatalog?
     private var processCatalog: CoreAudioProcessCatalog?
+    private var captureCoordinator: AudioCaptureCoordinator?
     private var audioDevices: [AudioDeviceSnapshot] = []
     private var audioProcesses: [AudioProcessSnapshot] = []
+    private var captureStates: [String: String] = [:]
 
     func applicationDidFinishLaunching(_: Notification) {
         var configurationError: Error?
@@ -34,6 +36,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
         self.processCatalog = processCatalog
         processCatalog.start()
+
+        let captureCoordinator = AudioCaptureCoordinator()
+        captureCoordinator.onStateChange = { [weak self] id, state in
+            self?.captureStates[id] = String(describing: state)
+            self?.publishState()
+        }
+        self.captureCoordinator = captureCoordinator
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720),
@@ -79,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     func applicationWillTerminate(_: Notification) {
         deviceCatalog?.stop()
         processCatalog?.stop()
+        captureCoordinator?.stopAll()
     }
 
     func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation!, withError error: Error) {
@@ -208,8 +218,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             buses: configuration.buses.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) },
             blackHoleRoutes: configuration.blackHoleRoutes.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) },
             applications: audioProcesses.map {
-                BridgeApplication(id: $0.applicationID, name: $0.name, available: $0.isProducingOutput)
-            }
+                BridgeApplication(
+                    id: $0.applicationID,
+                    name: $0.name,
+                    available: $0.isProducingOutput,
+                    captureState: captureStates[$0.applicationID] ?? "stopped"
+                )
+            },
+            inputCaptureStates: captureStates.filter { id, _ in audioDevices.contains(where: { $0.uid == id }) }
+                .map { BridgeInputCaptureState(uid: $0.key, state: $0.value) }
         )
         guard let data = try? JSONEncoder().encode(state),
               let json = String(data: data, encoding: .utf8)
@@ -244,12 +261,19 @@ private struct BridgeState: Encodable {
     let buses: [BridgeNamedItem]
     let blackHoleRoutes: [BridgeNamedItem]
     let applications: [BridgeApplication]
+    let inputCaptureStates: [BridgeInputCaptureState]
 }
 
 private struct BridgeApplication: Encodable {
     let id: String
     let name: String
     let available: Bool
+    let captureState: String
+}
+
+private struct BridgeInputCaptureState: Encodable {
+    let uid: String
+    let state: String
 }
 
 private struct BridgeDevice: Encodable {
