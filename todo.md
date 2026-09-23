@@ -36,6 +36,8 @@ Statuses: `[ ]` = not started, `[~]` = in progress, `[x]` = complete. Tasks are 
 
 ## 3. Interface and integration
 
+- [x] Split the React interface into focused modules and adopt a modern state store. **Done when:** shared state, bridge, application shell, and reusable controls are separated from the entry point, with Zustand handling UI and native snapshot state. The interface is split across typed state, bridge, store, app composition, and reusable header, master switch, and group components; Zustand is pinned in the web package manifest and lockfile.
+
 - [~] Implement a typed Swift ↔ WebKit bridge, command validation, and state snapshots. **Done when:** an invalid command is rejected without changing the audio graph. Snapshots now include destination mix rows; add, remove, level, and mono-placement commands go through validated atomic configuration updates and trigger routing reconstruction. Native audio graph application is connected; invalid-command behavior still needs end-to-end verification.
 - [x] Add Font Awesome Free to the React interface for local SVG bundling. **Done when:** package versions are pinned, an icon appears on the current screen, and the build needs no CDN.
 - [~] Build the left panel with device, bus, and BlackHole groups, selection, and sliders. **Done when:** all outputs appear and sliders control the native mix. The selectable groups and physical output level sliders are in place; bus and BlackHole level editing awaits native edit commands.

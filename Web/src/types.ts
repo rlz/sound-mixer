@@ -1,0 +1,112 @@
+export type OutputState = {
+    uid: string;
+    name: string;
+    isBlackHole: boolean;
+    available: boolean;
+    outputChannels: number;
+    level: number;
+    configured: boolean;
+    routeError?: string | null;
+};
+
+export type DeviceState = {
+    uid: string;
+    name: string;
+    available: boolean;
+    outputChannels: number;
+    inputChannels: number;
+    savedAs: string[];
+    muted: boolean;
+};
+
+export type MixInputState = {
+    kind: string;
+    id: string;
+    level: number;
+    monoPlacement: "left" | "right" | "both";
+};
+
+export type MixState = {
+    target: "output" | "bus" | "route";
+    id: string;
+    level: number;
+    inputs: MixInputState[];
+};
+
+export type MixerState = {
+    schemaVersion: number;
+    isEnabled: boolean;
+    devices: DeviceState[];
+    outputs: OutputState[];
+    buses: { id: string; name: string }[];
+    blackHoleRoutes: { id: string; name: string; deviceUID: string }[];
+    applications: {
+        id: string;
+        name: string;
+        available: boolean;
+        muted: boolean;
+        captureState: string;
+    }[];
+    inputCaptureStates: { uid: string; state: string }[];
+    mixes: MixState[];
+};
+
+export type BridgeCommand =
+    | { command: "ready" }
+    | { command: "openPrivacySettings" }
+    | { command: "setMasterEnabled"; enabled: boolean }
+    | { command: "setOutputLevel"; uid: string; level: number }
+    | { command: "deleteOutputMix"; uid: string }
+    | {
+          command: "setSourceMuted";
+          kind: "inputDevice" | "application";
+          sourceID: string;
+          muted: boolean;
+      }
+    | { command: "createBus"; name: string }
+    | { command: "renameBus"; id: string; name: string }
+    | { command: "renameRoute"; id: string; name: string }
+    | { command: "deleteBus"; id: string }
+    | {
+          command: "addMixInput" | "removeMixInput";
+          target: "output" | "bus" | "route";
+          id: string;
+          kind: string;
+          sourceID: string;
+          monoPlacement?: "left" | "right" | "both";
+      }
+    | {
+          command: "setMixInputLevel";
+          target: "output" | "bus" | "route";
+          id: string;
+          kind: string;
+          sourceID: string;
+          level: number;
+      }
+    | {
+          command: "setMonoPlacement";
+          target: "output" | "bus" | "route";
+          id: string;
+          kind: string;
+          sourceID: string;
+          monoPlacement: "left" | "right" | "both";
+      };
+
+declare global {
+    interface Window {
+        soundMixerBridge?: {
+            onState: (state: MixerState) => void;
+            onCommandResult: (result: {
+                requestId: string;
+                accepted: boolean;
+                error?: string;
+            }) => void;
+            send: (command: BridgeCommand) => Promise<void>;
+        };
+        webkit?: {
+            messageHandlers: {
+                soundMixer: { postMessage: (message: unknown) => void };
+            };
+        };
+    }
+}
