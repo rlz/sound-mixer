@@ -6,3 +6,4 @@ Web/.vite/
 xcuserdata/
 *.xcresult/
 *.xcarchive/
+prototypes/core-audio/.build/
