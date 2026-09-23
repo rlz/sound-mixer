@@ -2,6 +2,7 @@
 DerivedData/
 .build/
 Web/node_modules/
+Web/dist/
 Web/.vite/
 .tools/
 xcuserdata/
