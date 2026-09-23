@@ -9,6 +9,21 @@ struct BridgeState: Encodable {
     let blackHoleRoutes: [BridgeRoute]
     let applications: [BridgeApplication]
     let inputCaptureStates: [BridgeInputCaptureState]
+    let mixes: [BridgeMix]
+}
+
+struct BridgeMix: Encodable {
+    let target: String
+    let id: String
+    let level: Double
+    let inputs: [BridgeMixInput]
+}
+
+struct BridgeMixInput: Encodable {
+    let kind: String
+    let id: String
+    let level: Double
+    let monoPlacement: String
 }
 
 struct BridgeApplication: Encodable {

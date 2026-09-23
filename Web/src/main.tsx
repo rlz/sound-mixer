@@ -24,6 +24,21 @@ type DeviceState = {
     name: string;
     available: boolean;
     outputChannels: number;
+    inputChannels: number;
+    savedAs: string[];
+};
+
+type MixInputState = {
+    kind: string;
+    id: string;
+    level: number;
+    monoPlacement: "left" | "right" | "both";
+};
+type MixState = {
+    target: "output" | "bus" | "route";
+    id: string;
+    level: number;
+    inputs: MixInputState[];
 };
 
 type MixerState = {
@@ -34,6 +49,7 @@ type MixerState = {
     buses: { id: string; name: string }[];
     blackHoleRoutes: { id: string; name: string; deviceUID: string }[];
     applications: { id: string; name: string; available: boolean }[];
+    mixes: MixState[];
 };
 
 type BridgeCommand =
@@ -43,7 +59,31 @@ type BridgeCommand =
     | { command: "createBus"; name: string }
     | { command: "renameBus"; id: string; name: string }
     | { command: "renameRoute"; id: string; name: string }
-    | { command: "deleteBus"; id: string };
+    | { command: "deleteBus"; id: string }
+    | {
+          command: "addMixInput" | "removeMixInput";
+          target: "output" | "bus" | "route";
+          id: string;
+          kind: string;
+          sourceID: string;
+          monoPlacement?: "left" | "right" | "both";
+      }
+    | {
+          command: "setMixInputLevel";
+          target: "output" | "bus" | "route";
+          id: string;
+          kind: string;
+          sourceID: string;
+          level: number;
+      }
+    | {
+          command: "setMonoPlacement";
+          target: "output" | "bus" | "route";
+          id: string;
+          kind: string;
+          sourceID: string;
+          monoPlacement: "left" | "right" | "both";
+      };
 
 declare global {
     interface Window {
@@ -143,6 +183,21 @@ function App() {
     const selectedRoute = mixerState?.blackHoleRoutes.find(
         (route) => selectedItem === `blackHole:${route.id}`,
     );
+    const selectedTarget = selectedOutput
+        ? { target: "output" as const, id: selectedOutput.uid }
+        : selectedBus
+          ? { target: "bus" as const, id: selectedBus.id }
+          : selectedRoute
+            ? { target: "route" as const, id: selectedRoute.id }
+            : null;
+    const selectedMix =
+        selectedTarget &&
+        mixerState?.mixes.find(
+            (mix) =>
+                mix.target === selectedTarget.target &&
+                mix.id === selectedTarget.id,
+        );
+    const [sourceChoice, setSourceChoice] = useState("");
 
     useEffect(() => {
         if (window.soundMixerBridge) {
@@ -460,6 +515,319 @@ function App() {
                                         Save name
                                     </button>
                                 </form>
+                            </section>
+                        )}
+
+                        {selectedMix && selectedTarget && (
+                            <section
+                                className="mb-5 rounded-2xl border border-slate-800 bg-slate-900 p-5"
+                                aria-label="Mix sources"
+                            >
+                                <div className="mb-4 flex flex-wrap items-end gap-3">
+                                    <label className="min-w-56 flex-1 text-sm">
+                                        Add a source
+                                        <select
+                                            value={sourceChoice}
+                                            onChange={(event) =>
+                                                setSourceChoice(
+                                                    event.currentTarget.value,
+                                                )
+                                            }
+                                            className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                                        >
+                                            <option value="">
+                                                Choose an available source
+                                            </option>
+                                            {mixerState?.devices
+                                                .filter(
+                                                    (device) =>
+                                                        device.inputChannels >
+                                                            0 &&
+                                                        device.available,
+                                                )
+                                                .map((device) => (
+                                                    <option
+                                                        key={`input:${device.uid}`}
+                                                        value={`inputDevice|${device.uid}`}
+                                                    >
+                                                        {device.name} · input
+                                                    </option>
+                                                ))}
+                                            {mixerState?.applications
+                                                .filter((app) => app.available)
+                                                .map((app) => (
+                                                    <option
+                                                        key={`application:${app.id}`}
+                                                        value={`application|${app.id}`}
+                                                    >
+                                                        {app.name} · application
+                                                    </option>
+                                                ))}
+                                            {mixerState?.buses
+                                                .filter(
+                                                    (bus) =>
+                                                        !(
+                                                            selectedTarget.target ===
+                                                                "bus" &&
+                                                            bus.id ===
+                                                                selectedTarget.id
+                                                        ),
+                                                )
+                                                .map((bus) => (
+                                                    <option
+                                                        key={`bus:${bus.id}`}
+                                                        value={`bus|${bus.id}`}
+                                                    >
+                                                        {bus.name} · bus
+                                                    </option>
+                                                ))}
+                                        </select>
+                                    </label>
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            !sourceChoice || pending !== null
+                                        }
+                                        className="rounded-lg bg-sky-300 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
+                                        onClick={() => {
+                                            if (!sourceChoice) return;
+                                            const [kind, sourceID] =
+                                                sourceChoice.split("|");
+                                            void send(`mix-add:${sourceID}`, {
+                                                command: "addMixInput",
+                                                ...selectedTarget,
+                                                kind,
+                                                sourceID,
+                                                monoPlacement: "both",
+                                            });
+                                            setSourceChoice("");
+                                        }}
+                                    >
+                                        Add source
+                                    </button>
+                                </div>
+                                {selectedMix.inputs.length === 0 ? (
+                                    <p className="text-sm text-slate-400">
+                                        This mix is empty. Choose an input,
+                                        active application, or virtual bus
+                                        above.
+                                    </p>
+                                ) : (
+                                    <ul className="space-y-3">
+                                        {selectedMix.inputs.map((input) => {
+                                            const name =
+                                                input.kind === "inputDevice"
+                                                    ? (mixerState?.devices.find(
+                                                          (device) =>
+                                                              device.uid ===
+                                                              input.id,
+                                                      )?.name ?? input.id)
+                                                    : input.kind ===
+                                                        "application"
+                                                      ? (mixerState?.applications.find(
+                                                            (app) =>
+                                                                app.id ===
+                                                                input.id,
+                                                        )?.name ?? input.id)
+                                                      : (mixerState?.buses.find(
+                                                            (bus) =>
+                                                                bus.id ===
+                                                                input.id,
+                                                        )?.name ?? input.id);
+                                            const available =
+                                                input.kind === "inputDevice"
+                                                    ? mixerState?.devices.some(
+                                                          (device) =>
+                                                              device.uid ===
+                                                                  input.id &&
+                                                              device.available,
+                                                      )
+                                                    : input.kind ===
+                                                        "application"
+                                                      ? mixerState?.applications.some(
+                                                            (app) =>
+                                                                app.id ===
+                                                                    input.id &&
+                                                                app.available,
+                                                        )
+                                                      : true;
+                                            return (
+                                                <li
+                                                    key={`${input.kind}:${input.id}`}
+                                                    className="rounded-xl border border-slate-800 p-3"
+                                                >
+                                                    <div className="mb-2 flex items-center justify-between gap-3">
+                                                        <div className="min-w-0">
+                                                            <span className="block truncate text-sm">
+                                                                {name}
+                                                            </span>
+                                                            <span
+                                                                className={`text-xs ${available ? "text-emerald-300" : "text-amber-300"}`}
+                                                            >
+                                                                {available
+                                                                    ? "Available"
+                                                                    : "Unavailable"}
+                                                            </span>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            disabled={
+                                                                pending !== null
+                                                            }
+                                                            className="text-xs text-rose-300 underline"
+                                                            onClick={() =>
+                                                                void send(
+                                                                    `mix-remove:${input.id}`,
+                                                                    {
+                                                                        command:
+                                                                            "removeMixInput",
+                                                                        ...selectedTarget,
+                                                                        kind: input.kind,
+                                                                        sourceID:
+                                                                            input.id,
+                                                                    },
+                                                                )
+                                                            }
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                    <label className="flex items-center gap-3 text-xs">
+                                                        Source level{" "}
+                                                        <input
+                                                            type="range"
+                                                            min="0"
+                                                            max="1"
+                                                            step="0.01"
+                                                            value={input.level}
+                                                            aria-label={`${name} source level`}
+                                                            disabled={
+                                                                pending !== null
+                                                            }
+                                                            onPointerUp={(
+                                                                event,
+                                                            ) =>
+                                                                void send(
+                                                                    `mix-level:${input.id}`,
+                                                                    {
+                                                                        command:
+                                                                            "setMixInputLevel",
+                                                                        ...selectedTarget,
+                                                                        kind: input.kind,
+                                                                        sourceID:
+                                                                            input.id,
+                                                                        level: Number(
+                                                                            event
+                                                                                .currentTarget
+                                                                                .value,
+                                                                        ),
+                                                                    },
+                                                                )
+                                                            }
+                                                            onChange={(
+                                                                event,
+                                                            ) => {
+                                                                const level =
+                                                                    Number(
+                                                                        event
+                                                                            .currentTarget
+                                                                            .value,
+                                                                    );
+                                                                setMixerState(
+                                                                    (state) =>
+                                                                        state && {
+                                                                            ...state,
+                                                                            mixes: state.mixes.map(
+                                                                                (
+                                                                                    mix,
+                                                                                ) =>
+                                                                                    mix.target ===
+                                                                                        selectedTarget.target &&
+                                                                                    mix.id ===
+                                                                                        selectedTarget.id
+                                                                                        ? {
+                                                                                              ...mix,
+                                                                                              inputs: mix.inputs.map(
+                                                                                                  (
+                                                                                                      row,
+                                                                                                  ) =>
+                                                                                                      row.kind ===
+                                                                                                          input.kind &&
+                                                                                                      row.id ===
+                                                                                                          input.id
+                                                                                                          ? {
+                                                                                                                ...row,
+                                                                                                                level,
+                                                                                                            }
+                                                                                                          : row,
+                                                                                              ),
+                                                                                          }
+                                                                                        : mix,
+                                                                            ),
+                                                                        },
+                                                                );
+                                                            }}
+                                                        />
+                                                        <span>
+                                                            {Math.round(
+                                                                input.level *
+                                                                    100,
+                                                            )}
+                                                            %
+                                                        </span>
+                                                    </label>
+                                                    {input.kind !== "bus" && (
+                                                        <label className="mt-2 flex items-center gap-2 text-xs">
+                                                            Mono placement{" "}
+                                                            <select
+                                                                value={
+                                                                    input.monoPlacement
+                                                                }
+                                                                disabled={
+                                                                    pending !==
+                                                                    null
+                                                                }
+                                                                onChange={(
+                                                                    event,
+                                                                ) =>
+                                                                    void send(
+                                                                        `mono:${input.id}`,
+                                                                        {
+                                                                            command:
+                                                                                "setMonoPlacement",
+                                                                            ...selectedTarget,
+                                                                            kind: input.kind,
+                                                                            sourceID:
+                                                                                input.id,
+                                                                            monoPlacement:
+                                                                                event
+                                                                                    .currentTarget
+                                                                                    .value as
+                                                                                    | "left"
+                                                                                    | "right"
+                                                                                    | "both",
+                                                                        },
+                                                                    )
+                                                                }
+                                                                className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                                                            >
+                                                                <option value="both">
+                                                                    Stereo
+                                                                </option>
+                                                                <option value="left">
+                                                                    Left
+                                                                </option>
+                                                                <option value="right">
+                                                                    Right
+                                                                </option>
+                                                            </select>
+                                                        </label>
+                                                    )}
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                )}
                             </section>
                         )}
 

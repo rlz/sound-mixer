@@ -178,6 +178,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case "renameBus": return try renameBus(body: body, store: store)
         case "renameRoute": return try renameRoute(body: body, store: store)
         case "deleteBus": return try deleteBus(body: body, store: store)
+        case "addMixInput": return try editMixInput(body: body, store: store, operation: .add)
+        case "removeMixInput": return try editMixInput(body: body, store: store, operation: .remove)
+        case "setMixInputLevel": return try editMixInput(body: body, store: store, operation: .level)
+        case "setMonoPlacement": return try editMixInput(body: body, store: store, operation: .placement)
         default:
             throw BridgeError.unknownCommand
         }
@@ -248,6 +252,72 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
     }
 
+    private enum MixInputOperation: Equatable { case add, remove, level, placement }
+
+    private func editMixInput(body: [String: Any], store: ConfigurationStore, operation: MixInputOperation) throws -> MixerConfiguration {
+        let common: Set = ["requestId", "command", "target", "id", "kind", "sourceID"]
+        let expected = common.union(operation == .add ? ["monoPlacement"] : (operation == .level ? ["level"] : (operation == .placement ? ["monoPlacement"] : [])))
+        guard Set(body.keys) == expected,
+              let target = body["target"] as? String, ["output", "bus", "route"].contains(target),
+              let id = body["id"] as? String, !id.isEmpty,
+              let kind = body["kind"] as? String,
+              let sourceID = body["sourceID"] as? String, !sourceID.isEmpty
+        else { throw BridgeError.invalidPayload }
+        let reference: SourceReference
+        switch kind {
+        case "inputDevice": reference = .inputDevice(DeviceUID(rawValue: sourceID))
+        case "application": reference = .application(ApplicationID(rawValue: sourceID))
+        case "bus":
+            guard let busID = UUID(uuidString: sourceID) else { throw BridgeError.invalidPayload }
+            reference = .bus(busID)
+        default: throw BridgeError.invalidPayload
+        }
+        let level = body["level"] as? Double
+        let placement = (body["monoPlacement"] as? String).flatMap(MonoPlacement.init(rawValue:))
+        if operation == .level, level == nil || !(0 ... 1).contains(level!) {
+            throw BridgeError.invalidPayload
+        }
+        if operation == .add || operation == .placement, placement == nil {
+            throw BridgeError.invalidPayload
+        }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { config in
+            switch target {
+            case "output":
+                guard let index = config.outputMixes.firstIndex(where: { $0.deviceUID.rawValue == id }) else { throw BridgeError.unknownOutput }
+                var value = config.outputMixes[index].mix
+                try Self.applyInput(operation, reference: reference, level: level, placement: placement, to: &value)
+                config.outputMixes[index].mix = value
+            case "bus":
+                guard let uuid = UUID(uuidString: id), let index = config.buses.firstIndex(where: { $0.id == uuid }) else { throw BridgeError.unknownBus }
+                var value = config.buses[index].mix
+                try Self.applyInput(operation, reference: reference, level: level, placement: placement, to: &value)
+                config.buses[index].mix = value
+            default:
+                guard let uuid = UUID(uuidString: id), let index = config.blackHoleRoutes.firstIndex(where: { $0.id == uuid }) else { throw BridgeError.unknownRoute }
+                var value = config.blackHoleRoutes[index].mix
+                try Self.applyInput(operation, reference: reference, level: level, placement: placement, to: &value)
+                config.blackHoleRoutes[index].mix = value
+            }
+        }
+    }
+
+    private static func applyInput(_ operation: MixInputOperation, reference: SourceReference, level: Double?, placement: MonoPlacement?, to mix: inout Mix) throws {
+        switch operation {
+        case .add:
+            guard !mix.inputs.contains(where: { $0.source == reference }), let placement else { throw BridgeError.invalidPayload }
+            mix.inputs.append(MixInput(source: reference, monoPlacement: placement))
+        case .remove:
+            guard let index = mix.inputs.firstIndex(where: { $0.source == reference }) else { throw BridgeError.invalidPayload }
+            mix.inputs.remove(at: index)
+        case .level:
+            guard let index = mix.inputs.firstIndex(where: { $0.source == reference }), let level else { throw BridgeError.invalidPayload }
+            mix.inputs[index].level = level
+        case .placement:
+            guard let index = mix.inputs.firstIndex(where: { $0.source == reference }), let placement else { throw BridgeError.invalidPayload }
+            mix.inputs[index].monoPlacement = placement
+        }
+    }
+
     private func validatedName(_ name: String) throws -> String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.count <= 64 else { throw BridgeError.invalidName }
@@ -294,12 +364,31 @@ private extension AppDelegate {
                 )
             },
             inputCaptureStates: captureStates.filter { id, _ in audioDevices.contains(where: { $0.uid == id }) }
-                .map { BridgeInputCaptureState(uid: $0.key, state: $0.value) }
+                .map { BridgeInputCaptureState(uid: $0.key, state: $0.value) },
+            mixes: bridgeMixes(configuration)
         )
         guard let data = try? JSONEncoder().encode(state),
               let json = String(data: data, encoding: .utf8)
         else { return }
         webView?.evaluateJavaScript("window.soundMixerBridge?.onState(\(json))")
+    }
+
+    func bridgeMixes(_ configuration: MixerConfiguration) -> [BridgeMix] {
+        func item(_ target: String, _ id: String, _ mix: Mix) -> BridgeMix {
+            BridgeMix(target: target, id: id, level: mix.level, inputs: mix.inputs.map { input in
+                let kind: String
+                let sourceID: String
+                switch input.source {
+                case let .inputDevice(uid): kind = "inputDevice"; sourceID = uid.rawValue
+                case let .application(app): kind = "application"; sourceID = app.rawValue
+                case let .bus(bus): kind = "bus"; sourceID = bus.uuidString
+                }
+                return BridgeMixInput(kind: kind, id: sourceID, level: input.level, monoPlacement: input.monoPlacement.rawValue)
+            })
+        }
+        return configuration.outputMixes.map { item("output", $0.deviceUID.rawValue, $0.mix) }
+            + configuration.buses.map { item("bus", $0.id.uuidString, $0.mix) }
+            + configuration.blackHoleRoutes.map { item("route", $0.id.uuidString, $0.mix) }
     }
 
     func bridgeDevices(configuration: MixerConfiguration, discovered: [String: AudioDeviceSnapshot]) -> [BridgeDevice] {
