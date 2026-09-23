@@ -27,15 +27,21 @@ final class MixerConfigurationTests: XCTestCase {
                 deviceUID: blackHoleUID,
                 channels: .stereo(left: 3, right: 4),
                 mix: Mix(level: 0.8, inputs: [MixInput(source: .bus(busID))])
-            )]
+            )],
+            knownDevices: [
+                KnownDevice(uid: inputUID, lastKnownName: "USB Microphone"),
+                KnownDevice(uid: outputUID, lastKnownName: "Studio Speakers"),
+                KnownDevice(uid: blackHoleUID, lastKnownName: "BlackHole 64ch")
+            ]
         )
 
         let data = try JSONEncoder().encode(configuration)
         XCTAssertEqual(try JSONDecoder().decode(MixerConfiguration.self, from: data), configuration)
 
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertEqual(object["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(object["schemaVersion"] as? Int, 2)
         XCTAssertEqual(object["isEnabled"] as? Bool, true)
+        XCTAssertEqual((object["knownDevices"] as? [[String: String]])?.count, 3)
         let outputMixes = try XCTUnwrap(object["outputMixes"] as? [[String: Any]])
         let mix = try XCTUnwrap(outputMixes[0]["mix"] as? [String: Any])
         let inputs = try XCTUnwrap(mix["inputs"] as? [[String: Any]])
@@ -62,5 +68,55 @@ final class MixerConfigurationTests: XCTestCase {
         XCTAssertThrowsError(try decoder.decode(SourceReference.self, from: Data(#"{"kind":"bus","id":"not-a-uuid"}"#.utf8)))
         XCTAssertThrowsError(try decoder.decode(BlackHoleChannels.self, from: Data(#"{"mode":"stereo","channels":[3]}"#.utf8)))
         XCTAssertThrowsError(try decoder.decode(BlackHoleChannels.self, from: Data(#"{"mode":"mono","channels":[1,2]}"#.utf8)))
+    }
+
+    func testKnownNamesFollowReferencedUIDsAndFallbackToUID() {
+        let inputUID = DeviceUID(rawValue: "input-1")
+        let outputUID = DeviceUID(rawValue: "output-1")
+        let routeUID = DeviceUID(rawValue: "blackhole-1")
+        let unrelatedUID = DeviceUID(rawValue: "unrelated")
+        let input = MixInput(source: .inputDevice(inputUID))
+        var configuration = MixerConfiguration(
+            outputMixes: [OutputMix(deviceUID: outputUID, mix: Mix(inputs: [input]))],
+            blackHoleRoutes: [BlackHoleRoute(name: "Route", deviceUID: routeUID, channels: .mono(1))],
+            knownDevices: [KnownDevice(uid: outputUID, lastKnownName: "Saved Output")]
+        )
+
+        XCTAssertEqual(configuration.deviceDisplayName(for: outputUID), "Saved Output")
+        XCTAssertEqual(configuration.deviceDisplayName(for: inputUID), inputUID.rawValue)
+        XCTAssertEqual(Set(configuration.knownDevices.map(\.uid)), [inputUID, outputUID, routeUID])
+
+        configuration.reconcileKnownDevices(with: [
+            descriptor(uid: inputUID, name: "USB Mic"),
+            descriptor(uid: outputUID, name: "Renamed Output"),
+            descriptor(uid: unrelatedUID, name: "Unused")
+        ])
+        XCTAssertEqual(configuration.deviceDisplayName(for: inputUID), "USB Mic")
+        XCTAssertEqual(configuration.deviceDisplayName(for: outputUID), "Renamed Output")
+        XCTAssertEqual(configuration.deviceDisplayName(for: routeUID), routeUID.rawValue)
+        XCTAssertFalse(configuration.knownDevices.contains { $0.uid == unrelatedUID })
+
+        configuration.outputMixes.removeAll()
+        configuration.reconcileKnownDevices(with: [])
+        XCTAssertEqual(configuration.knownDevices.map(\.uid), [routeUID])
+        XCTAssertEqual(configuration.deviceDisplayName(for: routeUID), routeUID.rawValue)
+    }
+
+    func testUnsupportedVersionAndDuplicateMetadataAreRejected() throws {
+        let configuration = MixerConfiguration(outputMixes: [OutputMix(deviceUID: DeviceUID(rawValue: "speaker"))])
+        let data = try JSONEncoder().encode(configuration)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        object["schemaVersion"] = 1
+        XCTAssertThrowsError(try JSONDecoder().decode(MixerConfiguration.self, from: JSONSerialization.data(withJSONObject: object)))
+
+        object["schemaVersion"] = 2
+        let knownDevices = try XCTUnwrap(object["knownDevices"] as? [[String: Any]])
+        object["knownDevices"] = knownDevices + knownDevices
+        XCTAssertThrowsError(try JSONDecoder().decode(MixerConfiguration.self, from: JSONSerialization.data(withJSONObject: object)))
+    }
+
+    private func descriptor(uid: DeviceUID, name: String) -> AudioDeviceDescriptor {
+        AudioDeviceDescriptor(uid: uid, name: name, inputChannels: 2, outputChannels: 2, sampleRate: 48000, isBlackHole: false)
     }
 }

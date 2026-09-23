@@ -206,26 +206,116 @@ public struct BlackHoleRoute: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-public struct MixerConfiguration: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 1
+public struct KnownDevice: Codable, Equatable, Sendable {
+    public var uid: DeviceUID
+    public var lastKnownName: String?
 
-    public var schemaVersion: Int
+    public init(uid: DeviceUID, lastKnownName: String? = nil) {
+        self.uid = uid
+        self.lastKnownName = lastKnownName
+    }
+}
+
+public struct MixerConfiguration: Codable, Equatable, Sendable {
+    public static let currentSchemaVersion = 2
+
+    public let schemaVersion: Int
     public var isEnabled: Bool
     public var outputMixes: [OutputMix]
     public var buses: [VirtualBus]
     public var blackHoleRoutes: [BlackHoleRoute]
+    public var knownDevices: [KnownDevice]
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case isEnabled
+        case outputMixes
+        case buses
+        case blackHoleRoutes
+        case knownDevices
+    }
 
     public init(
-        schemaVersion: Int = currentSchemaVersion,
         isEnabled: Bool = false,
         outputMixes: [OutputMix] = [],
         buses: [VirtualBus] = [],
-        blackHoleRoutes: [BlackHoleRoute] = []
+        blackHoleRoutes: [BlackHoleRoute] = [],
+        knownDevices: [KnownDevice] = []
     ) {
-        self.schemaVersion = schemaVersion
+        schemaVersion = Self.currentSchemaVersion
         self.isEnabled = isEnabled
         self.outputMixes = outputMixes
         self.buses = buses
         self.blackHoleRoutes = blackHoleRoutes
+        self.knownDevices = knownDevices
+        reconcileKnownDevices(with: [])
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let version = try container.decode(Int.self, forKey: .schemaVersion)
+        guard version == Self.currentSchemaVersion else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .schemaVersion,
+                in: container,
+                debugDescription: "Unsupported configuration schema version \(version)"
+            )
+        }
+
+        schemaVersion = Self.currentSchemaVersion
+        isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
+        outputMixes = try container.decode([OutputMix].self, forKey: .outputMixes)
+        buses = try container.decode([VirtualBus].self, forKey: .buses)
+        blackHoleRoutes = try container.decode([BlackHoleRoute].self, forKey: .blackHoleRoutes)
+        knownDevices = try container.decode([KnownDevice].self, forKey: .knownDevices)
+        let uids = knownDevices.map(\.uid)
+        guard Set(uids).count == uids.count else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .knownDevices,
+                in: container,
+                debugDescription: "Duplicate device UID metadata"
+            )
+        }
+        reconcileKnownDevices(with: [])
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(Self.currentSchemaVersion, forKey: .schemaVersion)
+        try container.encode(isEnabled, forKey: .isEnabled)
+        try container.encode(outputMixes, forKey: .outputMixes)
+        try container.encode(buses, forKey: .buses)
+        try container.encode(blackHoleRoutes, forKey: .blackHoleRoutes)
+        try container.encode(knownDevices, forKey: .knownDevices)
+    }
+
+    public func deviceDisplayName(for uid: DeviceUID) -> String {
+        knownDevices.first(where: { $0.uid == uid })?.lastKnownName ?? uid.rawValue
+    }
+
+    /// Refresh metadata only for configured devices; discovery never creates saved ghosts.
+    public mutating func reconcileKnownDevices(with discoveredDevices: [AudioDeviceDescriptor]) {
+        var referencedUIDs = Set(outputMixes.map(\.deviceUID))
+        referencedUIDs.formUnion(blackHoleRoutes.map(\.deviceUID))
+        for mix in outputMixes.map(\.mix) + buses.map(\.mix) + blackHoleRoutes.map(\.mix) {
+            for input in mix.inputs {
+                if case let .inputDevice(uid) = input.source {
+                    referencedUIDs.insert(uid)
+                }
+            }
+        }
+
+        let savedNames = knownDevices.reduce(into: [DeviceUID: String]()) { names, device in
+            names[device.uid] = device.lastKnownName
+        }
+        let discoveredNames = discoveredDevices.reduce(into: [DeviceUID: String]()) { names, device in
+            names[device.uid] = device.name
+        }
+        knownDevices = referencedUIDs.sorted { $0.rawValue < $1.rawValue }.map { uid in
+            let currentName = discoveredNames[uid]?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let savedName = savedNames[uid]?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = [currentName, savedName].compactMap(\.self).first { !$0.isEmpty }
+            return KnownDevice(uid: uid, lastKnownName: name)
+        }
     }
 }
