@@ -1,4 +1,6 @@
 import React from "react";
+import { faSliders } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
@@ -9,9 +11,9 @@ function App() {
                 <div className="mb-8 flex items-center gap-3">
                     <div
                         aria-hidden="true"
-                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-400 font-bold text-slate-950"
+                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-400 text-slate-950"
                     >
-                        S
+                        <FontAwesomeIcon icon={faSliders} />
                     </div>
                     <span className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-300">
                         Sound Mixer
