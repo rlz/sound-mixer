@@ -26,7 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         guard let webDirectory = Bundle.main.url(forResource: "dist", withExtension: nil),
               let indexURL = URL(string: "index.html", relativeTo: webDirectory)
         else {
-            showLoadError("Локальный интерфейс не найден в приложении.")
+            showLoadError("The local interface was not found in the app bundle.")
             window.makeKeyAndOrderFront(nil)
             return
         }
@@ -41,11 +41,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     }
 
     func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation!, withError error: Error) {
-        showLoadError("Не удалось открыть локальный интерфейс: \(error.localizedDescription)")
+        showLoadError("Could not open the local interface: \(error.localizedDescription)")
     }
 
     func webView(_: WKWebView, didFail _: WKNavigation!, withError error: Error) {
-        showLoadError("Не удалось загрузить локальный интерфейс: \(error.localizedDescription)")
+        showLoadError("Could not load the local interface: \(error.localizedDescription)")
     }
 
     private func showLoadError(_ message: String) {

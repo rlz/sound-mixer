@@ -6,7 +6,7 @@ const moduleScript =
     /<script type="module" crossorigin src="(\.\/assets\/[^"]+\.js)"><\/script>/;
 
 if (!moduleScript.test(html)) {
-    throw new Error("Не найден собранный локальный скрипт Vite.");
+    throw new Error("The built local Vite script was not found.");
 }
 
 // WKWebView does not execute file:// module scripts reliably; Vite emits one self-contained bundle.

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key>
-    <string>ru</string>
+    <string>en</string>
     <key>CFBundleDisplayName</key>
     <string>Sound Mixer</string>
     <key>CFBundleExecutable</key>
@@ -23,8 +23,8 @@
     <key>LSMinimumSystemVersion</key>
     <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
     <key>NSAudioCaptureUsageDescription</key>
-    <string>Sound Mixer использует звук выбранных приложений для микширования.</string>
+    <string>Sound Mixer captures audio from selected apps for mixing.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Sound Mixer использует выбранные устройства ввода для микширования.</string>
+    <string>Sound Mixer captures audio from selected input devices for mixing.</string>
 </dict>
 </plist>

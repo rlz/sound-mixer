@@ -18,15 +18,15 @@ function App() {
                     </span>
                 </div>
                 <h1 className="text-3xl font-semibold tracking-tight">
-                    Оболочка приложения готова
+                    The app shell is ready
                 </h1>
                 <p className="mt-4 max-w-xl leading-7 text-slate-300">
-                    Интерфейс React загружен из ресурсов приложения. Обнаружение
-                    устройств, маршруты и управление звуком появятся в следующих
-                    задачах.
+                    The React interface loads from the app bundle. Device
+                    discovery, routing, and audio controls are coming in future
+                    updates.
                 </p>
                 <div className="mt-8 rounded-xl border border-slate-700 bg-slate-800/70 px-5 py-4 text-sm text-slate-300">
-                    Локальный интерфейс · macOS 15+ · без подключения к сети
+                    Local interface · macOS 15+ · works offline
                 </div>
             </section>
         </main>

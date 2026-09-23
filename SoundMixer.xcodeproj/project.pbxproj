@@ -86,9 +86,9 @@
             };
             buildConfigurationList = A10000000000000000000040 /* Build configuration list for PBXProject "SoundMixer" */;
             compatibilityVersion = "Xcode 14.0";
-            developmentRegion = ru;
+            developmentRegion = en;
             hasScannedForEncodings = 0;
-            knownRegions = (ru, en, Base);
+            knownRegions = (en, Base);
             mainGroup = A10000000000000000000020;
             productRefGroup = A10000000000000000000023 /* Products */;
             projectDirPath = "";
