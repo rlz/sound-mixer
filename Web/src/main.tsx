@@ -15,6 +15,7 @@ type OutputState = {
     outputChannels: number;
     level: number;
     configured: boolean;
+    routeError?: string | null;
 };
 
 type DeviceState = {
@@ -258,6 +259,11 @@ function App() {
                                     >
                                         {output.uid}
                                     </p>
+                                    {output.routeError && (
+                                        <p className="mt-2 text-sm text-rose-300" role="status">
+                                            Route unavailable: {output.routeError}
+                                        </p>
+                                    )}
                                 </div>
                                 <span className="shrink-0 text-right text-xs text-slate-400">
                                     {output.outputChannels}{" "}

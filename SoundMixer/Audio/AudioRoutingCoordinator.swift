@@ -24,16 +24,17 @@ final class AudioRoutingCoordinator {
         }
     }
 
-    func update(graph: MixGraphSnapshot, devices: [AudioDeviceSnapshot], processes: [AudioProcessSnapshot]) {
+    @discardableResult
+    func update(graph: MixGraphSnapshot, devices: [AudioDeviceSnapshot], processes: [AudioProcessSnapshot]) -> Bool {
         let orderedDevices = devices.sorted { $0.uid < $1.uid }
         let orderedProcesses = processes.sorted {
             $0.applicationID == $1.applicationID ? $0.processID < $1.processID : $0.applicationID < $1.applicationID
         }
         let enabled = graph.configuration.isEnabled
-        guard needsUpdate(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled) else { return }
+        guard needsUpdate(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled) else { return false }
         remember(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled)
         stopCurrentRouting()
-        guard enabled else { return }
+        guard enabled else { return true }
 
         let deviceByUID = Dictionary(orderedDevices.map { ($0.uid, $0) }, uniquingKeysWith: { first, _ in first })
         let processByID = Dictionary(orderedProcesses.map { ($0.applicationID, $0) }, uniquingKeysWith: { first, _ in first })
@@ -42,6 +43,7 @@ final class AudioRoutingCoordinator {
         startOutputRoutes(graph: graph, devices: deviceByUID, queues: &queuesBySource, sources: &captureSources)
         fanout = AudioSourceFanout(queuesBySource: queuesBySource)
         startCapture(sources: captureSources, devices: deviceByUID, processes: processByID)
+        return true
     }
 
     func stop() {

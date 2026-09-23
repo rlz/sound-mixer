@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var audioDevices: [AudioDeviceSnapshot] = []
     private var audioProcesses: [AudioProcessSnapshot] = []
     private var captureStates: [String: String] = [:]
+    private var outputRouteErrors: [String: String] = [:]
 
     func applicationDidFinishLaunching(_: Notification) {
         let configurationFailed = !loadConfiguration()
@@ -65,8 +66,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let audioRoutingCoordinator = AudioRoutingCoordinator(capture: captureCoordinator)
         audioRoutingCoordinator.onRouteError = { [weak self] route, error in
             DispatchQueue.main.async {
-                self?.captureStates[route] = "unavailable: \(error)"
-                self?.publishState()
+                guard let self else { return }
+                if route.hasPrefix("output:") {
+                    let uid = String(route.dropFirst("output:".count))
+                    self.outputRouteErrors[uid] = error
+                }
+                self.publishState()
             }
         }
         self.audioRoutingCoordinator = audioRoutingCoordinator
@@ -206,7 +211,9 @@ private extension AppDelegate {
 
     func updateAudioRouting() {
         guard let graph = configurationStore?.activeGraph else { return }
-        audioRoutingCoordinator?.update(graph: graph, devices: audioDevices, processes: audioProcesses)
+        if audioRoutingCoordinator?.update(graph: graph, devices: audioDevices, processes: audioProcesses) == true {
+            outputRouteErrors.removeAll()
+        }
     }
 
     func publishState(configuration: MixerConfiguration? = nil) {
@@ -282,7 +289,8 @@ private extension AppDelegate {
                 available: live.map { $0.isAlive && $0.outputChannels > 0 } ?? false,
                 outputChannels: live?.outputChannels ?? 0,
                 level: saved[uid]?.mix.level ?? 1,
-                configured: saved[uid] != nil
+                configured: saved[uid] != nil,
+                routeError: outputRouteErrors[uid]
             )
         }
     }
@@ -346,6 +354,7 @@ private struct BridgeOutput: Encodable {
     let outputChannels: Int
     let level: Double
     let configured: Bool
+    let routeError: String?
 }
 
 private struct BridgeNamedItem: Encodable {
