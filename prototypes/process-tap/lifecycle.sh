@@ -3,6 +3,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 temporary_directory="$(mktemp -d "${TMPDIR:-/private/tmp}/sound-mixer-tap.XXXXXX")"
+listening_mode="${SOUND_MIXER_LISTENING_MODE:-0}"
 player=0
 probe=0
 
@@ -19,17 +20,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
-python3 - "$temporary_directory/tone.wav" <<'PY'
+python3 - "$temporary_directory/tone.wav" "$listening_mode" <<'PY'
 import math
 import struct
 import sys
 import wave
 
+amplitude = 3000 if sys.argv[2] == "1" else 500
 with wave.open(sys.argv[1], "wb") as output:
     output.setnchannels(1)
     output.setsampwidth(2)
     output.setframerate(48000)
-    samples = (struct.pack("<h", round(500 * math.sin(2 * math.pi * 440 * index / 48000))) for index in range(48000 * 45))
+    samples = (struct.pack("<h", round(amplitude * math.sin(2 * math.pi * 440 * index / 48000))) for index in range(48000 * 45))
     output.writeframes(b"".join(samples))
 PY
 
@@ -42,13 +44,20 @@ if [[ "$before_output" == 0 ]]; then
     exit 1
 fi
 
-/usr/bin/afplay -v 0.1 "$temporary_directory/tone.wav" &
+if [[ "$listening_mode" == 1 ]]; then
+    echo "Listening check: the 440 Hz tone should remain audible until this script finishes"
+    /usr/bin/afplay -v 0.5 "$temporary_directory/tone.wav" &
+else
+    /usr/bin/afplay -v 0.1 "$temporary_directory/tone.wav" &
+fi
 player=$!
 sleep 2
 
+echo "Stage 1: stopping capture normally"
 "$root/.build/process-tap-probe" cycle "$player" --seconds 3
 kill -0 "$player"
 
+echo "Stage 2: starting capture to terminate with SIGKILL"
 "$root/.build/process-tap-probe" capture "$player" --seconds 120 > "$temporary_directory/crash.log" 2>&1 &
 probe=$!
 for attempt in {1..100}; do
@@ -58,6 +67,7 @@ for attempt in {1..100}; do
     sleep 0.1
 done
 rg '^Capturing|^Tap UID:' "$temporary_directory/crash.log"
+echo "Stage 3: terminating capture with SIGKILL"
 kill -9 "$probe"
 wait "$probe" 2>/dev/null || true
 probe=0
