@@ -23,6 +23,7 @@ Statuses: `[ ]` = not started, `[~]` = in progress, `[x]` = complete. Tasks are 
 ## 2. Native audio pipeline
 
 - [x] Observe Core Audio inputs and outputs and their availability. **Done when:** the list updates without restarting, and settings are tied to UIDs. The native device catalog observes HAL list and relevant device-property changes and publishes UID-keyed snapshots; the interface bridge will consume these snapshots in the interface task.
+- [x] Show a read-only list of discovered Core Audio outputs in the app. **Done when:** the native snapshot populates device names, UIDs, output channel counts, availability, and updates after device changes; no sample devices are shown. This is the visible checkpoint before returning to the remaining core work.
 - [ ] Match saved UIDs to discovered devices at launch and on every HAL change. **Done when:** a saved output, input, or BlackHole route remains unavailable if its device is missing at startup; absence does not corrupt configuration or block independent routes; the state snapshot distinguishes saved and discovered devices.
 - [ ] Capture input devices and application sources with permission handling. **Done when:** sources produce separate streams and denial appears as a source state.
 - [ ] Implement the stereo mixing engine, source and master levels, smooth level changes, and clipping protection. **Done when:** audio tests verify levels, absence of clicks, and basic stability.
@@ -35,7 +36,7 @@ Statuses: `[ ]` = not started, `[~]` = in progress, `[x]` = complete. Tasks are 
 
 ## 3. Interface and integration
 
-- [ ] Implement a typed Swift ↔ WebKit bridge, command validation, and state snapshots. **Done when:** an invalid command is rejected without changing the audio graph.
+- [~] Implement a typed Swift ↔ WebKit bridge, command validation, and state snapshots. **Done when:** an invalid command is rejected without changing the audio graph. Initial snapshots and validated persistence commands are implemented; native audio graph application and end-to-end rejection verification remain with the audio engine.
 - [x] Add Font Awesome Free to the React interface for local SVG bundling. **Done when:** package versions are pinned, an icon appears on the current screen, and the build needs no CDN.
 - [ ] Build the left panel with device, bus, and BlackHole groups, selection, and sliders. **Done when:** all outputs appear and sliders control the native mix.
 - [ ] Add the master switch and a textual disabled state to the window. **Done when:** the state is keyboard accessible, confirmed by Swift, and restored at launch.

@@ -12,6 +12,9 @@
 
 ## Window
 
+- The WebKit bridge accepts a versioned state snapshot from Swift and an allowlist of typed commands. The page sends a `ready` command after subscribing so the initial snapshot cannot be lost during startup. Every command includes a request ID and receives an accepted or rejected result. Swift validates required fields and ranges before saving; rejected commands leave saved state unchanged. State snapshots combine discovered outputs with configured output mixes, buses, and BlackHole routes. Audio graph application is added with the audio engine.
+- The initial device screen is read-only. It lists only discovered devices with output channels and saved output mixes, and shows each item's name, UID, output channel count, and availability. A saved UID with no matching output remains visible as disconnected. Input-only devices are not listed as outputs.
+
 - The main window has two panels: output devices and virtual buses on the left, and the selected item's mix settings on the right.
 - A master “Mixing On/Off” switch with clear text state appears at the top, independently of the selected item.
 - The left panel has “Output Devices,” “Virtual Buses,” and “BlackHole Routes” groups. All physical outputs appear whether or not a mix is configured.
