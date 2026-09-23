@@ -140,6 +140,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private func publishState(configuration: MixerConfiguration? = nil) {
         guard let configuration = configuration ?? configurationStore?.configuration else { return }
         let discovered = Dictionary(uniqueKeysWithValues: audioDevices.map { ($0.uid, $0) })
+        let savedUIDs = Set(configuration.knownDevices.map { $0.uid.rawValue })
+        let deviceUIDs = Set(discovered.keys).union(savedUIDs).sorted()
+        let deviceStates = deviceUIDs.map { uid -> BridgeDevice in
+            let live = discovered[uid]
+            let deviceUID = DeviceUID(rawValue: uid)
+            var savedAs: [String] = []
+            if configuration.outputMixes.contains(where: { $0.deviceUID == deviceUID }) { savedAs.append("output") }
+            if configuration.blackHoleRoutes.contains(where: { $0.deviceUID == deviceUID }) { savedAs.append("blackHoleRoute") }
+            let mixes = configuration.outputMixes.map(\.mix) + configuration.buses.map(\.mix) + configuration.blackHoleRoutes.map(\.mix)
+            let isSavedInput = mixes.flatMap(\.inputs).contains { input in
+                if case let .inputDevice(inputUID) = input.source { return inputUID == deviceUID }
+                return false
+            }
+            if isSavedInput { savedAs.append("input") }
+            return BridgeDevice(
+                uid: uid,
+                name: live?.name ?? configuration.deviceDisplayName(for: deviceUID),
+                discovered: live != nil,
+                available: live.map(\.isAlive) ?? false,
+                inputChannels: live?.inputChannels ?? 0,
+                outputChannels: live?.outputChannels ?? 0,
+                savedAs: savedAs
+            )
+        }
         let saved = Dictionary(uniqueKeysWithValues: configuration.outputMixes.map { ($0.deviceUID.rawValue, $0) })
         let discoveredOutputUIDs = audioDevices.filter { $0.outputChannels > 0 }.map(\.uid)
         let devices = Set(discoveredOutputUIDs).union(saved.keys).sorted().map { uid -> BridgeOutput in
@@ -156,6 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let state = BridgeState(
             schemaVersion: MixerConfiguration.currentSchemaVersion,
             isEnabled: configuration.isEnabled,
+            devices: deviceStates,
             outputs: devices,
             buses: configuration.buses.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) },
             blackHoleRoutes: configuration.blackHoleRoutes.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) }
@@ -188,9 +213,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 private struct BridgeState: Encodable {
     let schemaVersion: Int
     let isEnabled: Bool
+    let devices: [BridgeDevice]
     let outputs: [BridgeOutput]
     let buses: [BridgeNamedItem]
     let blackHoleRoutes: [BridgeNamedItem]
+}
+
+private struct BridgeDevice: Encodable {
+    let uid: String
+    let name: String
+    let discovered: Bool
+    let available: Bool
+    let inputChannels: Int
+    let outputChannels: Int
+    let savedAs: [String]
 }
 
 private struct BridgeOutput: Encodable {
