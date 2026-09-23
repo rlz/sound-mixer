@@ -31,6 +31,27 @@ final class StereoMixingEngineTests: XCTestCase {
         }
     }
 
+    func testMonoPlacementRoutesSamplesToExpectedChannels() {
+        let source: [Float] = [0.2, -0.4, 0.6]
+
+        for placement in [MonoPlacement.left, .right, .both] {
+            var engine = StereoMixingEngine(sampleRate: 48000, smoothingTime: 0.0001)
+            var outputLeft = [Float](repeating: 0, count: source.count)
+            var outputRight = [Float](repeating: 0, count: source.count)
+
+            source.withUnsafeBufferPointer { input in
+                outputLeft.withUnsafeMutableBufferPointer { left in
+                    outputRight.withUnsafeMutableBufferPointer { right in
+                        engine.mix(mono: input, placement: placement, into: left, outputRight: right, frameCount: source.count)
+                    }
+                }
+            }
+
+            XCTAssertEqual(outputLeft, placement == .right ? [0, 0, 0] : source)
+            XCTAssertEqual(outputRight, placement == .left ? [0, 0, 0] : source)
+        }
+    }
+
     func testGainChangeRampsWithoutDiscontinuityAndClipsSafely() {
         var engine = StereoMixingEngine(sampleRate: 48000, smoothingTime: 0.01)
         engine.setSourceGain(0.5)

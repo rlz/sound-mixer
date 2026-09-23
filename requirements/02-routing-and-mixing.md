@@ -11,7 +11,7 @@
 ## Channels and levels
 
 - The first release uses stereo as its internal base mix layout. For a mono input, the user can select left, right, or both output channels.
-- Mono inputs default to duplication into left and right channels without changing the level of either channel. The selected placement is saved for that mix row.
+- Mono inputs default to duplication into left and right channels without changing the level of either channel. During summing, `left` writes only to the left output, `right` only to the right output, and `both` writes the same sample to both; the selected placement is saved for that mix row.
 - Stereo sources retain left and right channels. Sources with more channels require an explicit channel map; without one, the source is marked unsupported rather than mixed implicitly.
 - The sum of sources can exceed 0 dBFS. The engine uses a finite-safe hard limiter at -1 to +1 full scale after summation. This prevents numeric overflow and bounds output, but sustained overload can sound distorted; tests verify the bound and gain smoothing.
 - Level changes must not click: the engine uses a 10 ms per-sample exponential ramp from the current gain to the target gain for source and mix output levels. Non-finite gain requests resolve to silence, and gains are constrained to 0–1.

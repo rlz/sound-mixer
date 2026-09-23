@@ -50,6 +50,31 @@ public struct StereoMixingEngine: Sendable {
         }
     }
 
+    /// Adds a mono source to the selected side or duplicates it to both sides.
+    /// The unused side is left untouched so multiple sources can be summed.
+    public mutating func mix(
+        mono: UnsafeBufferPointer<Float>,
+        placement: MonoPlacement,
+        into outputLeft: UnsafeMutableBufferPointer<Float>,
+        outputRight: UnsafeMutableBufferPointer<Float>,
+        frameCount: Int
+    ) {
+        let count = min(frameCount, min(mono.count, min(outputLeft.count, outputRight.count)))
+        guard count > 0 else { return }
+
+        for frame in 0 ..< count {
+            currentSourceGain += (targetSourceGain - currentSourceGain) * smoothingCoefficient
+            currentMainGain += (targetMainGain - currentMainGain) * smoothingCoefficient
+            let sample = mono[frame] * currentSourceGain * currentMainGain
+            if placement != .right {
+                outputLeft[frame] = Self.limit(outputLeft[frame] + sample)
+            }
+            if placement != .left {
+                outputRight[frame] = Self.limit(outputRight[frame] + sample)
+            }
+        }
+    }
+
     @inline(__always)
     private static func limit(_ sample: Float) -> Float {
         guard sample.isFinite else { return 0 }
