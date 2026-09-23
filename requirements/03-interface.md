@@ -37,6 +37,7 @@
 
 - An empty mix explains how to add a source.
 - Microphone or system-audio permission denial appears beside the affected source and provides an action to open System Settings.
+- Source rows show capture progress, active capture, permission denial, or the native unavailable reason. A denied source provides a validated bridge action that opens the relevant macOS privacy settings pane.
 - Missing BlackHole and lack of free channels are explained before route creation.
 - A saved BlackHole route remains visible and removable when the driver or selected instance is missing. For missing devices, show the last-known name if saved and the UID in details; otherwise use the UID as the name. Status text explicitly says the device is disconnected.
 - A route validation error identifies affected items and does not change the active audio graph.

@@ -63,7 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
         let captureCoordinator = AudioCaptureCoordinator()
         captureCoordinator.onStateChange = { [weak self] id, state in
-            self?.captureStates[id] = String(describing: state)
+            self?.captureStates[id] = Self.bridgeCaptureState(state)
             self?.publishState()
         }
         self.captureCoordinator = captureCoordinator
@@ -80,6 +80,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
         self.audioRoutingCoordinator = audioRoutingCoordinator
         updateAudioRouting()
+    }
+
+    private static func bridgeCaptureState(_ state: AudioCaptureState) -> String {
+        switch state {
+        case .stopped: "stopped"
+        case .starting: "starting"
+        case .capturing: "capturing"
+        case .permissionDenied: "permissionDenied"
+        case let .unavailable(reason): "unavailable: \(reason)"
+        }
     }
 
     private func createWindow() -> (NSWindow, WKWebView) {
@@ -151,6 +161,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         do {
             if command == "ready" {
                 try handleReady(body: body, requestID: requestID)
+                return
+            }
+            if command == "openPrivacySettings" {
+                guard Set(body.keys) == ["requestId", "command"] else { throw BridgeError.invalidPayload }
+                if let settingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy") {
+                    NSWorkspace.shared.open(settingsURL)
+                }
+                sendToWeb(method: "onCommandResult", payload: ["requestId": requestID, "accepted": true])
                 return
             }
             let configuration = try executeCommand(command, body: body)

@@ -49,12 +49,14 @@ type MixerState = {
     outputs: OutputState[];
     buses: { id: string; name: string }[];
     blackHoleRoutes: { id: string; name: string; deviceUID: string }[];
-    applications: { id: string; name: string; available: boolean; muted: boolean }[];
+    applications: { id: string; name: string; available: boolean; muted: boolean; captureState: string }[];
+    inputCaptureStates: { uid: string; state: string }[];
     mixes: MixState[];
 };
 
 type BridgeCommand =
     | { command: "ready" }
+    | { command: "openPrivacySettings" }
     | { command: "setMasterEnabled"; enabled: boolean }
     | { command: "setOutputLevel"; uid: string; level: number }
     | { command: "deleteOutputMix"; uid: string }
@@ -654,6 +656,23 @@ function App() {
                                                                 app.available,
                                                         )
                                                       : true;
+                                            const captureState =
+                                                input.kind === "inputDevice"
+                                                    ? (mixerState?.inputCaptureStates.find((state) => state.uid === input.id)?.state ?? "stopped")
+                                                    : input.kind === "application"
+                                                      ? (mixerState?.applications.find((app) => app.id === input.id)?.captureState ?? "stopped")
+                                                      : "capturing";
+                                            const unavailableReason = !available
+                                                ? input.kind === "inputDevice"
+                                                    ? "Device disconnected."
+                                                    : input.kind === "application"
+                                                      ? "Application is not producing audio."
+                                                      : "Source unavailable."
+                                                : captureState === "permissionDenied"
+                                                  ? "Permission denied. Allow access in System Settings."
+                                                  : captureState.startsWith("unavailable:")
+                                                    ? captureState.slice("unavailable:".length).trim()
+                                                    : null;
                                             return (
                                                 <li
                                                     key={`${input.kind}:${input.id}`}
@@ -668,9 +687,19 @@ function App() {
                                                                 className={`text-xs ${available ? "text-emerald-300" : "text-amber-300"}`}
                                                             >
                                                                 {available
-                                                                    ? "Available"
+                                                                    ? captureState === "capturing" ? "Capturing" : "Available"
                                                                     : "Unavailable"}
                                                             </span>
+                                                            {unavailableReason && (
+                                                                <span className="mt-1 block text-xs text-amber-200" role="status">
+                                                                    {unavailableReason}
+                                                                    {captureState === "permissionDenied" && (
+                                                                        <button type="button" className="ml-1 underline" onClick={() => void send(`privacy:${input.id}`, { command: "openPrivacySettings" })}>
+                                                                            Open System Settings
+                                                                        </button>
+                                                                    )}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                         <button
                                                             type="button"
@@ -910,9 +939,11 @@ function App() {
                                                         {output.routeError}
                                                     </p>
                                                 )}
-                                                {output.configured && !output.available && (
+                                                {!output.available && (
                                                     <p className="w-full text-xs text-amber-300">
-                                                        Saved mix is inactive while this device is disconnected. It will resume when the same device returns.
+                                                        {output.configured
+                                                            ? "Saved mix is inactive while this device is disconnected. It will resume when the same device returns."
+                                                            : "This device is disconnected."}
                                                     </p>
                                                 )}
                                             </div>
