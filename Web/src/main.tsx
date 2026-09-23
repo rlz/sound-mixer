@@ -11,6 +11,7 @@ import "./styles.css";
 type OutputState = {
     uid: string;
     name: string;
+    isBlackHole: boolean;
     available: boolean;
     outputChannels: number;
     level: number;
@@ -100,6 +101,7 @@ declare global {
 
 function App() {
     const [mixerState, setMixerState] = useState<MixerState | null>(null);
+    const [selectedItem, setSelectedItem] = useState<string | null>(null);
     const [pending, setPending] = useState<string | null>(null);
     const [commandError, setCommandError] = useState<string | null>(null);
 
@@ -191,174 +193,211 @@ function App() {
                     </p>
                 )}
 
-                <div className="mb-6 flex items-end justify-between gap-4">
-                    <div>
-                        <h1 className="text-3xl font-semibold tracking-tight">
-                            Output Devices
-                        </h1>
-                        <p className="mt-2 text-sm text-slate-400">
-                            Core Audio outputs detected by this Mac
-                        </p>
-                    </div>
-                    <span className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">
-                        {mixerState
-                            ? `${mixerState.outputs.length} devices`
-                            : "Connecting…"}
-                    </span>
-                </div>
-
-                {!mixerState ? (
-                    <div
-                        role="status"
-                        className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-400"
-                    >
-                        Waiting for the native device snapshot…
-                    </div>
-                ) : mixerState.outputs.length === 0 ? (
-                    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-300">
-                        No output devices were reported by Core Audio.
-                    </div>
-                ) : (
-                    <ul
-                        className="space-y-3"
-                        aria-label="Core Audio output devices"
-                    >
-                        {mixerState.outputs.map((output) => (
-                            <li
-                                key={output.uid}
-                                className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-800 bg-slate-900 px-5 py-4"
-                            >
-                                <span
-                                    aria-hidden="true"
-                                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${output.available ? "bg-emerald-400/10 text-emerald-300" : "bg-amber-400/10 text-amber-300"}`}
-                                >
-                                    <FontAwesomeIcon
-                                        icon={
-                                            output.available
-                                                ? faVolumeHigh
-                                                : faVolumeXmark
+                <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+                    <nav aria-label="Mixer items" className="space-y-5">
+                        <ItemGroup title="Output Devices">
+                            {mixerState?.outputs
+                                .filter((output) => !output.isBlackHole)
+                                .map((output) => (
+                                    <button
+                                        key={output.uid}
+                                        type="button"
+                                        aria-current={
+                                            selectedItem ===
+                                            `output:${output.uid}`
+                                                ? "true"
+                                                : undefined
                                         }
-                                    />
-                                </span>
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                        <h2 className="font-medium text-slate-100">
+                                        onClick={() =>
+                                            setSelectedItem(
+                                                `output:${output.uid}`,
+                                            )
+                                        }
+                                        className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `output:${output.uid}` ? "bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "text-slate-300 hover:bg-slate-800"}`}
+                                    >
+                                        <span className="min-w-0 truncate">
                                             {output.name}
-                                        </h2>
+                                        </span>
                                         <span
-                                            className={`text-xs ${output.available ? "text-emerald-300" : "text-amber-300"}`}
+                                            className={
+                                                output.available
+                                                    ? "text-emerald-300"
+                                                    : "text-amber-300"
+                                            }
                                         >
                                             {output.available
                                                 ? "Available"
                                                 : "Disconnected"}
                                         </span>
-                                    </div>
-                                    <p
-                                        className="mt-1 truncate font-mono text-xs text-slate-500"
-                                        title={output.uid}
-                                    >
-                                        {output.uid}
-                                    </p>
-                                    {output.routeError && (
-                                        <p className="mt-2 text-sm text-rose-300" role="status">
-                                            Route unavailable: {output.routeError}
-                                        </p>
-                                    )}
-                                </div>
-                                <span className="shrink-0 text-right text-xs text-slate-400">
-                                    {output.outputChannels}{" "}
-                                    {output.outputChannels === 1
-                                        ? "channel"
-                                        : "channels"}
-                                </span>
-                                {output.configured && (
-                                    <label className="flex min-w-48 flex-1 items-center gap-3 text-xs text-slate-300">
-                                        <span>Master level</span>
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max="1"
-                                            step="0.01"
-                                            value={output.level}
-                                            aria-label={`${output.name} master level`}
-                                            aria-valuetext={`${Math.round(output.level * 100)} percent`}
-                                            disabled={pending !== null}
-                                            onChange={(event) => {
-                                                const level = Number(
-                                                    event.currentTarget.value,
-                                                );
-                                                setMixerState(
-                                                    (current) =>
-                                                        current && {
-                                                            ...current,
-                                                            outputs:
-                                                                current.outputs.map(
-                                                                    (item) =>
-                                                                        item.uid ===
-                                                                        output.uid
-                                                                            ? {
-                                                                                  ...item,
-                                                                                  level,
-                                                                              }
-                                                                            : item,
-                                                                ),
-                                                        },
-                                                );
-                                            }}
-                                            onPointerUp={(event) => {
-                                                void send(
-                                                    `output:${output.uid}`,
-                                                    {
-                                                        command:
-                                                            "setOutputLevel",
-                                                        uid: output.uid,
-                                                        level: Number(
-                                                            event.currentTarget
-                                                                .value,
-                                                        ),
-                                                    },
-                                                    () => {
-                                                        setMixerState(
-                                                            (current) =>
-                                                                current && {
-                                                                    ...current,
-                                                                    outputs:
-                                                                        current.outputs.map(
-                                                                            (
-                                                                                item,
-                                                                            ) =>
-                                                                                item.uid ===
-                                                                                output.uid
-                                                                                    ? {
-                                                                                          ...item,
-                                                                                          level: output.level,
-                                                                                      }
-                                                                                    : item,
-                                                                        ),
-                                                                },
-                                                        );
-                                                    },
-                                                );
-                                            }}
-                                            onKeyUp={(event) => {
-                                                if (
-                                                    event.key.startsWith(
-                                                        "Arrow",
-                                                    )
-                                                ) {
-                                                    void send(
-                                                        `output:${output.uid}`,
-                                                        {
-                                                            command:
-                                                                "setOutputLevel",
-                                                            uid: output.uid,
-                                                            level: Number(
-                                                                event
-                                                                    .currentTarget
-                                                                    .value,
-                                                            ),
-                                                        },
-                                                        () => {
+                                    </button>
+                                ))}
+                            {mixerState?.outputs.every(
+                                (output) => output.isBlackHole,
+                            ) && (
+                                <p className="px-3 text-sm text-slate-500">
+                                    No output devices.
+                                </p>
+                            )}
+                        </ItemGroup>
+                        <ItemGroup title="Virtual Buses">
+                            {mixerState?.buses.map((bus) => (
+                                <button
+                                    key={bus.id}
+                                    type="button"
+                                    aria-current={
+                                        selectedItem === `bus:${bus.id}`
+                                            ? "true"
+                                            : undefined
+                                    }
+                                    onClick={() =>
+                                        setSelectedItem(`bus:${bus.id}`)
+                                    }
+                                    className={`w-full rounded-lg px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `bus:${bus.id}` ? "bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "text-slate-300 hover:bg-slate-800"}`}
+                                >
+                                    {bus.name}
+                                </button>
+                            ))}
+                            {mixerState?.buses.length === 0 && (
+                                <p className="px-3 text-sm text-slate-500">
+                                    No virtual buses.
+                                </p>
+                            )}
+                        </ItemGroup>
+                        <ItemGroup title="BlackHole Routes">
+                            {mixerState?.blackHoleRoutes.map((route) => (
+                                <button
+                                    key={route.id}
+                                    type="button"
+                                    aria-current={
+                                        selectedItem === `blackHole:${route.id}`
+                                            ? "true"
+                                            : undefined
+                                    }
+                                    onClick={() =>
+                                        setSelectedItem(`blackHole:${route.id}`)
+                                    }
+                                    className={`w-full rounded-lg px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `blackHole:${route.id}` ? "bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "text-slate-300 hover:bg-slate-800"}`}
+                                >
+                                    {route.name}
+                                </button>
+                            ))}
+                            {mixerState?.blackHoleRoutes.length === 0 && (
+                                <p className="px-3 text-sm text-slate-500">
+                                    No BlackHole routes.
+                                </p>
+                            )}
+                        </ItemGroup>
+                    </nav>
+                    <div>
+                        <div className="mb-6 flex items-end justify-between gap-4">
+                            <div>
+                                <h1 className="text-3xl font-semibold tracking-tight">
+                                    Output Devices
+                                </h1>
+                                <p className="mt-2 text-sm text-slate-400">
+                                    Core Audio outputs detected by this Mac
+                                </p>
+                            </div>
+                            <span className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">
+                                {mixerState
+                                    ? `${mixerState.outputs.filter((output) => !output.isBlackHole).length} devices`
+                                    : "Connecting…"}
+                            </span>
+                        </div>
+
+                        {!mixerState ? (
+                            <div
+                                role="status"
+                                className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-400"
+                            >
+                                Waiting for the native device snapshot…
+                            </div>
+                        ) : mixerState.outputs.every(
+                              (output) => output.isBlackHole,
+                          ) ? (
+                            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-300">
+                                No output devices were reported by Core Audio.
+                            </div>
+                        ) : (
+                            <ul
+                                className="space-y-3"
+                                aria-label="Core Audio output devices"
+                            >
+                                {mixerState.outputs
+                                    .filter((output) => !output.isBlackHole)
+                                    .map((output) => (
+                                        <li
+                                            key={output.uid}
+                                            className={`flex flex-wrap items-center gap-4 rounded-2xl border bg-slate-900 px-5 py-4 ${selectedItem === `output:${output.uid}` ? "border-sky-300" : "border-slate-800"}`}
+                                        >
+                                            <span
+                                                aria-hidden="true"
+                                                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${output.available ? "bg-emerald-400/10 text-emerald-300" : "bg-amber-400/10 text-amber-300"}`}
+                                            >
+                                                <FontAwesomeIcon
+                                                    icon={
+                                                        output.available
+                                                            ? faVolumeHigh
+                                                            : faVolumeXmark
+                                                    }
+                                                />
+                                            </span>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                    <h2 className="font-medium text-slate-100">
+                                                        {output.name}
+                                                    </h2>
+                                                    <span
+                                                        className={`text-xs ${output.available ? "text-emerald-300" : "text-amber-300"}`}
+                                                    >
+                                                        {output.available
+                                                            ? "Available"
+                                                            : "Disconnected"}
+                                                    </span>
+                                                </div>
+                                                <p
+                                                    className="mt-1 truncate font-mono text-xs text-slate-500"
+                                                    title={output.uid}
+                                                >
+                                                    {output.uid}
+                                                </p>
+                                                {output.routeError && (
+                                                    <p
+                                                        className="mt-2 text-sm text-rose-300"
+                                                        role="status"
+                                                    >
+                                                        Route unavailable:{" "}
+                                                        {output.routeError}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <span className="shrink-0 text-right text-xs text-slate-400">
+                                                {output.outputChannels}{" "}
+                                                {output.outputChannels === 1
+                                                    ? "channel"
+                                                    : "channels"}
+                                            </span>
+                                            {output.configured && (
+                                                <label className="flex min-w-48 flex-1 items-center gap-3 text-xs text-slate-300">
+                                                    <span>Master level</span>
+                                                    <input
+                                                        type="range"
+                                                        min="0"
+                                                        max="1"
+                                                        step="0.01"
+                                                        value={output.level}
+                                                        aria-label={`${output.name} master level`}
+                                                        aria-valuetext={`${Math.round(output.level * 100)} percent`}
+                                                        disabled={
+                                                            pending !== null
+                                                        }
+                                                        onChange={(event) => {
+                                                            const level =
+                                                                Number(
+                                                                    event
+                                                                        .currentTarget
+                                                                        .value,
+                                                                );
                                                             setMixerState(
                                                                 (current) =>
                                                                     current && {
@@ -372,82 +411,193 @@ function App() {
                                                                                     output.uid
                                                                                         ? {
                                                                                               ...item,
-                                                                                              level: output.level,
+                                                                                              level,
                                                                                           }
                                                                                         : item,
                                                                             ),
                                                                     },
                                                             );
-                                                        },
-                                                    );
-                                                }
-                                            }}
-                                        />
-                                        <span className="w-9 text-right tabular-nums">
-                                            {Math.round(output.level * 100)}%
-                                        </span>
-                                    </label>
-                                )}
-                            </li>
-                        ))}
-                    </ul>
-                )}
-
-                {mixerState && (
-                    <section
-                        className="mt-10"
-                        aria-labelledby="applications-title"
-                    >
-                        <div className="mb-4">
-                            <h2
-                                id="applications-title"
-                                className="text-xl font-semibold tracking-tight"
-                            >
-                                Applications
-                            </h2>
-                            <p className="mt-1 text-sm text-slate-400">
-                                Apps currently known to Core Audio
-                            </p>
-                        </div>
-                        {mixerState.applications.length === 0 ? (
-                            <p className="rounded-2xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-400">
-                                No audio applications were reported.
-                            </p>
-                        ) : (
-                            <ul
-                                className="space-y-2"
-                                aria-label="Audio applications"
-                            >
-                                {mixerState.applications.map((application) => (
-                                    <li
-                                        key={application.id}
-                                        className="flex justify-between rounded-xl border border-slate-800 bg-slate-900 px-5 py-3"
-                                    >
-                                        <span>{application.name}</span>
-                                        <span
-                                            className={
-                                                application.available
-                                                    ? "text-emerald-300"
-                                                    : "text-slate-400"
-                                            }
-                                        >
-                                            {application.available
-                                                ? "Audio output detected"
-                                                : "No active output"}
-                                        </span>
-                                    </li>
-                                ))}
+                                                        }}
+                                                        onPointerUp={(
+                                                            event,
+                                                        ) => {
+                                                            void send(
+                                                                `output:${output.uid}`,
+                                                                {
+                                                                    command:
+                                                                        "setOutputLevel",
+                                                                    uid: output.uid,
+                                                                    level: Number(
+                                                                        event
+                                                                            .currentTarget
+                                                                            .value,
+                                                                    ),
+                                                                },
+                                                                () => {
+                                                                    setMixerState(
+                                                                        (
+                                                                            current,
+                                                                        ) =>
+                                                                            current && {
+                                                                                ...current,
+                                                                                outputs:
+                                                                                    current.outputs.map(
+                                                                                        (
+                                                                                            item,
+                                                                                        ) =>
+                                                                                            item.uid ===
+                                                                                            output.uid
+                                                                                                ? {
+                                                                                                      ...item,
+                                                                                                      level: output.level,
+                                                                                                  }
+                                                                                                : item,
+                                                                                    ),
+                                                                            },
+                                                                    );
+                                                                },
+                                                            );
+                                                        }}
+                                                        onKeyUp={(event) => {
+                                                            if (
+                                                                event.key.startsWith(
+                                                                    "Arrow",
+                                                                )
+                                                            ) {
+                                                                void send(
+                                                                    `output:${output.uid}`,
+                                                                    {
+                                                                        command:
+                                                                            "setOutputLevel",
+                                                                        uid: output.uid,
+                                                                        level: Number(
+                                                                            event
+                                                                                .currentTarget
+                                                                                .value,
+                                                                        ),
+                                                                    },
+                                                                    () => {
+                                                                        setMixerState(
+                                                                            (
+                                                                                current,
+                                                                            ) =>
+                                                                                current && {
+                                                                                    ...current,
+                                                                                    outputs:
+                                                                                        current.outputs.map(
+                                                                                            (
+                                                                                                item,
+                                                                                            ) =>
+                                                                                                item.uid ===
+                                                                                                output.uid
+                                                                                                    ? {
+                                                                                                          ...item,
+                                                                                                          level: output.level,
+                                                                                                      }
+                                                                                                    : item,
+                                                                                        ),
+                                                                                },
+                                                                        );
+                                                                    },
+                                                                );
+                                                            }
+                                                        }}
+                                                    />
+                                                    <span className="w-9 text-right tabular-nums">
+                                                        {Math.round(
+                                                            output.level * 100,
+                                                        )}
+                                                        %
+                                                    </span>
+                                                </label>
+                                            )}
+                                        </li>
+                                    ))}
                             </ul>
                         )}
-                    </section>
-                )}
 
-                <p className="mt-6 text-xs text-slate-500">
-                    Output levels are available for configured mixes. Source
-                    capture and routing controls are still in development.
-                </p>
+                        {mixerState && (
+                            <section
+                                className="mt-10"
+                                aria-labelledby="applications-title"
+                            >
+                                <div className="mb-4">
+                                    <h2
+                                        id="applications-title"
+                                        className="text-xl font-semibold tracking-tight"
+                                    >
+                                        Applications
+                                    </h2>
+                                    <p className="mt-1 text-sm text-slate-400">
+                                        Apps currently known to Core Audio
+                                    </p>
+                                </div>
+                                {mixerState.applications.length === 0 ? (
+                                    <p className="rounded-2xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-400">
+                                        No audio applications were reported.
+                                    </p>
+                                ) : (
+                                    <ul
+                                        className="space-y-2"
+                                        aria-label="Audio applications"
+                                    >
+                                        {mixerState.applications.map(
+                                            (application) => (
+                                                <li
+                                                    key={application.id}
+                                                    className="flex justify-between rounded-xl border border-slate-800 bg-slate-900 px-5 py-3"
+                                                >
+                                                    <span>
+                                                        {application.name}
+                                                    </span>
+                                                    <span
+                                                        className={
+                                                            application.available
+                                                                ? "text-emerald-300"
+                                                                : "text-slate-400"
+                                                        }
+                                                    >
+                                                        {application.available
+                                                            ? "Audio output detected"
+                                                            : "No active output"}
+                                                    </span>
+                                                </li>
+                                            ),
+                                        )}
+                                    </ul>
+                                )}
+                            </section>
+                        )}
+
+                        <p className="mt-6 text-xs text-slate-500">
+                            Output levels are available for configured mixes.
+                            Source capture and routing controls are still in
+                            development.
+                        </p>
+                    </div>
+                </div>
             </section>
         </main>
+    );
+}
+
+function ItemGroup({
+    title,
+    children,
+}: {
+    title: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <section
+            aria-label={title}
+            className="rounded-xl border border-slate-800 bg-slate-900 p-3"
+        >
+            <h2 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                {title}
+            </h2>
+            <div className="space-y-1">{children}</div>
+        </section>
     );
 }
 

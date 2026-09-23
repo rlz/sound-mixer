@@ -286,6 +286,8 @@ private extension AppDelegate {
             return BridgeOutput(
                 uid: uid,
                 name: live?.name ?? configuration.deviceDisplayName(for: DeviceUID(rawValue: uid)),
+                isBlackHole: (live?.name ?? configuration.deviceDisplayName(for: DeviceUID(rawValue: uid)))
+                    .localizedCaseInsensitiveContains("BlackHole"),
                 available: live.map { $0.isAlive && $0.outputChannels > 0 } ?? false,
                 outputChannels: live?.outputChannels ?? 0,
                 level: saved[uid]?.mix.level ?? 1,
@@ -350,6 +352,7 @@ private struct BridgeDevice: Encodable {
 private struct BridgeOutput: Encodable {
     let uid: String
     let name: String
+    let isBlackHole: Bool
     let available: Bool
     let outputChannels: Int
     let level: Double
