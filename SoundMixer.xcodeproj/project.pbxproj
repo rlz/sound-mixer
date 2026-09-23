@@ -15,6 +15,7 @@
         A10000000000000000000007 /* CoreAudioDeviceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000018 /* CoreAudioDeviceCatalog.swift */; };
         A10000000000000000000008 /* CoreAudioProcessCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000019 /* CoreAudioProcessCatalog.swift */; };
         A10000000000000000000009 /* AudioCaptureCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001A /* AudioCaptureCoordinator.swift */; };
+        A1000000000000000000000A /* StereoMixingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001B /* StereoMixingEngine.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,6 +30,7 @@
         A10000000000000000000018 /* CoreAudioDeviceCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAudioDeviceCatalog.swift; sourceTree = "<group>"; };
         A10000000000000000000019 /* CoreAudioProcessCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAudioProcessCatalog.swift; sourceTree = "<group>"; };
         A1000000000000000000001A /* AudioCaptureCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureCoordinator.swift; sourceTree = "<group>"; };
+        A1000000000000000000001B /* StereoMixingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StereoMixingEngine.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -75,6 +77,7 @@
             children = (
                 A10000000000000000000015 /* MixerConfiguration.swift */,
                 A10000000000000000000016 /* GraphValidator.swift */,
+                A1000000000000000000001B /* StereoMixingEngine.swift */,
             );
             path = Domain;
             sourceTree = "<group>";
@@ -157,6 +160,7 @@
                 A10000000000000000000007 /* CoreAudioDeviceCatalog.swift in Sources */,
                 A10000000000000000000008 /* CoreAudioProcessCatalog.swift in Sources */,
                 A10000000000000000000009 /* AudioCaptureCoordinator.swift in Sources */,
+                A1000000000000000000000A /* StereoMixingEngine.swift in Sources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };
