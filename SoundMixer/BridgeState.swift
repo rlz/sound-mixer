@@ -31,6 +31,7 @@ struct BridgeApplication: Encodable {
     let name: String
     let available: Bool
     let captureState: String
+    let muted: Bool
 }
 
 struct BridgeInputCaptureState: Encodable {
@@ -46,6 +47,7 @@ struct BridgeDevice: Encodable {
     let inputChannels: Int
     let outputChannels: Int
     let savedAs: [String]
+    let muted: Bool
 }
 
 struct BridgeOutput: Encodable {

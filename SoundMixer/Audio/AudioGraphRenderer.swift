@@ -12,6 +12,7 @@ final class AudioGraphRenderer {
     private let sourceKeys: [String]
     private let mixStates: [UUID: [MixInputState]]
     private let outputState: [MixInputState]
+    private let mutedSources: Set<SourceReference>
     private static let maximumFrames = 8192
 
     init(
@@ -21,6 +22,7 @@ final class AudioGraphRenderer {
         monoSourceKeys: Set<String> = []
     ) {
         outputMix = output.mix
+        mutedSources = Set(graph.configuration.mutedSources)
         busesByID = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map { ($0.id, $0) })
         busOrder = graph.busRenderOrder
         self.sourceRings = sourceRings
@@ -84,7 +86,7 @@ final class AudioGraphRenderer {
             }
             guard let source else { continue }
             let state = states[index]
-            state.engine.setSourceGain(Float(input.level))
+            state.engine.setSourceGain(Float(mutedSources.contains(input.source) ? 0 : input.level))
             state.engine.setMainGain(Float(mix.level))
             if state.isMono {
                 state.engine.mix(

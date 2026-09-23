@@ -26,6 +26,7 @@ type DeviceState = {
     outputChannels: number;
     inputChannels: number;
     savedAs: string[];
+    muted: boolean;
 };
 
 type MixInputState = {
@@ -48,7 +49,7 @@ type MixerState = {
     outputs: OutputState[];
     buses: { id: string; name: string }[];
     blackHoleRoutes: { id: string; name: string; deviceUID: string }[];
-    applications: { id: string; name: string; available: boolean }[];
+    applications: { id: string; name: string; available: boolean; muted: boolean }[];
     mixes: MixState[];
 };
 
@@ -56,6 +57,7 @@ type BridgeCommand =
     | { command: "ready" }
     | { command: "setMasterEnabled"; enabled: boolean }
     | { command: "setOutputLevel"; uid: string; level: number }
+    | { command: "setSourceMuted"; kind: "inputDevice" | "application"; sourceID: string; muted: boolean }
     | { command: "createBus"; name: string }
     | { command: "renameBus"; id: string; name: string }
     | { command: "renameRoute"; id: string; name: string }
@@ -1084,6 +1086,18 @@ function App() {
                                                     key={application.id}
                                                     className="flex justify-between rounded-xl border border-slate-800 bg-slate-900 px-5 py-3"
                                                 >
+                                                    <button
+                                                        type="button"
+                                                        aria-pressed={application.muted}
+                                                        aria-label={`${application.muted ? "Unmute" : "Mute"} ${application.name} globally`}
+                                                        className="mr-4 rounded-lg border border-slate-700 px-3 py-1 text-sm"
+                                                        onClick={() => void window.soundMixerBridge?.send({
+                                                            command: "setSourceMuted",
+                                                            kind: "application",
+                                                            sourceID: application.id,
+                                                            muted: !application.muted,
+                                                        })}
+                                                    >{application.muted ? "Unmute" : "Mute"}</button>
                                                     <span>
                                                         {application.name}
                                                     </span>

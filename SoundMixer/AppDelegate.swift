@@ -13,14 +13,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var audioProcesses: [AudioProcessSnapshot] = []
     private var captureStates: [String: String] = [:]
     private var outputRouteErrors: [String: String] = [:]
+    private var startupConfigurationWarning: String?
 
     func applicationDidFinishLaunching(_: Notification) {
-        let configurationFailed = !loadConfiguration()
+        let configurationWarning = loadConfiguration()
         setupAudioServices()
         let (window, webView) = createWindow()
         self.window = window
         self.webView = webView
-        guard loadInterface(in: webView, configurationFailed: configurationFailed) else {
+        guard loadInterface(in: webView, configurationWarning: configurationWarning) else {
             window.makeKeyAndOrderFront(nil)
             return
         }
@@ -28,13 +29,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    private func loadConfiguration() -> Bool {
+    private func loadConfiguration() -> String? {
         do {
             let identifier = Bundle.main.bundleIdentifier ?? "com.rlz.soundmixer"
-            configurationStore = try ConfigurationStore(fileURL: ConfigurationStore.defaultFileURL(bundleIdentifier: identifier))
-            return true
+            let store = try ConfigurationStore(fileURL: ConfigurationStore.defaultFileURL(bundleIdentifier: identifier))
+            configurationStore = store
+            return store.discardedInvalidConfiguration
+                ? "The invalid saved configuration was deleted. Sound Mixer started with empty settings and mixing off."
+                : nil
         } catch {
-            return false
+            return "The saved configuration could not be reset, so mixing is unavailable. \(error.localizedDescription)"
         }
     }
 
@@ -97,7 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         return (window, webView)
     }
 
-    private func loadInterface(in webView: WKWebView, configurationFailed: Bool) -> Bool {
+    private func loadInterface(in webView: WKWebView, configurationWarning: String?) -> Bool {
         guard let webDirectory = Bundle.main.url(forResource: "dist", withExtension: nil),
               let indexURL = URL(string: "index.html", relativeTo: webDirectory)
         else {
@@ -106,13 +110,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
 
         webView.loadFileURL(indexURL, allowingReadAccessTo: webDirectory)
-        if configurationFailed {
-            showLoadError(
-                "The saved configuration could not be loaded. Mixing is off and the file was preserved. " +
-                    "Check or repair the configuration before editing."
-            )
-        }
+        startupConfigurationWarning = configurationWarning
         return true
+    }
+
+    func webView(_ webView: WKWebView, didFinish _: WKNavigation!) {
+        if let warning = startupConfigurationWarning {
+            startupConfigurationWarning = nil
+            showLoadError(warning)
+        }
+        publishState()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
@@ -132,10 +139,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func webView(_: WKWebView, didFail _: WKNavigation!, withError error: Error) {
         showLoadError("Could not load the local interface: \(error.localizedDescription)")
-    }
-
-    func webView(_: WKWebView, didFinish _: WKNavigation!) {
-        publishState()
     }
 
     func userContentController(_: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -174,6 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         switch command {
         case "setMasterEnabled": return try updateMixingEnabled(body: body, store: store)
         case "setOutputLevel": return try setOutputLevel(body: body, store: store)
+        case "setSourceMuted": return try setSourceMuted(body: body, store: store)
         case "createBus": return try createBus(body: body, store: store)
         case "renameBus": return try renameBus(body: body, store: store)
         case "renameRoute": return try renameRoute(body: body, store: store)
@@ -199,6 +203,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
               let level = body["level"] as? Double, (0 ... 1).contains(level)
         else { throw BridgeError.invalidPayload }
         return try updateOutputLevel(store: store, uid: uid, level: level)
+    }
+
+    private func setSourceMuted(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "kind", "sourceID", "muted"],
+              let kind = body["kind"] as? String,
+              let sourceID = body["sourceID"] as? String, !sourceID.isEmpty,
+              let muted = body["muted"] as? Bool else { throw BridgeError.invalidPayload }
+        let source: SourceReference
+        switch kind {
+        case "inputDevice": source = .inputDevice(DeviceUID(rawValue: sourceID))
+        case "application": source = .application(ApplicationID(rawValue: sourceID))
+        default: throw BridgeError.invalidPayload
+        }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { config in
+            config.mutedSources.removeAll { $0 == source }
+            if muted { config.mutedSources.append(source) }
+        }
     }
 
     private func createBus(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
@@ -360,7 +381,8 @@ private extension AppDelegate {
                     id: $0.applicationID,
                     name: $0.name,
                     available: $0.isProducingOutput,
-                    captureState: captureStates[$0.applicationID] ?? "stopped"
+                    captureState: captureStates[$0.applicationID] ?? "stopped",
+                    muted: configuration.mutedSources.contains(.application(ApplicationID(rawValue: $0.applicationID)))
                 )
             },
             inputCaptureStates: captureStates.filter { id, _ in audioDevices.contains(where: { $0.uid == id }) }
@@ -421,7 +443,8 @@ private extension AppDelegate {
                 available: live.map(\.isAlive) ?? false,
                 inputChannels: live?.inputChannels ?? 0,
                 outputChannels: live?.outputChannels ?? 0,
-                savedAs: savedAs
+                savedAs: savedAs,
+                muted: configuration.mutedSources.contains(.inputDevice(deviceUID))
             )
         }
     }

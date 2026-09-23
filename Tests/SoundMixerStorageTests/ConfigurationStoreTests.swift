@@ -58,7 +58,7 @@ final class ConfigurationStoreTests: XCTestCase {
         XCTAssertFalse(store.configuration.isEnabled)
     }
 
-    func testCorruptUnsupportedAndInvalidGraphFilesArePreserved() throws {
+    func testCorruptUnsupportedAndInvalidGraphFilesAreDeletedAndReset() throws {
         let fileURL = temporaryFileURL()
         defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
         try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -70,8 +70,11 @@ final class ConfigurationStoreTests: XCTestCase {
 
         for data in [Data("broken JSON".utf8), unsupported, invalidGraph] {
             try data.write(to: fileURL)
-            XCTAssertThrowsError(try ConfigurationStore(fileURL: fileURL))
-            XCTAssertEqual(try Data(contentsOf: fileURL), data)
+            let store = try ConfigurationStore(fileURL: fileURL)
+            XCTAssertTrue(store.discardedInvalidConfiguration)
+            XCTAssertFalse(store.configuration.isEnabled)
+            XCTAssertTrue(store.configuration.outputMixes.isEmpty)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
         }
     }
 

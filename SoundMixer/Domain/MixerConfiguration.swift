@@ -47,7 +47,7 @@ public struct ApplicationDescriptor: Equatable, Sendable {
     }
 }
 
-public enum SourceReference: Equatable, Sendable {
+public enum SourceReference: Hashable, Sendable {
     case inputDevice(DeviceUID)
     case application(ApplicationID)
     case bus(UUID)
@@ -217,7 +217,7 @@ public struct KnownDevice: Codable, Equatable, Sendable {
 }
 
 public struct MixerConfiguration: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
 
     public let schemaVersion: Int
     public var isEnabled: Bool
@@ -225,6 +225,7 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
     public var buses: [VirtualBus]
     public var blackHoleRoutes: [BlackHoleRoute]
     public var knownDevices: [KnownDevice]
+    public var mutedSources: [SourceReference]
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion
@@ -233,6 +234,7 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         case buses
         case blackHoleRoutes
         case knownDevices
+        case mutedSources
     }
 
     public init(
@@ -240,7 +242,8 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         outputMixes: [OutputMix] = [],
         buses: [VirtualBus] = [],
         blackHoleRoutes: [BlackHoleRoute] = [],
-        knownDevices: [KnownDevice] = []
+        knownDevices: [KnownDevice] = [],
+        mutedSources: [SourceReference] = []
     ) {
         schemaVersion = Self.currentSchemaVersion
         self.isEnabled = isEnabled
@@ -248,6 +251,7 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         self.buses = buses
         self.blackHoleRoutes = blackHoleRoutes
         self.knownDevices = knownDevices
+        self.mutedSources = mutedSources
         reconcileKnownDevices(with: [])
     }
 
@@ -268,6 +272,11 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         buses = try container.decode([VirtualBus].self, forKey: .buses)
         blackHoleRoutes = try container.decode([BlackHoleRoute].self, forKey: .blackHoleRoutes)
         knownDevices = try container.decode([KnownDevice].self, forKey: .knownDevices)
+        mutedSources = try container.decode([SourceReference].self, forKey: .mutedSources)
+        guard mutedSources.allSatisfy({ if case .bus = $0 { false } else { true } }),
+              Set(mutedSources).count == mutedSources.count else {
+            throw DecodingError.dataCorruptedError(forKey: .mutedSources, in: container, debugDescription: "Muted sources must be unique input or application sources")
+        }
         let uids = knownDevices.map(\.uid)
         guard Set(uids).count == uids.count else {
             throw DecodingError.dataCorruptedError(
@@ -287,6 +296,7 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         try container.encode(buses, forKey: .buses)
         try container.encode(blackHoleRoutes, forKey: .blackHoleRoutes)
         try container.encode(knownDevices, forKey: .knownDevices)
+        try container.encode(mutedSources, forKey: .mutedSources)
     }
 
     public func deviceDisplayName(for uid: DeviceUID) -> String {

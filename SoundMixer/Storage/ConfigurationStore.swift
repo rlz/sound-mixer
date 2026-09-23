@@ -8,14 +8,39 @@ public final class ConfigurationStore {
     public private(set) var configuration: MixerConfiguration
     public private(set) var activeGraph: MixGraphSnapshot
     public let fileURL: URL
+    public private(set) var discardedInvalidConfiguration = false
+
+    public enum LoadError: LocalizedError {
+        case couldNotRemoveInvalidConfiguration(URL, Error)
+
+        public var errorDescription: String? {
+            switch self {
+            case let .couldNotRemoveInvalidConfiguration(url, error):
+                "The invalid configuration at \(url.path) could not be removed: \(error.localizedDescription)"
+            }
+        }
+    }
 
     public init(fileURL: URL) throws {
         self.fileURL = fileURL
         if FileManager.default.fileExists(atPath: fileURL.path) {
-            let data = try Data(contentsOf: fileURL)
-            let restored = try JSONDecoder().decode(MixerConfiguration.self, from: data)
-            activeGraph = try MixGraphSnapshot(configuration: restored)
-            configuration = restored
+            do {
+                let data = try Data(contentsOf: fileURL)
+                let restored = try JSONDecoder().decode(MixerConfiguration.self, from: data)
+                let restoredGraph = try MixGraphSnapshot(configuration: restored)
+                activeGraph = restoredGraph
+                configuration = restored
+            } catch {
+                do {
+                    try FileManager.default.removeItem(at: fileURL)
+                } catch {
+                    throw LoadError.couldNotRemoveInvalidConfiguration(fileURL, error)
+                }
+                let initial = MixerConfiguration()
+                activeGraph = try MixGraphSnapshot(configuration: initial)
+                configuration = initial
+                discardedInvalidConfiguration = true
+            }
         } else {
             let initial = MixerConfiguration()
             activeGraph = try MixGraphSnapshot(configuration: initial)

@@ -39,7 +39,7 @@ final class MixerConfigurationTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(MixerConfiguration.self, from: data), configuration)
 
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertEqual(object["schemaVersion"] as? Int, 2)
+        XCTAssertEqual(object["schemaVersion"] as? Int, 3)
         XCTAssertEqual(object["isEnabled"] as? Bool, true)
         XCTAssertEqual((object["knownDevices"] as? [[String: String]])?.count, 3)
         let outputMixes = try XCTUnwrap(object["outputMixes"] as? [[String: Any]])
@@ -110,7 +110,7 @@ final class MixerConfigurationTests: XCTestCase {
         object["schemaVersion"] = 1
         XCTAssertThrowsError(try JSONDecoder().decode(MixerConfiguration.self, from: JSONSerialization.data(withJSONObject: object)))
 
-        object["schemaVersion"] = 2
+        object["schemaVersion"] = 3
         let knownDevices = try XCTUnwrap(object["knownDevices"] as? [[String: Any]])
         object["knownDevices"] = knownDevices + knownDevices
         XCTAssertThrowsError(try JSONDecoder().decode(MixerConfiguration.self, from: JSONSerialization.data(withJSONObject: object)))
