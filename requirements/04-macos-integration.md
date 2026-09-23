@@ -37,6 +37,10 @@ The first release supports macOS 15 and later. The scaffold builds with Xcode 27
 
 ## Sources
 
+- The source catalog includes Core Audio input devices and audio-producing application processes. Refresh the process catalog periodically because Core Audio exposes process-list APIs but does not publish a stable application identity; use the bundle identifier as the saved reference and treat the PID as a short-lived runtime handle. Exclude Sound Mixer itself from selectable applications to prevent feedback.
+- An application is eligible for capture only while Core Audio reports an output process object and its bundle identifier is available. A catalog entry does not imply that capture permission is granted or that a tap can be created. Preserve distinct permission and runtime failure states per selected source; never substitute a system-wide recording for an unavailable process tap.
+- Input permission is requested only when capture of that input is started. System-audio permission is requested by starting the selected process tap. Permission denial is a state of that source and does not stop independent sources.
+
 - [Apple: Capturing system audio with Core Audio taps](https://developer.apple.com/documentation/CoreAudio/capturing-system-audio-with-core-audio-taps)
 - [Apple: AudioHardwareSystem](https://developer.apple.com/documentation/coreaudio/audiohardwaresystem)
 - [Apple: Requesting Authorization for Media Capture on macOS](https://developer.apple.com/documentation/bundleresources/requesting-authorization-for-media-capture-on-macos)

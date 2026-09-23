@@ -13,6 +13,7 @@
         A10000000000000000000005 /* GraphValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000016 /* GraphValidator.swift */; };
         A10000000000000000000006 /* ConfigurationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000017 /* ConfigurationStore.swift */; };
         A10000000000000000000007 /* CoreAudioDeviceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000018 /* CoreAudioDeviceCatalog.swift */; };
+        A10000000000000000000008 /* CoreAudioProcessCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000019 /* CoreAudioProcessCatalog.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,6 +26,7 @@
         A10000000000000000000016 /* GraphValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphValidator.swift; sourceTree = "<group>"; };
         A10000000000000000000017 /* ConfigurationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationStore.swift; sourceTree = "<group>"; };
         A10000000000000000000018 /* CoreAudioDeviceCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAudioDeviceCatalog.swift; sourceTree = "<group>"; };
+        A10000000000000000000019 /* CoreAudioProcessCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAudioProcessCatalog.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -85,7 +87,7 @@
         };
         A10000000000000000000026 /* Audio */ = {
             isa = PBXGroup;
-            children = (A10000000000000000000018 /* CoreAudioDeviceCatalog.swift */,);
+            children = (A10000000000000000000018 /* CoreAudioDeviceCatalog.swift */, A10000000000000000000019 /* CoreAudioProcessCatalog.swift */,);
             path = Audio;
             sourceTree = "<group>";
         };
@@ -151,6 +153,7 @@
                 A10000000000000000000005 /* GraphValidator.swift in Sources */,
                 A10000000000000000000006 /* ConfigurationStore.swift in Sources */,
                 A10000000000000000000007 /* CoreAudioDeviceCatalog.swift in Sources */,
+                A10000000000000000000008 /* CoreAudioProcessCatalog.swift in Sources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };

@@ -6,7 +6,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var webView: WKWebView?
     private var configurationStore: ConfigurationStore?
     private var deviceCatalog: CoreAudioDeviceCatalog?
+    private var processCatalog: CoreAudioProcessCatalog?
     private var audioDevices: [AudioDeviceSnapshot] = []
+    private var audioProcesses: [AudioProcessSnapshot] = []
 
     func applicationDidFinishLaunching(_: Notification) {
         var configurationError: Error?
@@ -24,6 +26,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
         self.deviceCatalog = deviceCatalog
         deviceCatalog.start()
+
+        let processCatalog = CoreAudioProcessCatalog()
+        processCatalog.onChange = { [weak self] processes in
+            self?.audioProcesses = processes
+            self?.publishState()
+        }
+        self.processCatalog = processCatalog
+        processCatalog.start()
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720),
@@ -64,6 +74,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
         true
+    }
+
+    func applicationWillTerminate(_: Notification) {
+        deviceCatalog?.stop()
+        processCatalog?.stop()
     }
 
     func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation!, withError error: Error) {
@@ -122,7 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             sendToWeb(method: "onCommandResult", payload: [
                 "requestId": requestID,
                 "accepted": false,
-                "error": error.localizedDescription,
+                "error": error.localizedDescription
             ])
         }
     }
@@ -140,20 +155,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private func publishState(configuration: MixerConfiguration? = nil) {
         guard let configuration = configuration ?? configurationStore?.configuration else { return }
         let discovered = Dictionary(uniqueKeysWithValues: audioDevices.map { ($0.uid, $0) })
-        let savedUIDs = Set(configuration.knownDevices.map { $0.uid.rawValue })
+        let savedUIDs = Set(configuration.knownDevices.map(\.uid.rawValue))
         let deviceUIDs = Set(discovered.keys).union(savedUIDs).sorted()
         let deviceStates = deviceUIDs.map { uid -> BridgeDevice in
             let live = discovered[uid]
             let deviceUID = DeviceUID(rawValue: uid)
             var savedAs: [String] = []
-            if configuration.outputMixes.contains(where: { $0.deviceUID == deviceUID }) { savedAs.append("output") }
-            if configuration.blackHoleRoutes.contains(where: { $0.deviceUID == deviceUID }) { savedAs.append("blackHoleRoute") }
+            if configuration.outputMixes.contains(where: { $0.deviceUID == deviceUID }) {
+                savedAs.append("output")
+            }
+            if configuration.blackHoleRoutes.contains(where: { $0.deviceUID == deviceUID }) {
+                savedAs.append("blackHoleRoute")
+            }
             let mixes = configuration.outputMixes.map(\.mix) + configuration.buses.map(\.mix) + configuration.blackHoleRoutes.map(\.mix)
             let isSavedInput = mixes.flatMap(\.inputs).contains { input in
-                if case let .inputDevice(inputUID) = input.source { return inputUID == deviceUID }
+                if case let .inputDevice(inputUID) = input.source {
+                    return inputUID == deviceUID
+                }
                 return false
             }
-            if isSavedInput { savedAs.append("input") }
+            if isSavedInput {
+                savedAs.append("input")
+            }
             return BridgeDevice(
                 uid: uid,
                 name: live?.name ?? configuration.deviceDisplayName(for: deviceUID),
@@ -183,7 +206,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             devices: deviceStates,
             outputs: devices,
             buses: configuration.buses.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) },
-            blackHoleRoutes: configuration.blackHoleRoutes.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) }
+            blackHoleRoutes: configuration.blackHoleRoutes.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) },
+            applications: audioProcesses.map {
+                BridgeApplication(id: $0.applicationID, name: $0.name, available: $0.isProducingOutput)
+            }
         )
         guard let data = try? JSONEncoder().encode(state),
               let json = String(data: data, encoding: .utf8)
@@ -217,6 +243,13 @@ private struct BridgeState: Encodable {
     let outputs: [BridgeOutput]
     let buses: [BridgeNamedItem]
     let blackHoleRoutes: [BridgeNamedItem]
+    let applications: [BridgeApplication]
+}
+
+private struct BridgeApplication: Encodable {
+    let id: String
+    let name: String
+    let available: Bool
 }
 
 private struct BridgeDevice: Encodable {

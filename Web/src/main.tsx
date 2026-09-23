@@ -23,6 +23,7 @@ type MixerState = {
     outputs: OutputState[];
     buses: { id: string; name: string }[];
     blackHoleRoutes: { id: string; name: string }[];
+    applications: { id: string; name: string; available: boolean }[];
 };
 
 type BridgeCommand =
@@ -197,8 +198,57 @@ function App() {
                     </ul>
                 )}
 
+                {mixerState && (
+                    <section
+                        className="mt-10"
+                        aria-labelledby="applications-title"
+                    >
+                        <div className="mb-4">
+                            <h2
+                                id="applications-title"
+                                className="text-xl font-semibold tracking-tight"
+                            >
+                                Applications
+                            </h2>
+                            <p className="mt-1 text-sm text-slate-400">
+                                Apps currently known to Core Audio
+                            </p>
+                        </div>
+                        {mixerState.applications.length === 0 ? (
+                            <p className="rounded-2xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-400">
+                                No audio applications were reported.
+                            </p>
+                        ) : (
+                            <ul
+                                className="space-y-2"
+                                aria-label="Audio applications"
+                            >
+                                {mixerState.applications.map((application) => (
+                                    <li
+                                        key={application.id}
+                                        className="flex justify-between rounded-xl border border-slate-800 bg-slate-900 px-5 py-3"
+                                    >
+                                        <span>{application.name}</span>
+                                        <span
+                                            className={
+                                                application.available
+                                                    ? "text-emerald-300"
+                                                    : "text-slate-400"
+                                            }
+                                        >
+                                            {application.available
+                                                ? "Audio output detected"
+                                                : "No active output"}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </section>
+                )}
+
                 <p className="mt-6 text-xs text-slate-500">
-                    Device discovery only · audio routing controls are not
+                    Discovery only · source capture and routing controls are not
                     connected yet
                 </p>
             </section>
