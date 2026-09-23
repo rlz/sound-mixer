@@ -11,13 +11,13 @@
 7. Permission denial, a missing driver, and device disconnection do not crash the app; their states appear and recover when the cause is resolved.
 8. The master switch stops and resumes all mixes. While mixing is off, normal audio from other apps continues through the system output.
 9. After a normal Sound Mixer exit, other apps' audio works and app-created taps and audio resources are released. Crash behavior is checked separately.
-10. Every accepted configuration change is saved automatically without a Save button. After restart, names, routes, channels, levels, and master switch state are restored: a previously Off state stays off; a previously On state starts available routes after validation. A corrupt or outdated file does not start an unsafe route.
+10. Every accepted configuration change is saved automatically without a Save button. After restart, names, routes, channels, levels, mute states, and master switch state are restored: a previously Off state stays off; a previously On state starts available routes after validation. A corrupt, invalid, or unsupported-schema file is discarded and replaced by a new empty, disabled configuration; if it cannot be removed, mixing stays off and the user sees an actionable error.
 11. Controls work with keyboard and VoiceOver; dark mode and larger system text do not hide primary actions.
 12. Build, tests, formatting checks, and linters pass in CI with a supported Xcode version.
 
 ## Verification
 
-- Automated tests: models and graph validation, audio-engine levels and channels, configuration migration, atomic saves, master switch state, bridge message types, and primary interface actions; matching saved and discovered UIDs, missing devices at launch, removal of unavailable settings, reconnection with the same or a different UID, incompatible channels, and disabled mixing.
+- Automated tests: models and graph validation, audio-engine levels and channels, invalid-configuration reset, atomic saves, master switch state, bridge message types, and primary interface actions; matching saved and discovered UIDs, missing devices at launch, removal of unavailable settings, reconnection with the same or a different UID, incompatible channels, and disabled mixing. Configuration migration is not required during development.
 - Manual Mac checks: built-in speakers, an external output, a microphone, audio from a single application, multichannel BlackHole, device connection and disconnection, permission revocation, disabled mixing, normal and crash exits, and restart after each setting change. Separately check startup without a previously configured output, input, and BlackHole device; removal of each unavailable item; and reconnection of the same device with mixing both on and off.
 - During audio checks, measure latency, buffer underruns, and CPU load using a predefined reference configuration. Set target thresholds after the prototype and record them here.
 

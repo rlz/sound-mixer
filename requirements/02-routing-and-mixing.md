@@ -7,6 +7,9 @@
 - Sources can participate in several mixes at once. Where possible, the engine shares capture of the same source to avoid inconsistent copies.
 - An unavailable source remains in its route but contributes no audio and is marked in the interface.
 - A saved input source stays visible as a mix row and can be removed even if its device was missing at launch. The same UID resumes capture after format and permission checks when it returns.
+- Physical input devices are shown in the input-device area whether or not they have been added to a mix. Added application sources remain configured while their process is absent; they show unavailable and contribute silence until a process with the same bundle identifier becomes available and capture checks pass.
+- Muting an input device or application is global across all mixes: it silences that source in every route while preserving its rows and per-route levels. The mute state is saved by stable source identity, restored at launch, and does not imply that the source is available or permitted.
+- Input and application source rows expose a live signal meter when capture is active. Meter readings are observed runtime state, not saved configuration; unavailable or inactive sources show a clear non-live state rather than a stale level. Muting does not stop capture, so an actively captured muted source may continue to show its input level.
 
 ## Channels and levels
 
@@ -18,7 +21,7 @@
 
 ## Configuration schema
 
-- The root contains `schemaVersion: 2`, `isEnabled`, and the `outputMixes`, `buses`, `blackHoleRoutes`, and `knownDevices` arrays. A new configuration starts with the audio pipeline off and empty mixes. During development, older schema versions are rejected rather than migrated.
+- The root contains `schemaVersion: 3`, `isEnabled`, and the `outputMixes`, `buses`, `blackHoleRoutes`, `knownDevices`, and `mutedSources` arrays. A new configuration starts with the audio pipeline off and empty mixes. `mutedSources` contains unique stable source references (`inputDevice` UID or `application` bundle identifier); buses cannot be globally muted as capture inputs. No migration or backward compatibility is required during development.
 - An output mix refers to a device by Core Audio UID. Buses and BlackHole routes have their own UUIDs; names are for display only and may be duplicated.
 - A BlackHole route stores a device UID and `channels` with either `mode: mono` and one channel number, or `mode: stereo` and an ordered pair of left and right channel numbers. User-facing channel numbers start at 1. A bus stores no device UID and does not become a system output.
 - Each mix stores a master `level` and `inputs` rows. A row stores a source reference, `level`, and `monoPlacement` (`left`, `right`, `both`). Levels are numbers from 0 to 1; range checks belong to configuration validation.
@@ -27,7 +30,7 @@
 - Decoding rejects unknown source kinds, invalid bus UUIDs, and channel counts that do not match the route mode. A separate semantic validation step checks references, cycles, ranges, and channel conflicts before applying configuration.
 - When reading the file, a missing device is not a structural or graph error and does not remove its reference. Missing devices are handled in a separate step that matches saved UIDs to discovered devices. Name metadata is removed with the last reference to its UID.
 - Store the configuration as `configuration.json` in the app's Application Support directory. All edits, including the master switch and refreshed last-known device names, pass through one native transaction: copy the current configuration, apply the edit, reconcile referenced device metadata, validate the graph, write the full JSON file atomically, then publish the new state. If validation or writing fails, keep the previous state and file. An unchanged edit does not need another write.
-- A missing file starts with an empty, disabled configuration. If the file cannot be decoded or fails graph validation, show a startup error, keep mixing off, and preserve the file for diagnosis; do not silently replace it. Recovery requires an explicit future user action. Device availability is not part of this file validation.
+- A missing file starts with an empty, disabled configuration. If the stored file cannot be decoded, has an unsupported schema version, or fails graph validation, remove that configuration file and start with a new empty, disabled configuration. Tell the user that invalid saved settings were discarded. If removal fails, keep mixing off and show an actionable startup error. Device availability is not part of this file validation.
 
 ## Route graph
 
