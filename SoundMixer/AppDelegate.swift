@@ -4,8 +4,17 @@ import WebKit
 final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     private var window: NSWindow?
     private var webView: WKWebView?
+    private var configurationStore: ConfigurationStore?
 
     func applicationDidFinishLaunching(_: Notification) {
+        var configurationError: Error?
+        do {
+            let identifier = Bundle.main.bundleIdentifier ?? "com.rlz.soundmixer"
+            configurationStore = try ConfigurationStore(fileURL: ConfigurationStore.defaultFileURL(bundleIdentifier: identifier))
+        } catch {
+            configurationError = error
+        }
+
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -32,6 +41,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         }
 
         webView.loadFileURL(indexURL, allowingReadAccessTo: webDirectory)
+        if configurationError != nil {
+            showLoadError(
+                "The saved configuration could not be loaded. Mixing is off and the file was preserved. " +
+                    "Check or repair the configuration before editing."
+            )
+        }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }

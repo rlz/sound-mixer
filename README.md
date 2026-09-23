@@ -35,7 +35,7 @@ The first version targets **macOS 15 and later**. The scaffold has been verified
 2. To change the interface, run `cd Web && npm ci && npm run build`, then rebuild the app in Xcode. This updates `Web/dist`; commit the built files alongside the source changes. At runtime, the app loads only local files.
 3. Run all checks with `./scripts/check.sh`. It installs the pinned SwiftFormat 0.62.1 and SwiftLint 0.65.0 releases after verifying their SHA256 checksums, runs them, then runs `npm ci`, Prettier and ESLint checks, the Web build, and the Xcode build. Xcode 27 and Node.js 26.8.1 are required. If only Command Line Tools are active, the script uses `/Applications/Xcode.app`.
 
-To fix formatting, run `.tools/bin/swiftformat SoundMixer --config .swiftformat --cache ignore` and `cd Web && npm run format`. The configuration uses four spaces for Swift, TypeScript, TSX, JavaScript, JSON, HTML, and CSS; the Prettier plugin sorts Tailwind classes. Web tool versions are pinned in `Web/package.json` and `Web/package-lock.json`. GitHub Actions runs the same checks with the Xcode 27 image. There are no test targets yet, so CI currently checks formatting, linting, and builds; tests will be added as features are implemented.
+To fix formatting, run `.tools/bin/swiftformat SoundMixer Tests --config .swiftformat --cache ignore` and `cd Web && npm run format`. The configuration uses four spaces for Swift, TypeScript, TSX, JavaScript, JSON, HTML, and CSS; the Prettier plugin sorts Tailwind classes. Web tool versions are pinned in `Web/package.json` and `Web/package-lock.json`. GitHub Actions runs formatting, linting, Swift tests, and builds with the Xcode 27 image.
 
 ## Technical references
 

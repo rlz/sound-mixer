@@ -11,6 +11,7 @@
         A10000000000000000000003 /* dist in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* dist */; };
         A10000000000000000000004 /* MixerConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000015 /* MixerConfiguration.swift */; };
         A10000000000000000000005 /* GraphValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000016 /* GraphValidator.swift */; };
+        A10000000000000000000006 /* ConfigurationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000017 /* ConfigurationStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -21,6 +22,7 @@
         A10000000000000000000014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
         A10000000000000000000015 /* MixerConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MixerConfiguration.swift; sourceTree = "<group>"; };
         A10000000000000000000016 /* GraphValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphValidator.swift; sourceTree = "<group>"; };
+        A10000000000000000000017 /* ConfigurationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -39,6 +41,7 @@
                 A10000000000000000000011 /* AppDelegate.swift */,
                 A10000000000000000000012 /* main.swift */,
                 A10000000000000000000024 /* Domain */,
+                A10000000000000000000025 /* Storage */,
                 A10000000000000000000014 /* Info.plist */,
             );
             path = SoundMixer;
@@ -67,6 +70,14 @@
                 A10000000000000000000016 /* GraphValidator.swift */,
             );
             path = Domain;
+            sourceTree = "<group>";
+        };
+        A10000000000000000000025 /* Storage */ = {
+            isa = PBXGroup;
+            children = (
+                A10000000000000000000017 /* ConfigurationStore.swift */,
+            );
+            path = Storage;
             sourceTree = "<group>";
         };
 /* End PBXGroup section */
@@ -129,6 +140,7 @@
                 A10000000000000000000002 /* main.swift in Sources */,
                 A10000000000000000000004 /* MixerConfiguration.swift in Sources */,
                 A10000000000000000000005 /* GraphValidator.swift in Sources */,
+                A10000000000000000000006 /* ConfigurationStore.swift in Sources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };

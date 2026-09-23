@@ -18,7 +18,7 @@ Statuses: `[ ]` = not started, `[~]` = in progress, `[x]` = complete. Tasks are 
 - [x] Define models for devices, buses, routes, sources, and levels, stable identifiers, and the configuration schema. **Done when:** serialization tests cover the models.
 - [x] Extend configuration to v2 with last-known-name metadata for configured UIDs. **Done when:** a device missing at startup can be labeled with its saved name; a UID without a name is shown as the UID. Older development schemas are rejected; migration is not required before release.
 - [x] Implement graph validation for node existence, cycles, BlackHole channel conflicts, and format compatibility. **Done when:** tests reject invalid changes before application. Structural validation and per-endpoint runtime device checks are covered by tests.
-- [ ] Implement automatic atomic saving of every accepted change, including the master switch state, with schema version checks. **Done when:** configuration is restored after restart without manual saving; changes to last-known names and removal of the last reference to a UID are saved; a corrupt or unsupported file is handled without a crash.
+- [x] Implement automatic atomic saving of every accepted change, including the master switch state, with schema version checks. **Done when:** configuration is restored after restart without manual saving; changes to last-known names and removal of the last reference to a UID are saved; a corrupt or unsupported file is handled without a crash. The native configuration store is wired into startup; future edit entry points must use its transaction API.
 
 ## 2. Native audio pipeline
 
