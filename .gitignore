@@ -7,3 +7,4 @@ xcuserdata/
 *.xcresult/
 *.xcarchive/
 prototypes/core-audio/.build/
+prototypes/process-tap/.build/
