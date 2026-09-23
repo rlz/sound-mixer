@@ -62,6 +62,46 @@ func listProcesses() throws {
     }
 }
 
+func objectForUID(_ uid: CFString, selector: AudioObjectPropertySelector) throws -> AudioObjectID {
+    var propertyAddress = address(selector)
+    var qualifier = uid
+    var result = AudioObjectID(kAudioObjectUnknown)
+    var size = UInt32(MemoryLayout<AudioObjectID>.size)
+    try withUnsafePointer(to: &qualifier) { pointer in
+        try check(AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &propertyAddress,
+            UInt32(MemoryLayout<CFString>.size),
+            pointer,
+            &size,
+            &result
+        ), "translate UID")
+    }
+    return result
+}
+
+func defaultOutput() throws -> AudioObjectID {
+    try value(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyDefaultOutputDevice, as: AudioObjectID.self)
+}
+
+func resourceIDs(_ selector: AudioObjectPropertySelector) throws -> [AudioObjectID] {
+    var propertyAddress = address(selector)
+    var size: UInt32 = 0
+    let system = AudioObjectID(kAudioObjectSystemObject)
+    try check(AudioObjectGetPropertyDataSize(system, &propertyAddress, 0, nil, &size), "resource list size")
+    var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+    guard !ids.isEmpty else { return [] }
+    try ids.withUnsafeMutableBytes { bytes in
+        try check(AudioObjectGetPropertyData(system, &propertyAddress, 0, nil, &size, bytes.baseAddress!), "resource list")
+    }
+    return ids
+}
+
+func listResources() throws {
+    try print("Default output: \(defaultOutput())")
+    try print("Tap IDs: \(resourceIDs(kAudioHardwarePropertyTapList))")
+}
+
 final class Meter {
     var frames: UInt64 = 0
     var peak: Float = 0
@@ -83,7 +123,31 @@ let inputCallback: AudioDeviceIOProc = { _, _, input, _, _, _, context in
     return noErr
 }
 
-func capture(pid: pid_t, seconds: Int) throws {
+func checkedTapFormat(_ tap: AudioObjectID) throws -> AudioStreamBasicDescription {
+    let format: AudioStreamBasicDescription = try value(tap, kAudioTapPropertyFormat, as: AudioStreamBasicDescription.self)
+    guard format.mFormatID == kAudioFormatLinearPCM,
+          format.mFormatFlags & kAudioFormatFlagIsFloat != 0,
+          format.mBitsPerChannel == 32,
+          format.mChannelsPerFrame == 2
+    else {
+        throw NSError(domain: "ProcessTapProbe", code: 4, userInfo: [
+            NSLocalizedDescriptionKey: "Unsupported tap format; expected stereo Float32 PCM"
+        ])
+    }
+    return format
+}
+
+func aggregateDescription(tapUID: CFString, aggregateUID: CFString) -> CFDictionary {
+    [
+        kAudioAggregateDeviceNameKey: "Sound Mixer process tap probe",
+        kAudioAggregateDeviceUIDKey: aggregateUID as String,
+        kAudioAggregateDeviceIsPrivateKey: true,
+        kAudioAggregateDeviceTapListKey: [[kAudioSubTapUIDKey: tapUID as String]],
+        kAudioAggregateDeviceTapAutoStartKey: true
+    ] as CFDictionary
+}
+
+func capture(pid: pid_t, seconds: Int) throws -> (CFString, CFString) {
     guard pid != getpid() else { throw NSError(domain: "ProcessTapProbe", code: 1, userInfo: [
         NSLocalizedDescriptionKey: "Refusing to capture this probe's own PID"
     ]) }
@@ -100,28 +164,26 @@ func capture(pid: pid_t, seconds: Int) throws {
     try check(AudioHardwareCreateProcessTap(description, &tap), "create process tap")
     defer { let status = AudioHardwareDestroyProcessTap(tap); print("destroy tap: \(status)") }
 
-    let format: AudioStreamBasicDescription = try value(tap, kAudioTapPropertyFormat, as: AudioStreamBasicDescription.self)
-    guard format.mFormatID == kAudioFormatLinearPCM,
-          format.mFormatFlags & kAudioFormatFlagIsFloat != 0,
-          format.mBitsPerChannel == 32,
-          format.mChannelsPerFrame == 2
-    else {
-        throw NSError(domain: "ProcessTapProbe", code: 4, userInfo: [
-            NSLocalizedDescriptionKey: "Unsupported tap format; expected stereo Float32 PCM"
-        ])
-    }
+    let format = try checkedTapFormat(tap)
 
     let uid: CFString = try value(tap, kAudioTapPropertyUID, as: CFString.self)
-    let aggregateDescription: [String: Any] = [
-        kAudioAggregateDeviceNameKey: "Sound Mixer process tap probe",
-        kAudioAggregateDeviceUIDKey: UUID().uuidString,
-        kAudioAggregateDeviceIsPrivateKey: true,
-        kAudioAggregateDeviceTapListKey: [[kAudioSubTapUIDKey: uid as String]],
-        kAudioAggregateDeviceTapAutoStartKey: true
-    ]
+    guard try objectForUID(uid, selector: kAudioHardwarePropertyTranslateUIDToTap) == tap else {
+        throw NSError(domain: "ProcessTapProbe", code: 7, userInfo: [
+            NSLocalizedDescriptionKey: "Created tap cannot be found by UID"
+        ])
+    }
+    let aggregateUID = UUID().uuidString as CFString
     var aggregate = AudioObjectID(kAudioObjectUnknown)
-    try check(AudioHardwareCreateAggregateDevice(aggregateDescription as CFDictionary, &aggregate), "create aggregate device")
+    try check(
+        AudioHardwareCreateAggregateDevice(aggregateDescription(tapUID: uid, aggregateUID: aggregateUID), &aggregate),
+        "create aggregate device"
+    )
     defer { let status = AudioHardwareDestroyAggregateDevice(aggregate); print("destroy aggregate: \(status)") }
+    guard try objectForUID(aggregateUID, selector: kAudioHardwarePropertyTranslateUIDToDevice) == aggregate else {
+        throw NSError(domain: "ProcessTapProbe", code: 8, userInfo: [
+            NSLocalizedDescriptionKey: "Created aggregate cannot be found by UID"
+        ])
+    }
 
     let meter = Meter()
     var callbackID: AudioDeviceIOProcID?
@@ -133,18 +195,41 @@ func capture(pid: pid_t, seconds: Int) throws {
         "Capturing PID \(pid), process object \(process), tap \(tap), aggregate \(aggregate), " +
             "\(format.mSampleRate) Hz for \(seconds)s. Play audio in the target app."
     )
+    print("Tap UID: \(uid); aggregate UID: \(aggregateUID)")
+    fflush(stdout)
     Thread.sleep(forTimeInterval: TimeInterval(seconds))
     try check(AudioDeviceStop(aggregate, callbackID), "stop capture")
     print("Captured frames: \(meter.frames); peak: \(meter.peak)")
+    return (uid, aggregateUID)
+}
+
+func cycle(pid: pid_t, seconds: Int) throws {
+    let outputBefore = try defaultOutput()
+    print("Default output before cycle: \(outputBefore)")
+    let (tapUID, aggregateUID) = try capture(pid: pid, seconds: seconds)
+    // Returning from capture runs all cleanup defers before the off-state checks.
+    Thread.sleep(forTimeInterval: 0.5)
+    let tapAfter = try objectForUID(tapUID, selector: kAudioHardwarePropertyTranslateUIDToTap)
+    let aggregateAfter = try objectForUID(aggregateUID, selector: kAudioHardwarePropertyTranslateUIDToDevice)
+    let outputAfter = try defaultOutput()
+    print("Off state: tap \(tapAfter), aggregate \(aggregateAfter), default output \(outputAfter)")
+    guard tapAfter == kAudioObjectUnknown, aggregateAfter == kAudioObjectUnknown, outputAfter == outputBefore else {
+        throw NSError(domain: "ProcessTapProbe", code: 6, userInfo: [
+            NSLocalizedDescriptionKey: "Off state retained an audio resource or changed the default output"
+        ])
+    }
+    print("Off-state resource check passed")
 }
 
 do {
     let args = Array(CommandLine.arguments.dropFirst())
     if args.isEmpty || args == ["list"] {
         try listProcesses()
+    } else if args == ["resources"] {
+        try listResources()
     } else if args == ["self-check"] {
         do {
-            try capture(pid: getpid(), seconds: 1)
+            _ = try capture(pid: getpid(), seconds: 1)
             throw NSError(domain: "ProcessTapProbe", code: 5, userInfo: [NSLocalizedDescriptionKey: "Self-capture was accepted"])
         } catch let error as NSError where error.domain == "ProcessTapProbe" && error.code == 1 {
             print("Self-capture rejected as expected")
@@ -162,9 +247,17 @@ do {
             print("Usage: run.sh capture PID --seconds 10")
             exit(2)
         }
-        try capture(pid: pid, seconds: seconds)
+        _ = try capture(pid: pid, seconds: seconds)
+    } else if args.first == "cycle" {
+        guard args.count == 4, let pid = pid_t(args[1]), args[2] == "--seconds",
+              let seconds = Int(args[3]), (1 ... 120).contains(seconds)
+        else {
+            print("Usage: run.sh cycle PID --seconds 10")
+            exit(2)
+        }
+        try cycle(pid: pid, seconds: seconds)
     } else {
-        print("Usage: run.sh [list | self-check | capture PID --seconds 10]")
+        print("Usage: run.sh [list | resources | self-check | capture PID --seconds 10 | cycle PID --seconds 10]")
         exit(2)
     }
 } catch {
