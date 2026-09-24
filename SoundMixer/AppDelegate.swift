@@ -414,15 +414,7 @@ extension AppDelegate {
                 BridgeRoute(id: $0.id.uuidString, name: $0.name, deviceUID: $0.deviceUID.rawValue,
                             channels: Self.bridgeChannels($0.channels))
             },
-            applications: audioProcesses.map {
-                BridgeApplication(
-                    id: $0.applicationID,
-                    name: $0.name,
-                    available: $0.isProducingOutput,
-                    captureState: captureStates[$0.applicationID] ?? "stopped",
-                    muted: configuration.mutedSources.contains(.application(ApplicationID(rawValue: $0.applicationID)))
-                )
-            },
+            applications: bridgeApplications(configuration: configuration),
             inputCaptureStates: captureStates.filter { id, _ in audioDevices.contains(where: { $0.uid == id }) }
                 .map { BridgeInputCaptureState(uid: $0.key, state: $0.value) },
             mixes: bridgeMixes(configuration)
@@ -449,6 +441,36 @@ extension AppDelegate {
         return configuration.outputMixes.map { item("output", $0.deviceUID.rawValue, $0.mix) }
             + configuration.buses.map { item("bus", $0.id.uuidString, $0.mix) }
             + configuration.blackHoleRoutes.map { item("route", $0.id.uuidString, $0.mix) }
+    }
+
+    func bridgeApplications(configuration: MixerConfiguration) -> [BridgeApplication] {
+        let configuredIDs = (configuration.outputMixes.map(\.mix)
+            + configuration.buses.map(\.mix)
+            + configuration.blackHoleRoutes.map(\.mix))
+            .flatMap(\.inputs)
+            .compactMap { input -> String? in
+                guard case let .application(id) = input.source else { return nil }
+                return id.rawValue
+            }
+        let orderedProcesses = audioProcesses.sorted {
+            $0.applicationID == $1.applicationID
+                ? $0.processID < $1.processID
+                : $0.applicationID < $1.applicationID
+        }
+        let processes = Dictionary(
+            orderedProcesses.map { ($0.applicationID, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return Set(configuredIDs).union(processes.keys).sorted().map { id in
+            let process = processes[id]
+            return BridgeApplication(
+                id: id,
+                name: process?.name ?? id,
+                available: process?.isProducingOutput ?? false,
+                captureState: captureStates[id] ?? "stopped",
+                muted: configuration.mutedSources.contains(.application(ApplicationID(rawValue: id)))
+            )
+        }
     }
 
     static func bridgeChannels(_ channels: BlackHoleChannels) -> [Int] {

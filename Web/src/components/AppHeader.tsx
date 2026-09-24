@@ -3,10 +3,10 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 export function AppHeader() {
     return (
-        <header className="mb-10 flex items-center gap-3">
+        <header className="flex shrink-0 items-center gap-3">
             <div
                 aria-hidden="true"
-                className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-400 text-slate-950"
+                className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-400 text-slate-950"
             >
                 <FontAwesomeIcon icon={faSliders} />
             </div>

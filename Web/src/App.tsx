@@ -76,6 +76,34 @@ export function App() {
         );
     const sourceChoice = useMixerStore((state) => state.sourceChoice);
     const setSourceChoice = useMixerStore((state) => state.setSourceChoice);
+    const configuredInputIDs = new Set(
+        (mixerState?.mixes ?? [])
+            .flatMap((mix) => mix.inputs)
+            .filter((input) => input.kind === "inputDevice")
+            .map((input) => input.id),
+    );
+    const configuredApplicationIDs = new Set(
+        (mixerState?.mixes ?? [])
+            .flatMap((mix) => mix.inputs)
+            .filter((input) => input.kind === "application")
+            .map((input) => input.id),
+    );
+    const sourceDevices = (mixerState?.devices ?? []).filter(
+        (device) =>
+            device.inputChannels > 0 || configuredInputIDs.has(device.uid),
+    );
+    const sourceApplications = [...configuredApplicationIDs].map(
+        (id) =>
+            mixerState?.applications.find(
+                (application) => application.id === id,
+            ) ?? {
+                id,
+                name: id,
+                available: false,
+                muted: false,
+                captureState: "stopped",
+            },
+    );
 
     useEffect(() => {
         if (window.soundMixerBridge) {
@@ -89,33 +117,38 @@ export function App() {
     }, [setMixerState]);
 
     return (
-        <main className="min-h-screen bg-slate-950 p-6 text-slate-100 sm:p-10">
-            <section className="mx-auto w-full max-w-5xl">
-                <AppHeader />
+        <main className="app-shell text-slate-100">
+            <section className="app-content">
+                <div className="app-toolbar">
+                    <AppHeader />
 
-                <MasterSwitch
-                    mixerState={mixerState}
-                    pending={pending}
-                    onToggle={() =>
-                        mixerState &&
-                        void send("master", {
-                            command: "setMasterEnabled",
-                            enabled: !mixerState.isEnabled,
-                        })
-                    }
-                />
+                    <MasterSwitch
+                        mixerState={mixerState}
+                        pending={pending}
+                        onToggle={() =>
+                            mixerState &&
+                            void send("master", {
+                                command: "setMasterEnabled",
+                                enabled: !mixerState.isEnabled,
+                            })
+                        }
+                    />
+                </div>
 
                 {commandError && (
                     <p
-                        className="mb-5 rounded-xl border border-rose-800 bg-rose-950/50 p-3 text-sm text-rose-200"
+                        className="border-b border-rose-800 bg-rose-950 px-5 py-2 text-sm text-rose-200"
                         role="alert"
                     >
                         {commandError}
                     </p>
                 )}
 
-                <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-                    <nav aria-label="Mixer items" className="space-y-5">
+                <div className="mixer-workspace">
+                    <nav
+                        aria-label="Mixer items"
+                        className="mixer-pane mixer-pane-left space-y-5"
+                    >
                         <ItemGroup title="Output Devices">
                             {mixerState?.outputs
                                 .filter((output) => !output.isBlackHole)
@@ -286,7 +319,7 @@ export function App() {
                             )}
                         </ItemGroup>
                     </nav>
-                    <div>
+                    <div className="mixer-pane mixer-pane-center">
                         <div className="mb-6 flex items-end justify-between gap-4">
                             <div>
                                 <h1 className="text-3xl font-semibold tracking-tight">
@@ -1200,90 +1233,154 @@ export function App() {
                                     ))}
                             </ul>
                         )}
-
-                        {mixerState && (
-                            <section
-                                className="mt-10"
-                                aria-labelledby="applications-title"
-                            >
-                                <div className="mb-4">
-                                    <h2
-                                        id="applications-title"
-                                        className="text-xl font-semibold tracking-tight"
+                    </div>
+                    <aside
+                        className="mixer-pane mixer-pane-right space-y-5"
+                        aria-label="Audio sources"
+                    >
+                        <ItemGroup title="Physical Inputs">
+                            {sourceDevices.length === 0 && (
+                                <p className="px-3 text-sm text-slate-500">
+                                    No physical inputs found.
+                                </p>
+                            )}
+                            {sourceDevices.map((device) => {
+                                const captureState =
+                                    mixerState?.inputCaptureStates.find(
+                                        (state) => state.uid === device.uid,
+                                    )?.state ?? "stopped";
+                                return (
+                                    <div
+                                        key={device.uid}
+                                        className="rounded-lg px-3 py-2"
                                     >
-                                        Applications
-                                    </h2>
-                                    <p className="mt-1 text-sm text-slate-400">
-                                        Apps currently known to Core Audio
+                                        <div className="flex items-start justify-between gap-2">
+                                            <span className="min-w-0 truncate text-sm">
+                                                {device.name}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                disabled={pending !== null}
+                                                aria-pressed={device.muted}
+                                                aria-label={`${device.muted ? "Unmute" : "Mute"} ${device.name} globally`}
+                                                className="text-xs text-sky-300 underline disabled:opacity-50"
+                                                onClick={() =>
+                                                    void send(
+                                                        `mute-input:${device.uid}`,
+                                                        {
+                                                            command:
+                                                                "setSourceMuted",
+                                                            kind: "inputDevice",
+                                                            sourceID:
+                                                                device.uid,
+                                                            muted: !device.muted,
+                                                        },
+                                                    )
+                                                }
+                                            >
+                                                {device.muted
+                                                    ? "Unmute"
+                                                    : "Mute"}
+                                            </button>
+                                        </div>
+                                        <p className="mt-1 text-xs text-slate-400">
+                                            {!device.available
+                                                ? "Disconnected"
+                                                : captureState === "capturing"
+                                                  ? "Capturing"
+                                                  : captureState.startsWith(
+                                                          "unavailable:",
+                                                      )
+                                                    ? captureState
+                                                          .slice(
+                                                              "unavailable:"
+                                                                  .length,
+                                                          )
+                                                          .trim()
+                                                    : captureState ===
+                                                        "permissionDenied"
+                                                      ? "Permission denied"
+                                                      : "Available"}
+                                        </p>
+                                        {captureState ===
+                                            "permissionDenied" && (
+                                            <button
+                                                type="button"
+                                                className="text-xs text-amber-200 underline"
+                                                onClick={() =>
+                                                    void send(
+                                                        `privacy-input:${device.uid}`,
+                                                        {
+                                                            command:
+                                                                "openPrivacySettings",
+                                                        },
+                                                    )
+                                                }
+                                            >
+                                                Open System Settings
+                                            </button>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </ItemGroup>
+                        <ItemGroup title="Added Applications">
+                            {sourceApplications.length === 0 && (
+                                <p className="px-3 text-sm text-slate-500">
+                                    Add an application from a mix source
+                                    selector.
+                                </p>
+                            )}
+                            {sourceApplications.map((application) => (
+                                <div
+                                    key={application.id}
+                                    className="rounded-lg px-3 py-2"
+                                >
+                                    <div className="flex items-start justify-between gap-2">
+                                        <span className="min-w-0 truncate text-sm">
+                                            {application.name}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            disabled={pending !== null}
+                                            aria-pressed={application.muted}
+                                            aria-label={`${application.muted ? "Unmute" : "Mute"} ${application.name} globally`}
+                                            className="text-xs text-sky-300 underline disabled:opacity-50"
+                                            onClick={() =>
+                                                void send(
+                                                    `mute-app:${application.id}`,
+                                                    {
+                                                        command:
+                                                            "setSourceMuted",
+                                                        kind: "application",
+                                                        sourceID:
+                                                            application.id,
+                                                        muted: !application.muted,
+                                                    },
+                                                )
+                                            }
+                                        >
+                                            {application.muted
+                                                ? "Unmute"
+                                                : "Mute"}
+                                        </button>
+                                    </div>
+                                    <p className="mt-1 text-xs text-slate-400">
+                                        {application.available
+                                            ? application.captureState ===
+                                              "capturing"
+                                                ? "Capturing"
+                                                : "Available"
+                                            : "Application is not running or producing audio."}
                                     </p>
                                 </div>
-                                {mixerState.applications.length === 0 ? (
-                                    <p className="rounded-2xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-400">
-                                        No audio applications were reported.
-                                    </p>
-                                ) : (
-                                    <ul
-                                        className="space-y-2"
-                                        aria-label="Audio applications"
-                                    >
-                                        {mixerState.applications.map(
-                                            (application) => (
-                                                <li
-                                                    key={application.id}
-                                                    className="flex justify-between rounded-xl border border-slate-800 bg-slate-900 px-5 py-3"
-                                                >
-                                                    <button
-                                                        type="button"
-                                                        aria-pressed={
-                                                            application.muted
-                                                        }
-                                                        aria-label={`${application.muted ? "Unmute" : "Mute"} ${application.name} globally`}
-                                                        className="mr-4 rounded-lg border border-slate-700 px-3 py-1 text-sm"
-                                                        onClick={() =>
-                                                            void window.soundMixerBridge?.send(
-                                                                {
-                                                                    command:
-                                                                        "setSourceMuted",
-                                                                    kind: "application",
-                                                                    sourceID:
-                                                                        application.id,
-                                                                    muted: !application.muted,
-                                                                },
-                                                            )
-                                                        }
-                                                    >
-                                                        {application.muted
-                                                            ? "Unmute"
-                                                            : "Mute"}
-                                                    </button>
-                                                    <span>
-                                                        {application.name}
-                                                    </span>
-                                                    <span
-                                                        className={
-                                                            application.available
-                                                                ? "text-emerald-300"
-                                                                : "text-slate-400"
-                                                        }
-                                                    >
-                                                        {application.available
-                                                            ? "Audio output detected"
-                                                            : "No active output"}
-                                                    </span>
-                                                </li>
-                                            ),
-                                        )}
-                                    </ul>
-                                )}
-                            </section>
-                        )}
-
-                        <p className="mt-6 text-xs text-slate-500">
-                            Output levels are available for configured mixes.
-                            Source capture and routing controls are still in
-                            development.
+                            ))}
+                        </ItemGroup>
+                        <p className="text-xs text-slate-500">
+                            Source levels are shown in each destination mix.
+                            Capture requires the relevant macOS permission.
                         </p>
-                    </div>
+                    </aside>
                 </div>
             </section>
         </main>
