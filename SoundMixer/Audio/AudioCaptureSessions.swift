@@ -104,7 +104,7 @@ final class AudioInputCaptureSession {
               format.mFormatID == kAudioFormatLinearPCM,
               format.mFormatFlags & kAudioFormatFlagIsFloat != 0,
               format.mBitsPerChannel == 32,
-              (1 ... 2).contains(format.mChannelsPerFrame),
+              (1 ... 64).contains(format.mChannelsPerFrame),
               format.mBytesPerFrame >= UInt32(MemoryLayout<Float>.size),
               format.mSampleRate.isFinite, format.mSampleRate > 0
         else {
@@ -162,15 +162,15 @@ final class AudioInputCaptureSession {
         )
         guard status == noErr else { throw AudioCaptureCoordinator.CaptureError.audioStatus(status) }
         guard hardwareFormat.mSampleRate.isFinite, hardwareFormat.mSampleRate > 0,
-              (1 ... 2).contains(hardwareFormat.mChannelsPerFrame)
+              (1 ... 64).contains(hardwareFormat.mChannelsPerFrame)
         else {
             throw AudioCaptureCoordinator.CaptureError.unsupportedInputFormat(
                 channels: Int(hardwareFormat.mChannelsPerFrame),
                 sampleRate: hardwareFormat.mSampleRate
             )
         }
-        // AUHAL input must use the device rate. The source fanout resamples to
-        // 48 kHz later; preserving mono also keeps placement controls accurate.
+        // AUHAL input must use the device rate and full channel layout. The
+        // source fanout resamples to 48 kHz after capture.
         let bytesPerFrame = hardwareFormat.mChannelsPerFrame * UInt32(MemoryLayout<Float>.size)
         var clientFormat = AudioStreamBasicDescription(
             mSampleRate: hardwareFormat.mSampleRate,

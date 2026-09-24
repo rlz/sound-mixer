@@ -1075,13 +1075,30 @@ export function App() {
                                                                                     key={
                                                                                         index
                                                                                     }
-                                                                                    className="grid grid-cols-[4rem_minmax(7rem,1fr)_minmax(7rem,1fr)] items-center gap-2 text-xs"
+                                                                                    className="grid grid-cols-[minmax(9rem,1.2fr)_minmax(7rem,1fr)_minmax(7rem,1fr)] items-center gap-2 text-xs"
                                                                                 >
-                                                                                    <span>
-                                                                                        Channel{" "}
-                                                                                        {index +
-                                                                                            1}
-                                                                                    </span>
+                                                                                    <div className="min-w-0">
+                                                                                        <span>
+                                                                                            Channel{" "}
+                                                                                            {index +
+                                                                                                1}
+                                                                                        </span>
+                                                                                        <PeakMeter
+                                                                                            level={
+                                                                                                mixerState?.inputCaptureStates.find(
+                                                                                                    (
+                                                                                                        state,
+                                                                                                    ) =>
+                                                                                                        state.uid ===
+                                                                                                        input.id,
+                                                                                                )
+                                                                                                    ?.channelLevels[
+                                                                                                    index
+                                                                                                ]
+                                                                                            }
+                                                                                            label={`${name} channel ${index + 1}`}
+                                                                                        />
+                                                                                    </div>
                                                                                     <select
                                                                                         value={
                                                                                             choice

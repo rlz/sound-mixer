@@ -51,7 +51,7 @@
 ## Audio requirements
 
 - Audio callbacks run without blocking operations or allocation.
-- Transfer captured audio to each output through a bounded, single-producer/single-consumer stereo queue, with one queue per source and output so each queue has one reader. A queue holds at most 32,768 frames (about 683 ms at 48 kHz); when full, capture drops incoming frames rather than waiting, and output fills unavailable frames with silence. Convert captured sources to the internal 48 kHz format before enqueueing and apply each physical input channel's saved routing while rendering its mix. Queue underruns and dropped frames should be exposed to diagnostics so latency and stability can be measured.
+- Transfer captured audio to each output through a bounded, single-producer/single-consumer planar queue, with one queue per source and output so each queue has one reader. Physical input queues preserve 1–64 channels; application and BlackHole sources use stereo queues. A queue holds at most 32,768 frames (about 683 ms at 48 kHz); when full, capture drops incoming frames rather than waiting, and output fills unavailable frames with silence. Convert captured sources to the internal 48 kHz format before enqueueing and apply each physical input channel's saved gain and routing while rendering its mix. Queue underruns and dropped frames should be exposed to diagnostics so latency and stability can be measured.
 - Record actual sample rate, channel count, and format for each device and source. Convert incompatible streams to a common format before summing.
 - Measure latency and CPU use with a reference configuration; set acceptable values after the technical prototype.
 
@@ -67,8 +67,8 @@
 - On app exit, its audio pipeline stops and its taps and aggregate devices are released. Other applications must continue normal playback through the system output.
 - Sound Mixer does not change the system output device or hardware volume. If a user independently routes system audio into BlackHole, macOS and BlackHole settings determine that route's behavior after Sound Mixer exits.
 
-## Microphone capture format and runtime health
+## Physical input capture format and runtime health
 
-- Configure AUHAL input at the selected device's actual input stream sample rate and preserve its mono or stereo channel count. Convert captured buffers to the internal 48 kHz format in the source fanout. Do not request a fixed 48 kHz stereo AUHAL input stream for a 44.1 kHz mono microphone.
+- Configure AUHAL input at the selected device's actual input stream sample rate and preserve its full channel count from 1 through 64. Convert captured buffers to the internal 48 kHz format in the source fanout. Do not request a fixed 48 kHz stereo AUHAL input stream for a 44.1 kHz mono microphone or discard channels from a multichannel interface.
 - An input reports Starting until successful audio-buffer delivery. Capturing requires recent successful rendering; fresh silence is still Capturing and has a zero peak. Render errors or a one-second startup timeout report an actionable unavailable state, and later successful rendering restores Capturing. Audio callbacks publish only atomic health values; status notifications run on the capture control queue.
 - The meter bar uses a −60 to 0 dBFS display scale, with a small visible indication for nonzero signals below that range. The reading and accessibility value retain the measured normalized amplitude.

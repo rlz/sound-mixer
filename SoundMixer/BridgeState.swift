@@ -44,6 +44,7 @@ struct BridgeInputCaptureState: Encodable {
     let uid: String
     let state: String
     let level: Double?
+    let channelLevels: [Double?]
 }
 
 struct BridgeDevice: Encodable {

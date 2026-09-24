@@ -63,9 +63,9 @@ public struct StereoMixingEngine: Sendable {
         outputRight: UnsafeMutableBufferPointer<Float>,
         frameCount: Int,
         peakMeter: RealtimePeakMeter? = nil
-    ) {
+    ) -> Float {
         let count = min(frameCount, min(mono.count, min(outputLeft.count, outputRight.count)))
-        guard count > 0 else { return }
+        guard count > 0 else { return 0 }
 
         var contributionPeak: Float = 0
         for frame in 0 ..< count {
@@ -81,6 +81,7 @@ public struct StereoMixingEngine: Sendable {
             }
         }
         peakMeter?.record(peak: contributionPeak)
+        return contributionPeak
     }
 
     @inline(__always)

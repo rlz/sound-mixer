@@ -11,7 +11,7 @@ final class AudioRoutingCoordinator {
     private let output = CoreAudioOutputCoordinator()
     private var fanout: AudioSourceFanout?
     private var renderers: [String: AudioGraphRenderer] = [:]
-    private var ringsByRoute: [String: [String: RealtimeStereoRingBuffer]] = [:]
+    private var ringsByRoute: [String: [String: RealtimeAudioRingBuffer]] = [:]
     private var sourceMeters: [String: RealtimePeakMeter] = [:]
     private var renderMeters: [String: RealtimePeakMeter] = [:]
     private var lastGraph: MixGraphSnapshot?
@@ -40,11 +40,14 @@ final class AudioRoutingCoordinator {
 
         let deviceByUID = Dictionary(orderedDevices.map { ($0.uid, $0) }, uniquingKeysWith: { first, _ in first })
         let processByID = Dictionary(orderedProcesses.map { ($0.applicationID, $0) }, uniquingKeysWith: { first, _ in first })
-        var queuesBySource: [String: [RealtimeStereoRingBuffer]] = [:]
+        var queuesBySource: [String: [RealtimeAudioRingBuffer]] = [:]
         var captureSources = Set<String>()
         renderMeters = Dictionary(uniqueKeysWithValues: Self.renderMeterKeys(graph.configuration).map { ($0, RealtimePeakMeter()) })
         startOutputRoutes(graph: graph, devices: deviceByUID, queues: &queuesBySource, sources: &captureSources)
-        fanout = AudioSourceFanout(queuesBySource: queuesBySource)
+        let inputChannelCounts = Dictionary(uniqueKeysWithValues: deviceByUID.values.map {
+            ("input:\($0.uid)", min(max($0.inputChannels, 1), 64))
+        })
+        fanout = AudioSourceFanout(queuesBySource: queuesBySource, inputChannelCounts: inputChannelCounts)
         sourceMeters = fanout?.metersBySource ?? [:]
         startCapture(sources: captureSources, devices: deviceByUID, processes: processByID)
         return true
@@ -95,7 +98,7 @@ final class AudioRoutingCoordinator {
     private func startOutputRoutes(
         graph: MixGraphSnapshot,
         devices: [String: AudioDeviceSnapshot],
-        queues: inout [String: [RealtimeStereoRingBuffer]],
+        queues: inout [String: [RealtimeAudioRingBuffer]],
         sources: inout Set<String>
     ) {
         for route in makeRoutes(graph.configuration) {
@@ -112,7 +115,7 @@ final class AudioRoutingCoordinator {
         _ route: RenderRoute,
         graph: MixGraphSnapshot,
         devices: [String: AudioDeviceSnapshot]
-    ) -> [String: RealtimeStereoRingBuffer]? {
+    ) -> [String: RealtimeAudioRingBuffer]? {
         guard let device = devices[route.uid], device.isAlive,
               route.channels.max().map({ device.outputChannels > $0 }) ?? false,
               device.nominalSampleRate.isFinite, device.nominalSampleRate > 0
@@ -122,13 +125,21 @@ final class AudioRoutingCoordinator {
         }
 
         let sourceKeys = Self.sourceKeys(in: route.mix, buses: graph.configuration.buses)
-        let rings = Dictionary(uniqueKeysWithValues: sourceKeys.map { ($0, RealtimeStereoRingBuffer()) })
-        let monoSourceKeys = Set(devices.values.filter { $0.inputChannels == 1 }.map { "input:\($0.uid)" })
+        let rings = Dictionary(uniqueKeysWithValues: sourceKeys.map { key in
+            let channelCount: Int
+            if key.hasPrefix("input:") {
+                let uid = String(key.dropFirst("input:".count))
+                channelCount = min(max(devices[uid]?.inputChannels ?? 2, 1), 64)
+            } else {
+                channelCount = 2
+            }
+            return (key, RealtimeAudioRingBuffer(channelCount: channelCount))
+        })
         let renderer = AudioGraphRenderer(
             graph: graph,
             output: OutputMix(deviceUID: DeviceUID(rawValue: route.uid), mix: route.mix),
             sourceRings: rings,
-            monoSourceKeys: monoSourceKeys,
+            monoSourceKeys: [],
             targetKey: route.targetKey,
             meters: renderMeters
         )
@@ -194,10 +205,16 @@ final class AudioRoutingCoordinator {
         sourceMeters.compactMapValues { $0.reading() }
     }
 
+    func inputChannelLevelReadings() -> [String: [Double?]] {
+        fanout?.channelReadingsBySource ?? [:]
+    }
+
     func renderLevelReadings() -> [String: Double] {
         renderMeters.compactMapValues { $0.reading() }
     }
+}
 
+extension AudioRoutingCoordinator {
     private static func renderMeterKeys(_ configuration: MixerConfiguration) -> [String] {
         var keys: [String] = []
         for output in configuration.outputMixes {
@@ -220,14 +237,26 @@ final class AudioRoutingCoordinator {
 
     private func makeRoutes(_ configuration: MixerConfiguration) -> [RenderRoute] {
         var routes = configuration.outputMixes.map { output in
-            RenderRoute(key: "output:\(output.deviceUID.rawValue)", uid: output.deviceUID.rawValue, channels: [0, 1], mix: output.mix, targetKey: "output:\(output.deviceUID.rawValue)")
+            RenderRoute(
+                key: "output:\(output.deviceUID.rawValue)",
+                uid: output.deviceUID.rawValue,
+                channels: [0, 1],
+                mix: output.mix,
+                targetKey: "output:\(output.deviceUID.rawValue)"
+            )
         }
         routes += configuration.blackHoleRoutes.map { route in
             let channels: [Int] = switch route.channels {
             case let .mono(channel): [channel - 1]
             case let .stereo(left, right): [left - 1, right - 1]
             }
-            return RenderRoute(key: "blackhole:\(route.id.uuidString)", uid: route.deviceUID.rawValue, channels: channels, mix: route.mix, targetKey: "route:\(route.id.uuidString)")
+            return RenderRoute(
+                key: "blackhole:\(route.id.uuidString)",
+                uid: route.deviceUID.rawValue,
+                channels: channels,
+                mix: route.mix,
+                targetKey: "route:\(route.id.uuidString)"
+            )
         }
         return routes
     }
@@ -261,159 +290,4 @@ private struct RenderRoute {
     let channels: [Int]
     let mix: Mix
     let targetKey: String
-}
-
-/// Converts captured Float32 input to the 48 kHz planar format used by renderers.
-/// It fans each source into a distinct SPSC queue for every configured endpoint.
-private final class AudioSourceFanout {
-    private let queuesBySource: [String: [RealtimeStereoRingBuffer]]
-    private let buffersBySource: [String: SourceBuffer]
-    let metersBySource: [String: RealtimePeakMeter]
-    private let capacity = 8192
-
-    init(queuesBySource: [String: [RealtimeStereoRingBuffer]]) {
-        self.queuesBySource = queuesBySource
-        buffersBySource = Dictionary(uniqueKeysWithValues: queuesBySource.keys.map { ($0, SourceBuffer(capacity: 8192)) })
-        metersBySource = Dictionary(uniqueKeysWithValues: queuesBySource.keys.map { ($0, RealtimePeakMeter()) })
-    }
-
-    func consume(id: String, buffers: UnsafePointer<AudioBufferList>, frames: UInt32, format: AudioStreamBasicDescription) {
-        metersBySource[id]?.record(buffers: buffers, frameCount: frames, format: format)
-        guard let queues = queuesBySource[id], let storage = buffersBySource[id], !queues.isEmpty,
-              let converted = storage.convert(buffers: buffers, frames: frames, format: format)
-        else { return }
-        let sourceLeft = UnsafeBufferPointer(start: storage.left, count: converted.frameCount)
-        let sourceRight = UnsafeBufferPointer(start: storage.right, count: converted.frameCount)
-        for queue in queues {
-            if converted.droppedFrames > 0 {
-                queue.recordDroppedFrames(converted.droppedFrames)
-            }
-            _ = queue.write(left: sourceLeft, right: sourceRight, frameCount: converted.frameCount)
-        }
-    }
-}
-
-struct AudioQueueDiagnostics: Equatable {
-    let droppedFrames: Int64
-    let underrunFrames: Int64
-}
-
-private final class SourceBuffer {
-    let left: UnsafeMutablePointer<Float>
-    let right: UnsafeMutablePointer<Float>
-    private let capacity: Int
-    var outputRemainder = 0.0
-
-    init(capacity: Int) {
-        self.capacity = capacity
-        left = .allocate(capacity: capacity)
-        right = .allocate(capacity: capacity)
-        left.initialize(repeating: 0, count: capacity)
-        right.initialize(repeating: 0, count: capacity)
-    }
-
-    deinit {
-        left.deinitialize(count: capacity)
-        right.deinitialize(count: capacity)
-        left.deallocate()
-        right.deallocate()
-    }
-
-    func convert(
-        buffers: UnsafePointer<AudioBufferList>,
-        frames: UInt32,
-        format: AudioStreamBasicDescription
-    ) -> (frameCount: Int, droppedFrames: Int)? {
-        guard format.mFormatID == kAudioFormatLinearPCM,
-              format.mFormatFlags & kAudioFormatFlagIsFloat != 0,
-              format.mBitsPerChannel == 32,
-              format.mChannelsPerFrame > 0,
-              format.mSampleRate.isFinite,
-              (8000 ... 384_000).contains(format.mSampleRate)
-        else { return nil }
-
-        let inputFrames = Int(frames)
-        guard inputFrames > 0, inputFrames <= capacity else { return nil }
-        let channelCount = Int(format.mChannelsPerFrame)
-        let list = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: buffers))
-        let nonInterleaved = format.mFormatFlags & kAudioFormatFlagIsNonInterleaved != 0
-        guard let firstData = list.first?.mData else { return nil }
-        let first = firstData.assumingMemoryBound(to: Float.self)
-        let second = rightChannel(list: list, formatIsNonInterleaved: nonInterleaved, channelCount: channelCount)
-        guard hasEnoughData(list: list, inputFrames: inputFrames, channelCount: channelCount, nonInterleaved: nonInterleaved)
-        else { return nil }
-
-        let expectedFrames = Double(inputFrames) * 48000 / format.mSampleRate + outputRemainder
-        let convertedFrames = Int(expectedFrames)
-        outputRemainder = expectedFrames - Double(convertedFrames)
-        let outputFrames = min(capacity, convertedFrames)
-        guard outputFrames > 0 else { return nil }
-        let source = AudioInputView(
-            channelCount: channelCount,
-            nonInterleaved: nonInterleaved,
-            first: first,
-            second: second,
-            sampleRate: format.mSampleRate
-        )
-        resample(frames: outputFrames, inputFrames: inputFrames, source: source)
-        return (outputFrames, convertedFrames - outputFrames)
-    }
-
-    private func rightChannel(
-        list: UnsafeMutableAudioBufferListPointer,
-        formatIsNonInterleaved: Bool,
-        channelCount: Int
-    ) -> UnsafePointer<Float>? {
-        guard formatIsNonInterleaved, channelCount > 1, list.count > 1, let data = list[1].mData else { return nil }
-        return UnsafePointer(data.assumingMemoryBound(to: Float.self))
-    }
-
-    private func hasEnoughData(
-        list: UnsafeMutableAudioBufferListPointer,
-        inputFrames: Int,
-        channelCount: Int,
-        nonInterleaved: Bool
-    ) -> Bool {
-        let sampleSize = MemoryLayout<Float>.size
-        let requiredBytes = inputFrames * (nonInterleaved ? sampleSize : channelCount * sampleSize)
-        guard Int(list[0].mDataByteSize) >= requiredBytes else { return false }
-        return !nonInterleaved || channelCount == 1 || (list.count > 1 && Int(list[1].mDataByteSize) >= inputFrames * sampleSize)
-    }
-
-    private func resample(frames: Int, inputFrames: Int, source: AudioInputView) {
-        for frame in 0 ..< frames {
-            let position = min(Double(inputFrames - 1), Double(frame) * source.sampleRate / 48000)
-            let inputFrame = Int(position)
-            let nextFrame = min(inputFrames - 1, inputFrame + 1)
-            let fraction = Float(position - Double(inputFrame))
-            let leftStart: Float
-            let leftEnd: Float
-            let rightStart: Float
-            let rightEnd: Float
-            if source.nonInterleaved {
-                let right = source.second ?? source.first
-                leftStart = source.first[inputFrame]
-                leftEnd = source.first[nextFrame]
-                rightStart = source.channelCount > 1 ? right[inputFrame] : leftStart
-                rightEnd = source.channelCount > 1 ? right[nextFrame] : leftEnd
-            } else {
-                let base = inputFrame * source.channelCount
-                let nextBase = nextFrame * source.channelCount
-                leftStart = source.first[base]
-                leftEnd = source.first[nextBase]
-                rightStart = source.channelCount > 1 ? source.first[base + 1] : leftStart
-                rightEnd = source.channelCount > 1 ? source.first[nextBase + 1] : leftEnd
-            }
-            left[frame] = leftStart + (leftEnd - leftStart) * fraction
-            right[frame] = rightStart + (rightEnd - rightStart) * fraction
-        }
-    }
-}
-
-private struct AudioInputView {
-    let channelCount: Int
-    let nonInterleaved: Bool
-    let first: UnsafePointer<Float>
-    let second: UnsafePointer<Float>?
-    let sampleRate: Double
 }

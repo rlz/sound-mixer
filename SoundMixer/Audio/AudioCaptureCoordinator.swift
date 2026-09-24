@@ -188,7 +188,8 @@ final class AudioCaptureCoordinator {
             case .permissionDenied: "System Audio Recording permission was denied."
             case .unsupportedFormat: "The source format is not supported."
             case let .unsupportedInputFormat(channels, sampleRate):
-                "This input reports \(channels) channels at \(sampleRate) Hz; only mono or stereo inputs with a valid sample rate are supported."
+                "This input reports \(channels) channels at \(sampleRate) Hz; "
+                    + "supported input formats have 1–64 channels and a valid sample rate."
             case let .audioStatus(status): "Core Audio failed with status \(status)."
             }
         }

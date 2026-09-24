@@ -379,10 +379,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                let device = audioDevices.first(where: { $0.uid == uid.rawValue })
             {
                 let defaults = MixInput.physicalInputDefaults(channelCount: device.inputChannels, mono: device.inputChannels == 1)
-                mix.inputs.append(MixInput(source: reference, monoPlacement: placement ?? .both,
+                mix.inputs.append(MixInput(source: reference, monoPlacement: placement,
                                            channelRouting: defaults.routing, channelLevels: defaults.levels))
             } else {
-                mix.inputs.append(MixInput(source: reference, monoPlacement: placement ?? .both))
+                mix.inputs.append(MixInput(source: reference, monoPlacement: placement))
             }
         case .remove:
             guard let index = mix.inputs.firstIndex(where: { $0.source == reference }) else { throw BridgeError.invalidPayload }
@@ -397,7 +397,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     private func setPhysicalInputChannels(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
-        let expected: Set<String> = ["requestId", "command", "target", "id", "sourceID", "channelRouting", "channelLevels", "channelsLinked"]
+        let expected: Set = ["requestId", "command", "target", "id", "sourceID", "channelRouting", "channelLevels", "channelsLinked"]
         guard Set(body.keys) == expected,
               let target = body["target"] as? String, ["output", "bus", "route"].contains(target),
               let id = body["id"] as? String,
@@ -467,6 +467,7 @@ extension AppDelegate {
         guard let configuration = configuration ?? configurationStore?.configuration else { return }
         let discovered = Dictionary(uniqueKeysWithValues: audioDevices.map { ($0.uid, $0) })
         let sourceLevels = audioRoutingCoordinator?.sourceLevelReadings() ?? [:]
+        let inputChannelLevels = audioRoutingCoordinator?.inputChannelLevelReadings() ?? [:]
         let renderLevels = audioRoutingCoordinator?.renderLevelReadings() ?? [:]
         let state = BridgeState(
             schemaVersion: MixerConfiguration.currentSchemaVersion,
@@ -480,7 +481,14 @@ extension AppDelegate {
             },
             applications: bridgeApplications(configuration: configuration, sourceLevels: sourceLevels),
             inputCaptureStates: captureStates.filter { id, _ in audioDevices.contains(where: { $0.uid == id }) }
-                .map { BridgeInputCaptureState(uid: $0.key, state: $0.value, level: sourceLevels["input:\($0.key)"]) },
+                .map {
+                    BridgeInputCaptureState(
+                        uid: $0.key,
+                        state: $0.value,
+                        level: sourceLevels["input:\($0.key)"],
+                        channelLevels: inputChannelLevels["input:\($0.key)"] ?? []
+                    )
+                },
             mixes: bridgeMixes(configuration, renderLevels: renderLevels)
         )
         guard let data = try? JSONEncoder().encode(state),

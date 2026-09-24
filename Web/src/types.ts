@@ -59,7 +59,12 @@ export type MixerState = {
         captureState: string;
         level: number | null;
     }[];
-    inputCaptureStates: { uid: string; state: string; level: number | null }[];
+    inputCaptureStates: {
+        uid: string;
+        state: string;
+        level: number | null;
+        channelLevels: (number | null)[];
+    }[];
     mixes: MixState[];
 };
 
