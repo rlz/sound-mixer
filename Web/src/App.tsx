@@ -598,6 +598,10 @@ export function App() {
                                 className="mb-5 rounded-2xl border border-slate-800 bg-slate-900 p-5"
                                 aria-label="Mix sources"
                             >
+                                <PeakMeter
+                                    level={selectedMix.levelReading}
+                                    label="Destination output"
+                                />
                                 <div className="mb-4 flex flex-wrap items-end gap-3">
                                     <label className="min-w-56 flex-1 text-sm">
                                         Add a source
@@ -767,6 +771,12 @@ export function App() {
                                                     key={`${input.kind}:${input.id}`}
                                                     className="item-panel rounded-xl border border-slate-800 p-3"
                                                 >
+                                                    <PeakMeter
+                                                        level={
+                                                            input.levelReading
+                                                        }
+                                                        label={`${name} mix source`}
+                                                    />
                                                     <div className="mb-2 flex items-center justify-between gap-3">
                                                         <div className="min-w-0">
                                                             <span className="block truncate text-sm">
@@ -1052,6 +1062,14 @@ export function App() {
                                                         {output.routeError}
                                                     </p>
                                                 )}
+                                                {output.configured && (
+                                                    <PeakMeter
+                                                        level={
+                                                            output.levelReading
+                                                        }
+                                                        label={`${output.name} output`}
+                                                    />
+                                                )}
                                                 {!output.available && (
                                                     <p className="w-full text-xs text-amber-300">
                                                         {output.configured
@@ -1256,7 +1274,8 @@ export function App() {
                                     mixerState?.inputCaptureStates.find(
                                         (state) => state.uid === device.uid,
                                     );
-                                const captureState = inputState?.state ?? "stopped";
+                                const captureState =
+                                    inputState?.state ?? "stopped";
                                 return (
                                     <div
                                         key={device.uid}
@@ -1339,7 +1358,10 @@ export function App() {
                                                 Open System Settings
                                             </button>
                                         )}
-                                        <PeakMeter level={inputState?.level} label={device.name} />
+                                        <PeakMeter
+                                            level={inputState?.level}
+                                            label={device.name}
+                                        />
                                     </div>
                                 );
                             })}
@@ -1404,7 +1426,10 @@ export function App() {
                                                 : "Available"
                                             : "Application is not running or producing audio."}
                                     </p>
-                                    <PeakMeter level={application.level} label={application.name} />
+                                    <PeakMeter
+                                        level={application.level}
+                                        label={application.name}
+                                    />
                                 </div>
                             ))}
                         </ItemGroup>

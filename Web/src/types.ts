@@ -6,6 +6,7 @@ export type OutputState = {
     outputChannels: number;
     level: number;
     configured: boolean;
+    levelReading: number | null;
     routeError?: string | null;
 };
 
@@ -24,6 +25,7 @@ export type MixInputState = {
     id: string;
     level: number;
     monoPlacement: "left" | "right" | "both";
+    levelReading: number | null;
 };
 
 export type MixState = {
@@ -31,6 +33,7 @@ export type MixState = {
     id: string;
     level: number;
     inputs: MixInputState[];
+    levelReading: number | null;
 };
 
 export type MixerState = {

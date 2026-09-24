@@ -34,20 +34,24 @@ public struct StereoMixingEngine: Sendable {
         right: UnsafeBufferPointer<Float>,
         into outputLeft: UnsafeMutableBufferPointer<Float>,
         outputRight: UnsafeMutableBufferPointer<Float>,
-        frameCount: Int
+        frameCount: Int,
+        peakMeter: RealtimePeakMeter? = nil
     ) {
         let count = min(frameCount, min(left.count, min(right.count, min(outputLeft.count, outputRight.count))))
         guard count > 0 else { return }
 
+        var contributionPeak: Float = 0
         for frame in 0 ..< count {
             currentSourceGain += (targetSourceGain - currentSourceGain) * smoothingCoefficient
             currentMainGain += (targetMainGain - currentMainGain) * smoothingCoefficient
             let gain = currentSourceGain * currentMainGain
             let leftSum = outputLeft[frame] + left[frame] * gain
             let rightSum = outputRight[frame] + right[frame] * gain
+            contributionPeak = max(contributionPeak, max(abs(left[frame] * gain), abs(right[frame] * gain)))
             outputLeft[frame] = Self.limit(leftSum)
             outputRight[frame] = Self.limit(rightSum)
         }
+        peakMeter?.record(peak: contributionPeak)
     }
 
     /// Adds a mono source to the selected side or duplicates it to both sides.
@@ -57,15 +61,18 @@ public struct StereoMixingEngine: Sendable {
         placement: MonoPlacement,
         into outputLeft: UnsafeMutableBufferPointer<Float>,
         outputRight: UnsafeMutableBufferPointer<Float>,
-        frameCount: Int
+        frameCount: Int,
+        peakMeter: RealtimePeakMeter? = nil
     ) {
         let count = min(frameCount, min(mono.count, min(outputLeft.count, outputRight.count)))
         guard count > 0 else { return }
 
+        var contributionPeak: Float = 0
         for frame in 0 ..< count {
             currentSourceGain += (targetSourceGain - currentSourceGain) * smoothingCoefficient
             currentMainGain += (targetMainGain - currentMainGain) * smoothingCoefficient
             let sample = mono[frame] * currentSourceGain * currentMainGain
+            contributionPeak = max(contributionPeak, abs(sample))
             if placement != .right {
                 outputLeft[frame] = Self.limit(outputLeft[frame] + sample)
             }
@@ -73,6 +80,7 @@ public struct StereoMixingEngine: Sendable {
                 outputRight[frame] = Self.limit(outputRight[frame] + sample)
             }
         }
+        peakMeter?.record(peak: contributionPeak)
     }
 
     @inline(__always)

@@ -13,6 +13,7 @@ final class AudioRoutingCoordinator {
     private var renderers: [String: AudioGraphRenderer] = [:]
     private var ringsByRoute: [String: [String: RealtimeStereoRingBuffer]] = [:]
     private var sourceMeters: [String: RealtimePeakMeter] = [:]
+    private var renderMeters: [String: RealtimePeakMeter] = [:]
     private var lastGraph: MixGraphSnapshot?
     private var lastDevices: [AudioDeviceSnapshot] = []
     private var lastProcesses: [AudioProcessSnapshot] = []
@@ -41,6 +42,7 @@ final class AudioRoutingCoordinator {
         let processByID = Dictionary(orderedProcesses.map { ($0.applicationID, $0) }, uniquingKeysWith: { first, _ in first })
         var queuesBySource: [String: [RealtimeStereoRingBuffer]] = [:]
         var captureSources = Set<String>()
+        renderMeters = Dictionary(uniqueKeysWithValues: Self.renderMeterKeys(graph.configuration).map { ($0, RealtimePeakMeter()) })
         startOutputRoutes(graph: graph, devices: deviceByUID, queues: &queuesBySource, sources: &captureSources)
         fanout = AudioSourceFanout(queuesBySource: queuesBySource)
         sourceMeters = fanout?.metersBySource ?? [:]
@@ -54,6 +56,7 @@ final class AudioRoutingCoordinator {
         renderers.removeAll()
         ringsByRoute.removeAll()
         sourceMeters.removeAll()
+        renderMeters.removeAll()
         fanout = nil
         lastEnabled = false
     }
@@ -85,6 +88,7 @@ final class AudioRoutingCoordinator {
         renderers.removeAll()
         ringsByRoute.removeAll()
         sourceMeters.removeAll()
+        renderMeters.removeAll()
         fanout = nil
     }
 
@@ -124,7 +128,9 @@ final class AudioRoutingCoordinator {
             graph: graph,
             output: OutputMix(deviceUID: DeviceUID(rawValue: route.uid), mix: route.mix),
             sourceRings: rings,
-            monoSourceKeys: monoSourceKeys
+            monoSourceKeys: monoSourceKeys,
+            targetKey: route.targetKey,
+            meters: renderMeters
         )
         do {
             try output.start(
@@ -188,16 +194,40 @@ final class AudioRoutingCoordinator {
         sourceMeters.compactMapValues { $0.reading() }
     }
 
+    func renderLevelReadings() -> [String: Double] {
+        renderMeters.compactMapValues { $0.reading() }
+    }
+
+    private static func renderMeterKeys(_ configuration: MixerConfiguration) -> [String] {
+        var keys: [String] = []
+        for output in configuration.outputMixes {
+            let target = "output:\(output.deviceUID.rawValue)"
+            keys.append("\(target)/destination")
+            keys += output.mix.inputs.map { "\(target)/\(AudioGraphRenderer.sourceMeterKey($0.source))" }
+        }
+        for route in configuration.blackHoleRoutes {
+            let target = "route:\(route.id.uuidString)"
+            keys.append("\(target)/destination")
+            keys += route.mix.inputs.map { "\(target)/\(AudioGraphRenderer.sourceMeterKey($0.source))" }
+        }
+        for bus in configuration.buses {
+            let target = "bus:\(bus.id.uuidString)"
+            keys.append("\(target)/destination")
+            keys += bus.mix.inputs.map { "\(target)/\(AudioGraphRenderer.sourceMeterKey($0.source))" }
+        }
+        return keys
+    }
+
     private func makeRoutes(_ configuration: MixerConfiguration) -> [RenderRoute] {
         var routes = configuration.outputMixes.map { output in
-            RenderRoute(key: "output:\(output.deviceUID.rawValue)", uid: output.deviceUID.rawValue, channels: [0, 1], mix: output.mix)
+            RenderRoute(key: "output:\(output.deviceUID.rawValue)", uid: output.deviceUID.rawValue, channels: [0, 1], mix: output.mix, targetKey: "output:\(output.deviceUID.rawValue)")
         }
         routes += configuration.blackHoleRoutes.map { route in
             let channels: [Int] = switch route.channels {
             case let .mono(channel): [channel - 1]
             case let .stereo(left, right): [left - 1, right - 1]
             }
-            return RenderRoute(key: "blackhole:\(route.id.uuidString)", uid: route.deviceUID.rawValue, channels: channels, mix: route.mix)
+            return RenderRoute(key: "blackhole:\(route.id.uuidString)", uid: route.deviceUID.rawValue, channels: channels, mix: route.mix, targetKey: "route:\(route.id.uuidString)")
         }
         return routes
     }
@@ -228,6 +258,7 @@ private struct RenderRoute {
     let uid: String
     let channels: [Int]
     let mix: Mix
+    let targetKey: String
 }
 
 /// Converts captured Float32 input to the 48 kHz planar format used by renderers.

@@ -13,16 +13,24 @@ final class AudioGraphRenderer {
     private let mixStates: [UUID: [MixInputState]]
     private let outputState: [MixInputState]
     private let mutedSources: Set<SourceReference>
+    private let busDestinationMeters: [UUID: RealtimePeakMeter]
+    private let outputDestinationMeter: RealtimePeakMeter?
     private static let maximumFrames = 8192
 
     init(
         graph: MixGraphSnapshot,
         output: OutputMix,
         sourceRings: [String: RealtimeStereoRingBuffer],
-        monoSourceKeys: Set<String> = []
+        monoSourceKeys: Set<String> = [],
+        targetKey: String,
+        meters: [String: RealtimePeakMeter]
     ) {
         outputMix = output.mix
         mutedSources = Set(graph.configuration.mutedSources)
+        busDestinationMeters = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map {
+            ($0.id, meters["bus:\($0.id.uuidString)/destination"])
+        }.compactMap { key, meter in meter.map { (key, $0) } })
+        outputDestinationMeter = meters["\(targetKey)/destination"]
         busesByID = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map { ($0.id, $0) })
         busOrder = graph.busRenderOrder
         self.sourceRings = sourceRings
@@ -36,9 +44,18 @@ final class AudioGraphRenderer {
         sourceBuffers = Dictionary(uniqueKeysWithValues: sourceKeys.map { ($0, StereoStorage(capacity: Self.maximumFrames)) })
         busBuffers = Dictionary(uniqueKeysWithValues: busOrder.map { ($0, StereoStorage(capacity: Self.maximumFrames)) })
         mixStates = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map { bus in
-            (bus.id, Self.states(for: bus.mix, sampleRate: 48000, monoSourceKeys: monoSourceKeys))
+            (
+                bus.id,
+                Self.states(
+                    for: bus.mix, sampleRate: 48000, monoSourceKeys: monoSourceKeys,
+                    meterTarget: "bus:\(bus.id.uuidString)", meters: meters
+                )
+            )
         })
-        outputState = Self.states(for: output.mix, sampleRate: 48000, monoSourceKeys: monoSourceKeys)
+        outputState = Self.states(
+            for: output.mix, sampleRate: 48000, monoSourceKeys: monoSourceKeys,
+            meterTarget: targetKey, meters: meters
+        )
     }
 
     func render(
@@ -63,13 +80,23 @@ final class AudioGraphRenderer {
             else { continue }
             storage.clear(frames: frames)
             renderMix(bus.mix, states: states, into: storage, frames: frames)
+            busDestinationMeters[busID]?.record(
+                left: storage.readLeftBuffer(frames), right: storage.readRightBuffer(frames), frameCount: frames
+            )
         }
 
         renderMix(outputMix, states: outputState, into: (left, right), frames: frames)
+        outputDestinationMeter?.record(left: UnsafeBufferPointer(left), right: UnsafeBufferPointer(right), frameCount: frames)
     }
 
-    private func renderMix(_ mix: Mix, states: [MixInputState], into destination: StereoStorage, frames: Int) {
-        renderMix(mix, states: states, into: (destination.leftBuffer(frames), destination.rightBuffer(frames)), frames: frames)
+    private func renderMix(
+        _ mix: Mix,
+        states: [MixInputState],
+        into destination: StereoStorage,
+        frames: Int
+    ) {
+        let output = (destination.leftBuffer(frames), destination.rightBuffer(frames))
+        renderMix(mix, states: states, into: output, frames: frames)
     }
 
     private func renderMix(
@@ -79,55 +106,73 @@ final class AudioGraphRenderer {
         frames: Int
     ) {
         for (index, input) in mix.inputs.enumerated() where index < states.count {
+            let state = states[index]
             let source: StereoStorage? = switch input.source {
             case let .bus(id): busBuffers[id]
             case .inputDevice, .application:
-                sourceBuffers[Self.sourceKey(input.source)]
+                sourceBuffers[state.sourceKey]
             }
             guard let source else { continue }
-            let state = states[index]
             state.engine.setSourceGain(Float(mutedSources.contains(input.source) ? 0 : input.level))
             state.engine.setMainGain(Float(mix.level))
             if state.isMono {
                 state.engine.mix(
                     mono: source.readLeftBuffer(frames), placement: input.monoPlacement,
-                    into: destination.0, outputRight: destination.1, frameCount: frames
+                    into: destination.0, outputRight: destination.1, frameCount: frames,
+                    peakMeter: state.peakMeter
                 )
             } else {
                 state.engine.mix(
                     left: source.readLeftBuffer(frames), right: source.readRightBuffer(frames),
-                    into: destination.0, outputRight: destination.1, frameCount: frames
+                    into: destination.0, outputRight: destination.1, frameCount: frames,
+                    peakMeter: state.peakMeter
                 )
             }
         }
     }
 
-    private static func states(for mix: Mix, sampleRate: Double, monoSourceKeys: Set<String>) -> [MixInputState] {
+    private static func states(
+        for mix: Mix,
+        sampleRate: Double,
+        monoSourceKeys: Set<String>,
+        meterTarget: String,
+        meters: [String: RealtimePeakMeter]
+    ) -> [MixInputState] {
         mix.inputs.map { input in
             let isMono: Bool = switch input.source {
             case .bus: false
             case .inputDevice, .application: monoSourceKeys.contains(sourceKey(input.source))
             }
-            return MixInputState(sampleRate: sampleRate, isMono: isMono)
+            let sourceKey = sourceKey(input.source)
+            let peakMeter = meters["\(meterTarget)/\(sourceKey)"]
+            return MixInputState(sampleRate: sampleRate, isMono: isMono, sourceKey: sourceKey, peakMeter: peakMeter)
+        }
+    }
+
+    static func sourceMeterKey(_ reference: SourceReference) -> String {
+        switch reference {
+        case let .inputDevice(uid): "input:\(uid.rawValue)"
+        case let .application(id): "application:\(id.rawValue)"
+        case let .bus(id): "bus:\(id.uuidString)"
         }
     }
 
     private static func sourceKey(_ reference: SourceReference) -> String {
-        switch reference {
-        case let .inputDevice(uid): "input:\(uid.rawValue)"
-        case let .application(id): "application:\(id.rawValue)"
-        case .bus: ""
-        }
+        sourceMeterKey(reference)
     }
 }
 
 private final class MixInputState {
     var engine: StereoMixingEngine
     let isMono: Bool
+    let sourceKey: String
+    let peakMeter: RealtimePeakMeter?
 
-    init(sampleRate: Double, isMono: Bool) {
+    init(sampleRate: Double, isMono: Bool, sourceKey: String, peakMeter: RealtimePeakMeter?) {
         engine = StereoMixingEngine(sampleRate: sampleRate)
         self.isMono = isMono
+        self.sourceKey = sourceKey
+        self.peakMeter = peakMeter
     }
 }
 

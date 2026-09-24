@@ -273,8 +273,15 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         blackHoleRoutes = try container.decode([BlackHoleRoute].self, forKey: .blackHoleRoutes)
         knownDevices = try container.decode([KnownDevice].self, forKey: .knownDevices)
         mutedSources = try container.decode([SourceReference].self, forKey: .mutedSources)
-        guard mutedSources.allSatisfy({ if case .bus = $0 { false } else { true } }),
-              Set(mutedSources).count == mutedSources.count else {
+        guard mutedSources.allSatisfy({
+            if case .bus = $0 {
+                false
+            } else {
+                true
+            }
+        }),
+            Set(mutedSources).count == mutedSources.count
+        else {
             throw DecodingError.dataCorruptedError(forKey: .mutedSources, in: container, debugDescription: "Muted sources must be unique input or application sources")
         }
         let uids = knownDevices.map(\.uid)

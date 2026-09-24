@@ -4,7 +4,7 @@ import Synchronization
 
 /// Publishes the latest callback peak without locks or allocation. A nil reading
 /// means no callback has arrived within the caller's freshness window.
-final class RealtimePeakMeter {
+public final class RealtimePeakMeter {
     private let peakBits = Atomic<UInt32>(0)
     private let updatedAt = Atomic<UInt64>(0)
 
@@ -52,6 +52,10 @@ final class RealtimePeakMeter {
             }
         }
         publish(peak)
+    }
+
+    func record(peak: Float) {
+        publish(peak.isFinite ? min(max(peak, 0), 1) : 0)
     }
 
     private func publish(_ peak: Float) {

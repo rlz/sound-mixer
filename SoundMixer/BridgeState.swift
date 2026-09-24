@@ -17,6 +17,7 @@ struct BridgeMix: Encodable {
     let id: String
     let level: Double
     let inputs: [BridgeMixInput]
+    let levelReading: Double?
 }
 
 struct BridgeMixInput: Encodable {
@@ -24,6 +25,7 @@ struct BridgeMixInput: Encodable {
     let id: String
     let level: Double
     let monoPlacement: String
+    let levelReading: Double?
 }
 
 struct BridgeApplication: Encodable {
@@ -61,6 +63,7 @@ struct BridgeOutput: Encodable {
     let level: Double
     let configured: Bool
     let routeError: String?
+    let levelReading: Double?
 }
 
 struct BridgeNamedItem: Encodable {

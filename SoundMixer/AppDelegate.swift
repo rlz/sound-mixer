@@ -413,11 +413,12 @@ extension AppDelegate {
         guard let configuration = configuration ?? configurationStore?.configuration else { return }
         let discovered = Dictionary(uniqueKeysWithValues: audioDevices.map { ($0.uid, $0) })
         let sourceLevels = audioRoutingCoordinator?.sourceLevelReadings() ?? [:]
+        let renderLevels = audioRoutingCoordinator?.renderLevelReadings() ?? [:]
         let state = BridgeState(
             schemaVersion: MixerConfiguration.currentSchemaVersion,
             isEnabled: configuration.isEnabled,
             devices: bridgeDevices(configuration: configuration, discovered: discovered),
-            outputs: bridgeOutputs(configuration: configuration, discovered: discovered),
+            outputs: bridgeOutputs(configuration: configuration, discovered: discovered, renderLevels: renderLevels),
             buses: configuration.buses.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) },
             blackHoleRoutes: configuration.blackHoleRoutes.map {
                 BridgeRoute(id: $0.id.uuidString, name: $0.name, deviceUID: $0.deviceUID.rawValue,
@@ -426,7 +427,7 @@ extension AppDelegate {
             applications: bridgeApplications(configuration: configuration, sourceLevels: sourceLevels),
             inputCaptureStates: captureStates.filter { id, _ in audioDevices.contains(where: { $0.uid == id }) }
                 .map { BridgeInputCaptureState(uid: $0.key, state: $0.value, level: sourceLevels["input:\($0.key)"]) },
-            mixes: bridgeMixes(configuration)
+            mixes: bridgeMixes(configuration, renderLevels: renderLevels)
         )
         guard let data = try? JSONEncoder().encode(state),
               let json = String(data: data, encoding: .utf8)
@@ -434,9 +435,10 @@ extension AppDelegate {
         webView?.evaluateJavaScript("window.soundMixerBridge?.onState(\(json))")
     }
 
-    func bridgeMixes(_ configuration: MixerConfiguration) -> [BridgeMix] {
+    func bridgeMixes(_ configuration: MixerConfiguration, renderLevels: [String: Double] = [:]) -> [BridgeMix] {
         func item(_ target: String, _ id: String, _ mix: Mix) -> BridgeMix {
-            BridgeMix(target: target, id: id, level: mix.level, inputs: mix.inputs.map { input in
+            let targetKey = "\(target == "output" ? "output" : target):\(id)"
+            let inputs = mix.inputs.map { input -> BridgeMixInput in
                 let kind: String
                 let sourceID: String
                 switch input.source {
@@ -444,8 +446,21 @@ extension AppDelegate {
                 case let .application(app): kind = "application"; sourceID = app.rawValue
                 case let .bus(bus): kind = "bus"; sourceID = bus.uuidString
                 }
-                return BridgeMixInput(kind: kind, id: sourceID, level: input.level, monoPlacement: input.monoPlacement.rawValue)
-            })
+                return BridgeMixInput(
+                    kind: kind,
+                    id: sourceID,
+                    level: input.level,
+                    monoPlacement: input.monoPlacement.rawValue,
+                    levelReading: renderLevels["\(targetKey)/\(AudioGraphRenderer.sourceMeterKey(input.source))"]
+                )
+            }
+            return BridgeMix(
+                target: target,
+                id: id,
+                level: mix.level,
+                inputs: inputs,
+                levelReading: renderLevels["\(targetKey)/destination"]
+            )
         }
         return configuration.outputMixes.map { item("output", $0.deviceUID.rawValue, $0.mix) }
             + configuration.buses.map { item("bus", $0.id.uuidString, $0.mix) }
@@ -526,7 +541,7 @@ extension AppDelegate {
         }
     }
 
-    func bridgeOutputs(configuration: MixerConfiguration, discovered: [String: AudioDeviceSnapshot]) -> [BridgeOutput] {
+    func bridgeOutputs(configuration: MixerConfiguration, discovered: [String: AudioDeviceSnapshot], renderLevels: [String: Double] = [:]) -> [BridgeOutput] {
         let saved = Dictionary(uniqueKeysWithValues: configuration.outputMixes.map { ($0.deviceUID.rawValue, $0) })
         let discoveredOutputUIDs = audioDevices.filter { $0.outputChannels > 0 }.map(\.uid)
         return Set(discoveredOutputUIDs).union(saved.keys).sorted().map { uid -> BridgeOutput in
@@ -540,7 +555,8 @@ extension AppDelegate {
                 outputChannels: live?.outputChannels ?? 0,
                 level: saved[uid]?.mix.level ?? 1,
                 configured: saved[uid] != nil,
-                routeError: outputRouteErrors[uid]
+                routeError: outputRouteErrors[uid],
+                levelReading: renderLevels["output:\(uid)/destination"]
             )
         }
     }
