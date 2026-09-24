@@ -178,6 +178,7 @@ final class AudioCaptureCoordinator {
         case processUnavailable
         case permissionDenied
         case unsupportedFormat
+        case unsupportedInputFormat(channels: Int, sampleRate: Double)
         case audioStatus(OSStatus)
 
         var errorDescription: String? {
@@ -186,6 +187,8 @@ final class AudioCaptureCoordinator {
             case .processUnavailable: "The application no longer has an audio process."
             case .permissionDenied: "System Audio Recording permission was denied."
             case .unsupportedFormat: "The source format is not supported."
+            case let .unsupportedInputFormat(channels, sampleRate):
+                "This input reports \(channels) channels at \(sampleRate) Hz; only mono or stereo inputs with a valid sample rate are supported."
             case let .audioStatus(status): "Core Audio failed with status \(status)."
             }
         }

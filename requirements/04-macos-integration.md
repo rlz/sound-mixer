@@ -32,6 +32,7 @@ The first release supports macOS 15 and later. The scaffold builds with Xcode 27
 - BlackHole is an external driver. Discover installed instances and their actual output channel counts through Core Audio.
 - Available BlackHole builds may have different channel counts; the interface must not assume a fixed layout.
 - For selected channels, use one HAL Output AudioUnit per device with a full-output-channel, interleaved Float32 client buffer. Zero unused channels and combine independent routes in that buffer before output. A BlackHole 64ch loopback test confirmed mono channel 17 and stereo pairs 3–4 and 63–64 without signal in the other channels; results and code are in `prototypes/channel-routing/`.
+- Every configured BlackHole stereo-pair output route also appears as an input source for the same pair. Capture those channels through the device's HAL input stream and map the ordered pair to stereo left/right. Check input-side channel availability independently from output-side availability; a route with a valid output pair but unavailable input pair remains an output route and reports its input source as unavailable.
 - Detect route channel conflicts before startup. If a device disappears, keep its saved setting but do not output to missing channels.
 - Users install the driver using the [official BlackHole instructions](https://github.com/ExistentialAudio/BlackHole#installation-instructions).
 

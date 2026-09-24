@@ -8,7 +8,7 @@ A user manages several independent audio mixes on a Mac: selects sources, sets l
 
 - **Physical output** — a Core Audio device available to the system with output channels, such as speakers, headphones, a USB interface, or an installed virtual driver.
 - **Internal virtual bus** — a user-created mixing graph node that exists only in Sound Mixer.
-- **BlackHole route** — a user-created mixer output tied to a specific installed BlackHole device and selected output channels.
+- **BlackHole route** — a user-created stereo mixer output tied to a specific installed BlackHole device and automatically assigned the next available adjacent channel pair.
 - **Source** — an audio input device, audio from a particular application, or an internal virtual bus added to a mix.
 - **Master volume** — a software gain for the selected output or bus mix. It does not change the device's system volume.
 - **Master switch** — the on/off state of Sound Mixer's entire audio pipeline. It persists across launches.
@@ -18,7 +18,7 @@ A user manages several independent audio mixes on a Mac: selects sources, sets l
 1. The user sees all available output devices and selects one to configure its mix.
 2. The user adds a microphone and application audio to a headphone mix, setting an independent volume for each source.
 3. The user creates a bus named “Stream,” renames it, and adds it as a source to several output mixes.
-4. The user creates a BlackHole route, selects one channel or a stereo pair, and sends a separate mix there.
+4. The user creates a stereo BlackHole route; Sound Mixer assigns the next available adjacent channel pair and sends a separate mix there.
 5. The user disconnects a device or revokes a permission; the app preserves the configuration and clearly shows which sources are unavailable.
 6. The user turns off mixing in one action; normal macOS audio continues playing. Audio also behaves normally after the app exits.
 7. The user relaunches Sound Mixer and gets the saved names, routes, levels, channels, and master switch state.
