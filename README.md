@@ -4,17 +4,16 @@ Sound Mixer is an audio mixer for modern macOS versions. It collects audio from 
 
 ## Status
 
-The application scaffold is ready: an AppKit window loads the local React interface through WKWebView. The audio pipeline, device support, and mix controls have not been implemented yet. The implementation order and acceptance criteria are in [todo.md](todo.md).
+The application has a native Core Audio capture and output pipeline, configurable mixes, per-mix input channel routing and gain settings, BlackHole stereo-pair output routes, automatic local configuration storage, and a React interface hosted in WKWebView. Some parts of the multichannel physical-input path and BlackHole pair input capture are still in progress; see [todo.md](todo.md) for implementation and verification status.
 
-## How the mixer will work
+## Current behavior and limitations
 
 - The left panel lists available Core Audio outputs, internal virtual buses, and configured BlackHole routes. Each output or bus has a master volume slider.
 - Users can create and rename internal virtual buses. These buses exist only in Sound Mixer and do not appear as macOS system devices.
-- For a BlackHole route, users select an installed BlackHole device and its output channels. If BlackHole is missing, the app explains how to install it and does not create a nonfunctional route.
-- The right panel configures the mix for the selected output or bus using input devices, applications, and other virtual buses as sources. Each source has its own volume control. A mono source can be sent to both stereo channels.
-- Invalid routes, including cycles between virtual buses, are rejected before they are applied.
-- A master switch turns the mixer's entire audio pipeline on or off. Normal macOS playback continues when mixing is off and after Sound Mixer exits. Settings are saved automatically and restored on the next launch.
-- If a configured device is missing at launch, its settings and mix rows remain visible with an unavailable status and can be removed. If a device with the same UID returns, valid routes resume when mixing is on.
+- BlackHole routes use the lowest available adjacent stereo output pair automatically. The installed driver remains a separate dependency and is never installed by Sound Mixer.
+- Mix sources include physical inputs, eligible applications, virtual buses, and configured BlackHole routes. Physical input rows store their channel routing and gain settings per mix. Current physical capture supports mono and stereo only; 3–64 channel capture and per-channel live meters are still being implemented.
+- The master switch controls Sound Mixer's capture and output. Configuration is saved locally and restored at launch. Missing devices remain visible with an unavailable state.
+- Sound Mixer does not change the macOS system output device or its hardware volume, and application capture depends on macOS System Audio Recording permission.
 
 See the detailed requirements for [product scope](requirements/00-product.md), [devices](requirements/01-devices.md), [routing and mixing](requirements/02-routing-and-mixing.md), [interface](requirements/03-interface.md), [macOS integration](requirements/04-macos-integration.md), and [quality and acceptance](requirements/05-quality-and-acceptance.md).
 
@@ -27,15 +26,32 @@ See the detailed requirements for [product scope](requirements/00-product.md), [
 - Swift and WebKit communicate through typed messages. The native side confirms settings changes, which are then reflected in the interface.
 - Versioned local configuration in Application Support automatically stores routes, levels, names, selected channels, and the master switch state. It does not store source audio.
 
-The first version targets **macOS 15 and later**. The scaffold has been verified with **Xcode 27.0 / macOS SDK 27.0**, Node.js 26.8.1, and npm 12.0.2. Core Audio process taps are planned for application audio capture; this feature depends on permission to record system audio. Users install BlackHole separately.
+The first version targets **macOS 15 and later**. The project is configured for **Xcode 27.0 / macOS SDK 27.0**, Node.js 26.8.1, and npm 12.0.2. Application audio capture uses Core Audio process taps and requires System Audio Recording permission. Users install BlackHole separately.
+
+## Build and launch
+
+Requirements: macOS 15 or later, Xcode 27 or later, Node.js 26.8.1, and npm 12.0.2. From the repository root:
+
+```sh
+./scripts/build-all.sh
+open SoundMixer.xcodeproj
+```
+
+In Xcode, select the **SoundMixer** scheme and run it on **My Mac**. The build script builds the local React interface, then builds the macOS app; the web assets are bundled into the app, so runtime does not require a network connection. To build without opening Xcode, run `./scripts/build-core.sh` after building the web assets, or use `./scripts/build-all.sh` for both steps.
+
+The first time you add a physical input or application source, macOS may ask for Microphone or System Audio Recording access. Grant access in **System Settings → Privacy & Security** for the relevant Sound Mixer permission, then turn the mixer off and on or restart capture. If access is denied, macOS may require quitting and reopening the app after changing the setting. Permission is needed only for the source type being captured; denial does not make unrelated routes unavailable.
+
+To run the repository's formatting, lint, test, web-build, and app-build checks, use `./scripts/check.sh`. It installs the pinned SwiftFormat and SwiftLint binaries after checksum verification and uses the locked npm dependencies. Xcode 27 and Node.js 26.8.1 are required.
+
+## Install BlackHole
+
+Sound Mixer does not bundle or install the BlackHole audio driver. Install a BlackHole build from the [official BlackHole repository](https://github.com/ExistentialAudio/BlackHole#installation-instructions), follow its installer instructions, and approve the system extension or restart if the installer requests it. Then open **Audio MIDI Setup** or Sound Mixer's device list and confirm the BlackHole device is available. In Sound Mixer, add a BlackHole route and choose the discovered BlackHole device; Sound Mixer assigns the next available stereo pair. A route can be unavailable if the driver is absent, disconnected, or does not expose its saved channels.
+
+BlackHole routes are intended for audio routing and loopback. Configure the application or macOS audio path to send audio into the corresponding BlackHole input when loopback is desired. Sound Mixer does not capture all system audio automatically.
 
 ## Development
 
-1. Install Xcode 27 or later and Node.js 26.8.1 with npm 12.0.2. Run `./scripts/build-all.sh` to install the locked web dependencies, build the React interface, and build the macOS app. Open [SoundMixer.xcodeproj](SoundMixer.xcodeproj) in Xcode afterward to run or debug the app.
-2. Web source lives in `Web/src`; `Web/dist` is generated by the build and ignored by Git. Do not commit its contents. `build-all` regenerates it before building the app, which copies the local files into the `.app`; runtime does not need a network connection.
-3. Run all checks with `./scripts/check.sh`. It installs the pinned SwiftFormat 0.62.1 and SwiftLint 0.65.0 releases after verifying their SHA256 checksums, runs them, then runs `npm ci`, Prettier and ESLint checks, the Web build, and the Xcode build. Xcode 27 and Node.js 26.8.1 are required. If only Command Line Tools are active, the script uses `/Applications/Xcode.app`.
-
-To fix formatting, run `.tools/bin/swiftformat SoundMixer Tests --config .swiftformat --cache ignore` and `cd Web && npm run format`. The configuration uses four spaces for Swift, TypeScript, TSX, JavaScript, JSON, HTML, and CSS; the Prettier plugin sorts Tailwind classes. Web tool versions are pinned in `Web/package.json` and `Web/package-lock.json`. GitHub Actions runs formatting, linting, Swift tests, and builds with the Xcode 27 image.
+Web source lives in `Web/src`; `Web/dist` is generated by the build and ignored by Git. Do not commit its contents. Use `npm run build` from `Web` while iterating on the interface. Swift and web tool versions and formatting rules are pinned in the repository. To fix formatting, run `.tools/bin/swiftformat SoundMixer Tests --config .swiftformat --cache ignore` and `cd Web && npm run format`.
 
 ## Technical references
 

@@ -31,5 +31,5 @@ Statuses: `[ ]` = not started, `[~]` = in progress. Tasks are ordered by depende
 ## 4. Acceptance and release
 
 - [ ] Run the manual matrix in `requirements/05-quality-and-acceptance.md`, including Scarlett per-channel meters/gains and BlackHole pair loopback; measure latency, underruns, and CPU. **Done when:** observations cover linked defaults, independent gain changes, relinking to channel 1, device details, and measurement conditions.
-- [ ] Update the README with build, launch, permission, and BlackHole installation instructions. **Done when:** a new developer can run the app from the instructions.
+- [x] Update the README with build, launch, permission, and BlackHole installation instructions. **Done when:** a new developer can run the app from the instructions.
 - [ ] Prepare a release build and repeat acceptance scenarios. **Done when:** a signed build is verified on a supported macOS version.
