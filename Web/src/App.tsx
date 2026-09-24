@@ -80,6 +80,16 @@ export function App() {
                 mix.target === selectedTarget.target &&
                 mix.id === selectedTarget.id,
         );
+    const addSourceToSelectedMix = (kind: string, sourceID: string) => {
+        if (!selectedTarget || !selectedMix || pending !== null) return;
+        void send(`mix-add:${sourceID}`, {
+            command: "addMixInput",
+            ...selectedTarget,
+            kind,
+            sourceID,
+            monoPlacement: "both",
+        });
+    };
     const sourceChoice = useMixerStore((state) => state.sourceChoice);
     const setSourceChoice = useMixerStore((state) => state.setSourceChoice);
     const configuredInputIDs = new Set(
@@ -1276,6 +1286,12 @@ export function App() {
                                     );
                                 const captureState =
                                     inputState?.state ?? "stopped";
+                                const alreadyInSelectedMix =
+                                    selectedMix?.inputs.some(
+                                        (input) =>
+                                            input.kind === "inputDevice" &&
+                                            input.id === device.uid,
+                                    ) ?? false;
                                 return (
                                     <div
                                         key={device.uid}
@@ -1362,6 +1378,31 @@ export function App() {
                                             level={inputState?.level}
                                             label={device.name}
                                         />
+                                        <button
+                                            type="button"
+                                            disabled={
+                                                !selectedTarget ||
+                                                !selectedMix ||
+                                                alreadyInSelectedMix ||
+                                                pending !== null
+                                            }
+                                            aria-label={
+                                                alreadyInSelectedMix
+                                                    ? `${device.name} is already in the selected mix`
+                                                    : `Add ${device.name} to the selected mix`
+                                            }
+                                            className="mt-1 rounded px-2 py-1 text-xs text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                            onClick={() =>
+                                                addSourceToSelectedMix(
+                                                    "inputDevice",
+                                                    device.uid,
+                                                )
+                                            }
+                                        >
+                                            {alreadyInSelectedMix
+                                                ? "Added"
+                                                : "Add to mix"}
+                                        </button>
                                     </div>
                                 );
                             })}
@@ -1373,65 +1414,98 @@ export function App() {
                                     selector.
                                 </p>
                             )}
-                            {sourceApplications.map((application) => (
-                                <div
-                                    key={application.id}
-                                    className="item-panel rounded-lg border border-slate-800 px-3 py-2"
-                                >
-                                    <div className="flex items-start justify-between gap-2">
-                                        <span className="flex min-w-0 items-center gap-2 truncate text-sm">
-                                            <FontAwesomeIcon
-                                                icon={faDesktop}
-                                                aria-hidden="true"
-                                                className="text-slate-400"
-                                            />
-                                            {application.name}
-                                        </span>
+                            {sourceApplications.map((application) => {
+                                const alreadyInSelectedMix =
+                                    selectedMix?.inputs.some(
+                                        (input) =>
+                                            input.kind === "application" &&
+                                            input.id === application.id,
+                                    ) ?? false;
+                                return (
+                                    <div
+                                        key={application.id}
+                                        className="item-panel rounded-lg border border-slate-800 px-3 py-2"
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <span className="flex min-w-0 items-center gap-2 truncate text-sm">
+                                                <FontAwesomeIcon
+                                                    icon={faDesktop}
+                                                    aria-hidden="true"
+                                                    className="text-slate-400"
+                                                />
+                                                {application.name}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                disabled={pending !== null}
+                                                aria-pressed={application.muted}
+                                                aria-label={`${application.muted ? "Unmute" : "Mute"} ${application.name} globally`}
+                                                title={`${application.muted ? "Unmute" : "Mute"} ${application.name} globally`}
+                                                className="icon-button text-sky-300 disabled:opacity-50"
+                                                onClick={() =>
+                                                    void send(
+                                                        `mute-app:${application.id}`,
+                                                        {
+                                                            command:
+                                                                "setSourceMuted",
+                                                            kind: "application",
+                                                            sourceID:
+                                                                application.id,
+                                                            muted: !application.muted,
+                                                        },
+                                                    )
+                                                }
+                                            >
+                                                <FontAwesomeIcon
+                                                    icon={
+                                                        application.muted
+                                                            ? faVolumeXmark
+                                                            : faVolumeHigh
+                                                    }
+                                                    aria-hidden="true"
+                                                />
+                                            </button>
+                                        </div>
+                                        <p className="mt-1 text-xs text-slate-400">
+                                            {application.available
+                                                ? application.captureState ===
+                                                  "capturing"
+                                                    ? "Capturing"
+                                                    : "Available"
+                                                : "Application is not running or producing audio."}
+                                        </p>
+                                        <PeakMeter
+                                            level={application.level}
+                                            label={application.name}
+                                        />
                                         <button
                                             type="button"
-                                            disabled={pending !== null}
-                                            aria-pressed={application.muted}
-                                            aria-label={`${application.muted ? "Unmute" : "Mute"} ${application.name} globally`}
-                                            title={`${application.muted ? "Unmute" : "Mute"} ${application.name} globally`}
-                                            className="icon-button text-sky-300 disabled:opacity-50"
+                                            disabled={
+                                                !selectedTarget ||
+                                                !selectedMix ||
+                                                alreadyInSelectedMix ||
+                                                pending !== null
+                                            }
+                                            aria-label={
+                                                alreadyInSelectedMix
+                                                    ? `${application.name} is already in the selected mix`
+                                                    : `Add ${application.name} to the selected mix`
+                                            }
+                                            className="mt-1 rounded px-2 py-1 text-xs text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
                                             onClick={() =>
-                                                void send(
-                                                    `mute-app:${application.id}`,
-                                                    {
-                                                        command:
-                                                            "setSourceMuted",
-                                                        kind: "application",
-                                                        sourceID:
-                                                            application.id,
-                                                        muted: !application.muted,
-                                                    },
+                                                addSourceToSelectedMix(
+                                                    "application",
+                                                    application.id,
                                                 )
                                             }
                                         >
-                                            <FontAwesomeIcon
-                                                icon={
-                                                    application.muted
-                                                        ? faVolumeXmark
-                                                        : faVolumeHigh
-                                                }
-                                                aria-hidden="true"
-                                            />
+                                            {alreadyInSelectedMix
+                                                ? "Added"
+                                                : "Add to mix"}
                                         </button>
                                     </div>
-                                    <p className="mt-1 text-xs text-slate-400">
-                                        {application.available
-                                            ? application.captureState ===
-                                              "capturing"
-                                                ? "Capturing"
-                                                : "Available"
-                                            : "Application is not running or producing audio."}
-                                    </p>
-                                    <PeakMeter
-                                        level={application.level}
-                                        label={application.name}
-                                    />
-                                </div>
-                            ))}
+                                );
+                            })}
                         </ItemGroup>
                         <p className="text-xs text-slate-500">
                             Source levels are shown in each destination mix.

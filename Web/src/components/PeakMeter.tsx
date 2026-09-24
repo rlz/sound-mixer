@@ -30,7 +30,9 @@ export function PeakMeter({ level, label }: PeakMeterProps) {
                     style={{ width: `${visualLevel * 100}%` }}
                 />
             </span>
-            <span className="w-16 text-right">{description}</span>
+            <span className="w-20 shrink-0 whitespace-nowrap text-right tabular-nums">
+                {description}
+            </span>
         </div>
     );
 }
