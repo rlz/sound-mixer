@@ -802,19 +802,19 @@ export function App() {
                                                     ] ?? 1,
                                             );
                                             const editorKey = `${selectedTarget.target}:${selectedTarget.id}:${input.id}`;
+                                            const linkedLevel = Math.max(
+                                                0,
+                                                ...levels,
+                                            );
                                             const scaleLinkedLevels = (
                                                 value: number,
                                             ) => {
-                                                const maximum = Math.max(
-                                                    0,
-                                                    ...levels,
-                                                );
-                                                return maximum > 0
+                                                return linkedLevel > 0
                                                     ? levels.map((level) =>
                                                           Math.min(
                                                               1,
                                                               (level * value) /
-                                                                  maximum,
+                                                                  linkedLevel,
                                                           ),
                                                       )
                                                     : levels.map(() => value);
@@ -1118,10 +1118,7 @@ export function App() {
                                                                                         <StableRange
                                                                                             value={
                                                                                                 input.channelsLinked
-                                                                                                    ? Math.max(
-                                                                                                          0,
-                                                                                                          ...levels,
-                                                                                                      )
+                                                                                                    ? linkedLevel
                                                                                                     : (levels[
                                                                                                           index
                                                                                                       ] ??
@@ -1129,8 +1126,8 @@ export function App() {
                                                                                             }
                                                                                             label={
                                                                                                 input.channelsLinked
-                                                                                                    ? "Linked channel gain"
-                                                                                                    : `Channel ${index + 1} gain`
+                                                                                                    ? `${name} linked channel gain, channel 1 reference`
+                                                                                                    : `${name} channel ${index + 1} level`
                                                                                             }
                                                                                             disabled={
                                                                                                 pending !==
@@ -1144,12 +1141,10 @@ export function App() {
                                                                                             ) => {
                                                                                                 const nextLevels =
                                                                                                     input.channelsLinked
-                                                                                                        ? scaleLinkedLevels(
-                                                                                                              value,
-                                                                                                          )
-                                                                                                        : [
-                                                                                                              ...levels,
-                                                                                                          ];
+                                                                                                    ? scaleLinkedLevels(
+                                                                                                          value,
+                                                                                                      )
+                                                                                                        : [...levels];
                                                                                                 if (
                                                                                                     !input.channelsLinked
                                                                                                 ) {
