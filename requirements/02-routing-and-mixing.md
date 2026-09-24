@@ -10,6 +10,8 @@
 - Physical input devices are shown in the input-device area whether or not they have been added to a mix. Added application sources remain configured while their process is absent; they show unavailable and contribute silence until a process with the same bundle identifier becomes available and capture checks pass.
 - Muting an input device or application is global across all mixes: it silences that source in every route while preserving its rows and per-route levels. The mute state is saved by stable source identity, restored at launch, and does not imply that the source is available or permitted.
 - Input and application source rows expose a live signal meter when capture is active. Meter readings are observed runtime state, not saved configuration; unavailable or inactive sources show a clear non-live state rather than a stale level. Muting does not stop capture, so an actively captured muted source may continue to show its input level.
+- Meter values are peak amplitude normalized to 0–1 full scale, measured from the actual Float32 signal. The input/source panel shows the captured signal before per-mix gain and global mute; each source row in a mix shows that source after its route gain and placement, before summing; a destination meter shows the final limited signal after its master gain. This lets the source panel continue to indicate captured audio while muted and makes route-level changes visible in mix rows.
+- Meter collection in audio callbacks is allocation-free and non-blocking. The native layer publishes a compact runtime meter snapshot to the interface at no more than 15 updates per second. Values older than 500 ms are reported as inactive; meters are never persisted in configuration.
 
 ## Channels and levels
 

@@ -19,6 +19,7 @@
 
 - Automated tests: models and graph validation, audio-engine levels and channels, invalid-configuration reset, atomic saves, master switch state, bridge message types, and primary interface actions; matching saved and discovered UIDs, missing devices at launch, removal of unavailable settings, reconnection with the same or a different UID, incompatible channels, and disabled mixing. Configuration migration is not required during development.
 - Manual Mac checks: built-in speakers, an external output, a microphone, audio from a single application, multichannel BlackHole, device connection and disconnection, permission revocation, disabled mixing, normal and crash exits, and restart after each setting change. Separately check startup without a previously configured output, input, and BlackHole device; removal of each unavailable item; and reconnection of the same device with mixing both on and off.
+- Meter checks: compare input, per-source mix, and destination meters against known silence and reference tones; confirm source gain, mix master gain, limiter behavior, and global mute affect only the specified meter locations; confirm stale/inactive readings clear after capture stops or a device disconnects; verify meter updates stay at or below 15 Hz and do not cause audio callback allocations, locks, or UI stalls.
 - During audio checks, measure latency, buffer underruns, and CPU load using a predefined reference configuration. Set target thresholds after the prototype and record them here.
 
 ## Acceptance limits
