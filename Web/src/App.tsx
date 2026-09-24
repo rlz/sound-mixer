@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { faVolumeHigh, faVolumeXmark } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useMixerStore } from "./store";
@@ -24,6 +24,10 @@ export function App() {
     const setEditingBusId = useMixerStore((state) => state.setEditingBusId);
     const editingRouteId = useMixerStore((state) => state.editingRouteId);
     const setEditingRouteId = useMixerStore((state) => state.setEditingRouteId);
+    const [routeDeviceUID, setRouteDeviceUID] = useState("");
+    const [routeMode, setRouteMode] = useState<"mono" | "stereo">("stereo");
+    const [routeLeft, setRouteLeft] = useState("1");
+    const [routeRight, setRouteRight] = useState("2");
 
     const send = async (
         key: string,
@@ -233,6 +237,26 @@ export function App() {
                             )}
                         </ItemGroup>
                         <ItemGroup title="BlackHole Routes">
+                            <button
+                                type="button"
+                                disabled={pending !== null}
+                                onClick={() => {
+                                    setEditingBusId(null);
+                                    setEditingRouteId(null);
+                                    setSelectedItem("route:new");
+                                    setBusNameDraft("New BlackHole Route");
+                                    setRouteDeviceUID(
+                                        mixerState?.outputs.find(
+                                            (output) =>
+                                                output.isBlackHole &&
+                                                output.available,
+                                        )?.uid ?? "",
+                                    );
+                                }}
+                                className="w-full rounded-lg px-3 py-2 text-left text-sm text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
+                            >
+                                + Add BlackHole route
+                            </button>
                             {mixerState?.blackHoleRoutes.map((route) => (
                                 <button
                                     key={route.id}
@@ -292,7 +316,8 @@ export function App() {
 
                         {(selectedBus ||
                             selectedRoute ||
-                            selectedItem === "bus:new") && (
+                            selectedItem === "bus:new" ||
+                            selectedItem === "route:new") && (
                             <section
                                 className="mb-5 rounded-2xl border border-slate-800 bg-slate-900 p-5"
                                 aria-label="Virtual item settings"
@@ -313,6 +338,24 @@ export function App() {
                                                 id: editingBusId,
                                                 name: busNameDraft ?? "",
                                             });
+                                        } else if (
+                                            selectedItem === "route:new"
+                                        ) {
+                                            void send("route-create", {
+                                                command: "createRoute",
+                                                name: busNameDraft ?? "",
+                                                deviceUID: routeDeviceUID,
+                                                mode: routeMode,
+                                                channels:
+                                                    routeMode === "mono"
+                                                        ? [Number(routeLeft)]
+                                                        : [
+                                                              Number(routeLeft),
+                                                              Number(
+                                                                  routeRight,
+                                                              ),
+                                                          ],
+                                            });
                                         } else {
                                             void send("bus-create", {
                                                 command: "createBus",
@@ -327,7 +370,9 @@ export function App() {
                                     >
                                         {selectedRoute
                                             ? "Route name"
-                                            : "Virtual bus name"}
+                                            : selectedItem === "route:new"
+                                              ? "Route name"
+                                              : "Virtual bus name"}
                                     </label>
                                     <input
                                         id="selected-virtual-name"
@@ -346,10 +391,128 @@ export function App() {
                                         }
                                         className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
                                     />
+                                    {selectedItem === "route:new" && (
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            <label className="text-sm">
+                                                BlackHole device
+                                                <select
+                                                    required
+                                                    value={routeDeviceUID}
+                                                    onChange={(event) =>
+                                                        setRouteDeviceUID(
+                                                            event.currentTarget
+                                                                .value,
+                                                        )
+                                                    }
+                                                    className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                                                >
+                                                    <option value="">
+                                                        Choose an available
+                                                        device
+                                                    </option>
+                                                    {mixerState?.outputs
+                                                        .filter(
+                                                            (output) =>
+                                                                output.isBlackHole &&
+                                                                output.available,
+                                                        )
+                                                        .map((output) => (
+                                                            <option
+                                                                key={output.uid}
+                                                                value={
+                                                                    output.uid
+                                                                }
+                                                            >
+                                                                {output.name} ·{" "}
+                                                                {
+                                                                    output.outputChannels
+                                                                }{" "}
+                                                                channels
+                                                            </option>
+                                                        ))}
+                                                </select>
+                                            </label>
+                                            <label className="text-sm">
+                                                Route layout
+                                                <select
+                                                    value={routeMode}
+                                                    onChange={(event) =>
+                                                        setRouteMode(
+                                                            event.currentTarget
+                                                                .value as
+                                                                | "mono"
+                                                                | "stereo",
+                                                        )
+                                                    }
+                                                    className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                                                >
+                                                    <option value="stereo">
+                                                        Stereo pair
+                                                    </option>
+                                                    <option value="mono">
+                                                        Mono
+                                                    </option>
+                                                </select>
+                                            </label>
+                                            <label className="text-sm">
+                                                {routeMode === "stereo"
+                                                    ? "Left channel"
+                                                    : "Channel"}
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    max={
+                                                        mixerState?.outputs.find(
+                                                            (output) =>
+                                                                output.uid ===
+                                                                routeDeviceUID,
+                                                        )?.outputChannels ?? 1
+                                                    }
+                                                    required
+                                                    value={routeLeft}
+                                                    onChange={(event) =>
+                                                        setRouteLeft(
+                                                            event.currentTarget
+                                                                .value,
+                                                        )
+                                                    }
+                                                    className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                                                />
+                                            </label>
+                                            {routeMode === "stereo" && (
+                                                <label className="text-sm">
+                                                    Right channel
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        max={
+                                                            mixerState?.outputs.find(
+                                                                (output) =>
+                                                                    output.uid ===
+                                                                    routeDeviceUID,
+                                                            )?.outputChannels ??
+                                                            1
+                                                        }
+                                                        required
+                                                        value={routeRight}
+                                                        onChange={(event) =>
+                                                            setRouteRight(
+                                                                event
+                                                                    .currentTarget
+                                                                    .value,
+                                                            )
+                                                        }
+                                                        className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                                                    />
+                                                </label>
+                                            )}
+                                        </div>
+                                    )}
                                     {selectedRoute && (
                                         <p className="font-mono text-xs text-slate-500">
                                             Core Audio UID:{" "}
-                                            {selectedRoute.deviceUID}
+                                            {selectedRoute.deviceUID} · channels{" "}
+                                            {selectedRoute.channels.join(" / ")}
                                         </p>
                                     )}
                                     <button
@@ -357,8 +520,35 @@ export function App() {
                                         disabled={pending !== null}
                                         className="rounded-lg bg-sky-300 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
                                     >
-                                        Save name
+                                        {selectedItem === "route:new"
+                                            ? "Create route"
+                                            : "Save name"}
                                     </button>
+                                    {selectedRoute && (
+                                        <button
+                                            type="button"
+                                            disabled={pending !== null}
+                                            onClick={() => {
+                                                if (
+                                                    window.confirm(
+                                                        `Delete “${selectedRoute.name}” and its saved mix?`,
+                                                    )
+                                                ) {
+                                                    void send(
+                                                        `route-delete:${selectedRoute.id}`,
+                                                        {
+                                                            command:
+                                                                "deleteRoute",
+                                                            id: selectedRoute.id,
+                                                        },
+                                                    );
+                                                }
+                                            }}
+                                            className="ml-3 rounded-lg border border-rose-800 px-3 py-2 text-sm text-rose-200"
+                                        >
+                                            Delete route
+                                        </button>
+                                    )}
                                 </form>
                             </section>
                         )}
@@ -747,7 +937,8 @@ export function App() {
 
                         {selectedBus ||
                         selectedRoute ||
-                        selectedItem === "bus:new" ? null : !mixerState ? (
+                        selectedItem === "bus:new" ||
+                        selectedItem === "route:new" ? null : !mixerState ? (
                             <div
                                 role="status"
                                 className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-400"

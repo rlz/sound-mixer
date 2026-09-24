@@ -70,6 +70,7 @@ struct BridgeRoute: Encodable {
     let id: String
     let name: String
     let deviceUID: String
+    let channels: [Int]
 }
 
 enum BridgeError: LocalizedError {
@@ -80,6 +81,8 @@ enum BridgeError: LocalizedError {
     case unknownBus
     case unknownRoute
     case invalidName
+    case unavailableBlackHole
+    case invalidChannels
 
     var errorDescription: String? {
         switch self {
@@ -90,6 +93,8 @@ enum BridgeError: LocalizedError {
         case .unknownBus: "The virtual bus is not present in the saved configuration."
         case .unknownRoute: "The BlackHole route is not present in the saved configuration."
         case .invalidName: "Names must contain 1 to 64 characters."
+        case .unavailableBlackHole: "Select an available BlackHole output device."
+        case .invalidChannels: "The selected channels are unavailable or already used."
         }
     }
 }

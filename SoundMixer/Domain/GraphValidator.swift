@@ -14,6 +14,25 @@ public enum GraphValidationError: Error, Equatable {
     case blackHoleChannelConflict(DeviceUID)
 }
 
+extension GraphValidationError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case let .duplicateOutput(uid): "An output mix already exists for device \(uid.rawValue)."
+        case let .duplicateBus(id): "A virtual bus already exists with ID \(id.uuidString)."
+        case let .duplicateRoute(id): "A BlackHole route already exists with ID \(id.uuidString)."
+        case .duplicateSource: "A source can appear only once in each mix."
+        case .emptyIdentifier: "A device or source identifier cannot be empty."
+        case .emptyName: "Names must contain at least one non-space character."
+        case .invalidLevel: "Levels must be between 0 and 100 percent."
+        case let .missingBus(id): "The referenced virtual bus \(id.uuidString) no longer exists."
+        case .busCycle: "This change would create a cycle between virtual buses."
+        case .invalidChannels: "Choose distinct channel numbers starting at 1."
+        case let .blackHoleChannelConflict(uid):
+            "Those channels are already reserved by another route or output mix on \(uid.rawValue)."
+        }
+    }
+}
+
 public enum GraphEndpoint: Equatable {
     case input(DeviceUID)
     case output(DeviceUID)

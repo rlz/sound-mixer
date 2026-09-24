@@ -22,6 +22,7 @@
         A1000000000000000000000E /* AudioRoutingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001F /* AudioRoutingCoordinator.swift */; };
         A1000000000000000000000F /* AudioCaptureSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000027 /* AudioCaptureSessions.swift */; };
         A10000000000000000000028 /* BridgeState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000029 /* BridgeState.swift */; };
+        A1000000000000000000002A /* BlackHoleRouteCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002B /* BlackHoleRouteCommands.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +44,7 @@
         A1000000000000000000001F /* AudioRoutingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRoutingCoordinator.swift; sourceTree = "<group>"; };
         A10000000000000000000027 /* AudioCaptureSessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureSessions.swift; sourceTree = "<group>"; };
         A10000000000000000000029 /* BridgeState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeState.swift; sourceTree = "<group>"; };
+        A1000000000000000000002B /* BlackHoleRouteCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlackHoleRouteCommands.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -60,6 +62,7 @@
             children = (
                 A10000000000000000000011 /* AppDelegate.swift */,
                 A10000000000000000000029 /* BridgeState.swift */,
+                A1000000000000000000002B /* BlackHoleRouteCommands.swift */,
                 A10000000000000000000012 /* main.swift */,
                 A10000000000000000000024 /* Domain */,
                 A10000000000000000000025 /* Storage */,
@@ -180,6 +183,7 @@
                 A1000000000000000000000D /* AudioGraphRenderer.swift in Sources */,
                 A1000000000000000000000E /* AudioRoutingCoordinator.swift in Sources */,
                 A1000000000000000000000F /* AudioCaptureSessions.swift in Sources */,
+                A1000000000000000000002A /* BlackHoleRouteCommands.swift in Sources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };

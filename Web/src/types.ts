@@ -39,7 +39,12 @@ export type MixerState = {
     devices: DeviceState[];
     outputs: OutputState[];
     buses: { id: string; name: string }[];
-    blackHoleRoutes: { id: string; name: string; deviceUID: string }[];
+    blackHoleRoutes: {
+        id: string;
+        name: string;
+        deviceUID: string;
+        channels: number[];
+    }[];
     applications: {
         id: string;
         name: string;
@@ -66,6 +71,14 @@ export type BridgeCommand =
     | { command: "createBus"; name: string }
     | { command: "renameBus"; id: string; name: string }
     | { command: "renameRoute"; id: string; name: string }
+    | {
+          command: "createRoute";
+          name: string;
+          deviceUID: string;
+          mode: "mono" | "stereo";
+          channels: number[];
+      }
+    | { command: "deleteRoute"; id: string }
     | { command: "deleteBus"; id: string }
     | {
           command: "addMixInput" | "removeMixInput";

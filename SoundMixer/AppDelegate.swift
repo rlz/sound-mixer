@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var processCatalog: CoreAudioProcessCatalog?
     private var captureCoordinator: AudioCaptureCoordinator?
     private var audioRoutingCoordinator: AudioRoutingCoordinator?
-    private var audioDevices: [AudioDeviceSnapshot] = []
+    var audioDevices: [AudioDeviceSnapshot] = []
     private var audioProcesses: [AudioProcessSnapshot] = []
     private var captureStates: [String: String] = [:]
     private var outputRouteErrors: [String: String] = [:]
@@ -124,7 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         return true
     }
 
-    func webView(_ webView: WKWebView, didFinish _: WKNavigation!) {
+    func webView(_: WKWebView, didFinish _: WKNavigation!) {
         if let warning = startupConfigurationWarning {
             startupConfigurationWarning = nil
             showLoadError(warning)
@@ -200,7 +200,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case "createBus": return try createBus(body: body, store: store)
         case "renameBus": return try renameBus(body: body, store: store)
         case "renameRoute": return try renameRoute(body: body, store: store)
+        case "createRoute": return try createRoute(body: body, store: store)
         case "deleteBus": return try deleteBus(body: body, store: store)
+        case "deleteRoute": return try deleteRoute(body: body, store: store)
         case "addMixInput": return try editMixInput(body: body, store: store, operation: .add)
         case "removeMixInput": return try editMixInput(body: body, store: store, operation: .remove)
         case "setMixInputLevel": return try editMixInput(body: body, store: store, operation: .level)
@@ -251,7 +253,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
         return try store.update(discoveredDevices: discoveredDescriptors()) { config in
             config.mutedSources.removeAll { $0 == source }
-            if muted { config.mutedSources.append(source) }
+            if muted {
+                config.mutedSources.append(source)
+            }
         }
     }
 
@@ -372,14 +376,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
     }
 
-    private func validatedName(_ name: String) throws -> String {
+    func validatedName(_ name: String) throws -> String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.count <= 64 else { throw BridgeError.invalidName }
         return trimmed
     }
 }
 
-private extension AppDelegate {
+extension AppDelegate {
     func discoveredDescriptors() -> [AudioDeviceDescriptor] {
         audioDevices.map {
             AudioDeviceDescriptor(
@@ -407,7 +411,8 @@ private extension AppDelegate {
             outputs: bridgeOutputs(configuration: configuration, discovered: discovered),
             buses: configuration.buses.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) },
             blackHoleRoutes: configuration.blackHoleRoutes.map {
-                BridgeRoute(id: $0.id.uuidString, name: $0.name, deviceUID: $0.deviceUID.rawValue)
+                BridgeRoute(id: $0.id.uuidString, name: $0.name, deviceUID: $0.deviceUID.rawValue,
+                            channels: Self.bridgeChannels($0.channels))
             },
             applications: audioProcesses.map {
                 BridgeApplication(
@@ -444,6 +449,13 @@ private extension AppDelegate {
         return configuration.outputMixes.map { item("output", $0.deviceUID.rawValue, $0.mix) }
             + configuration.buses.map { item("bus", $0.id.uuidString, $0.mix) }
             + configuration.blackHoleRoutes.map { item("route", $0.id.uuidString, $0.mix) }
+    }
+
+    static func bridgeChannels(_ channels: BlackHoleChannels) -> [Int] {
+        switch channels {
+        case let .mono(channel): [channel]
+        case let .stereo(left, right): [left, right]
+        }
     }
 
     func bridgeDevices(configuration: MixerConfiguration, discovered: [String: AudioDeviceSnapshot]) -> [BridgeDevice] {
