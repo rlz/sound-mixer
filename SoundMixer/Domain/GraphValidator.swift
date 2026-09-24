@@ -141,11 +141,6 @@ public enum GraphValidator {
                 for channelLevel in input.channelLevels {
                     try validateLevel(channelLevel)
                 }
-                if input.channelsLinked, let firstLevel = input.channelLevels.first,
-                   input.channelLevels.contains(where: { $0 != firstLevel })
-                {
-                    throw GraphValidationError.invalidChannelSettings
-                }
                 let key = SourceKey(input.source)
                 guard sources.insert(key).inserted else { throw GraphValidationError.duplicateSource }
                 switch input.source {

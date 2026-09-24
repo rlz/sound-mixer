@@ -403,8 +403,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
               let routing = Optional(routingValues.compactMap { ChannelRouting(rawValue: $0) }), routing.count == routingValues.count,
               let levels = body["channelLevels"] as? [Double], levels.count == routing.count,
               levels.allSatisfy({ $0.isFinite && (0 ... 1).contains($0) }),
-              let linked = body["channelsLinked"] as? Bool,
-              !linked || levels.isEmpty || levels.allSatisfy({ $0 == levels[0] })
+              let linked = body["channelsLinked"] as? Bool
         else { throw BridgeError.invalidPayload }
         let reference = SourceReference.inputDevice(DeviceUID(rawValue: sourceID))
         return try store.update(discoveredDevices: discoveredDescriptors()) { config in

@@ -4,7 +4,7 @@ Statuses: `[ ]` = not started, `[~]` = in progress. Tasks are ordered by depende
 
 ## 1. Domain model and configuration
 
-- [~] Add per-mix physical-input routing and gain in configuration schema v4. **Done when:** each physical-input mix row stores routing and gain per hardware channel; routing defaults to mono → both, channel 1 → first, channel 2 → second, remaining channels → ignore; gains default linked at unity; independent levels and link state serialize and validate per mix. Domain defaults, validation, initialization on add, and a typed native bridge update command are in place; the channel editor and realtime application of settings remain.
+- [~] Add per-mix physical-input routing and gain in configuration schema v4. **Done when:** each physical-input mix row stores routing and gain per hardware channel; routing defaults to mono → both, channel 1 → first, channel 2 → second, remaining channels → ignore; gains default linked at unity; independent levels and link state serialize and validate per mix. Domain defaults, validation, initialization on add, typed bridge updates, and an accessible channel routing/gain editor are in place. Linked gains preserve channel ratios; per-channel meters and realtime application of settings remain.
 - [ ] Add BlackHole stereo-pair routes as mix sources. **Done when:** route UUIDs are valid source references, route dependencies participate in bus/route cycle validation, and confirmed route deletion atomically removes every source and mute reference; cancellation or save failure preserves the configuration.
 
 ## 2. Native audio pipeline
