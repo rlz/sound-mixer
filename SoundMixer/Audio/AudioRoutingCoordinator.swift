@@ -245,12 +245,12 @@ private final class AudioSourceFanout {
     }
 
     func consume(id: String, buffers: UnsafePointer<AudioBufferList>, frames: UInt32, format: AudioStreamBasicDescription) {
+        metersBySource[id]?.record(buffers: buffers, frameCount: frames, format: format)
         guard let queues = queuesBySource[id], let storage = buffersBySource[id], !queues.isEmpty,
               let converted = storage.convert(buffers: buffers, frames: frames, format: format)
         else { return }
         let sourceLeft = UnsafeBufferPointer(start: storage.left, count: converted.frameCount)
         let sourceRight = UnsafeBufferPointer(start: storage.right, count: converted.frameCount)
-        metersBySource[id]?.record(left: sourceLeft, right: sourceRight, frameCount: converted.frameCount)
         for queue in queues {
             if converted.droppedFrames > 0 {
                 queue.recordDroppedFrames(converted.droppedFrames)

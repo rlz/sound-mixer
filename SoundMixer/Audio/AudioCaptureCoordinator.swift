@@ -22,6 +22,23 @@ final class AudioCaptureCoordinator {
     private let queue = DispatchQueue(label: "com.rlz.soundmixer.audio-capture")
     private var processSessions: [String: AudioProcessCaptureSession] = [:]
     private var inputSessions: [String: AudioInputCaptureSession] = [:]
+    private var stateTimer: DispatchSourceTimer?
+    private var publishedStates: [String: AudioCaptureState] = [:]
+
+    init() {
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now(), repeating: .milliseconds(250))
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            for (uid, session) in inputSessions {
+                publish(uid, session.captureState)
+            }
+        }
+        timer.resume()
+        stateTimer = timer
+    }
+
+    deinit { stateTimer?.cancel() }
 
     func startApplication(id: String, processID: pid_t) {
         queue.async { [weak self] in self?.startProcess(id: id, processID: processID) }
@@ -110,7 +127,6 @@ final class AudioCaptureCoordinator {
             let session = try AudioInputCaptureSession(uid: uid, deviceID: deviceID, owner: self)
             try session.start()
             inputSessions[uid] = session
-            publish(uid, .capturing)
         } catch {
             publish(uid, .unavailable(error.localizedDescription))
         }
@@ -138,6 +154,8 @@ final class AudioCaptureCoordinator {
     }
 
     private func publish(_ id: String, _ state: AudioCaptureState) {
+        guard publishedStates[id] != state else { return }
+        publishedStates[id] = state
         DispatchQueue.main.async { [weak self] in self?.onStateChange?(id, state) }
     }
 

@@ -60,3 +60,9 @@
 - Connecting a device does not turn on the master switch. When it is off, the item becomes configurable but capture and output do not start.
 - On app exit, its audio pipeline stops and its taps and aggregate devices are released. Other applications must continue normal playback through the system output.
 - Sound Mixer does not change the system output device or hardware volume. If a user independently routes system audio into BlackHole, macOS and BlackHole settings determine that route's behavior after Sound Mixer exits.
+
+## Microphone capture format and runtime health
+
+- Configure AUHAL input at the selected device's actual input stream sample rate and preserve its mono or stereo channel count. Convert captured buffers to the internal 48 kHz format in the source fanout. Do not request a fixed 48 kHz stereo AUHAL input stream for a 44.1 kHz mono microphone.
+- An input reports Starting until successful audio-buffer delivery. Capturing requires recent successful rendering; fresh silence is still Capturing and has a zero peak. Render errors or a one-second startup timeout report an actionable unavailable state, and later successful rendering restores Capturing. Audio callbacks publish only atomic health values; status notifications run on the capture control queue.
+- The meter bar uses a −60 to 0 dBFS display scale, with a small visible indication for nonzero signals below that range. The reading and accessibility value retain the measured normalized amplitude.

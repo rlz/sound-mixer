@@ -1,6 +1,7 @@
 import AudioToolbox
 import CoreAudio
 import Foundation
+import Synchronization
 
 final class AudioProcessCaptureSession {
     let captureID: String
@@ -60,6 +61,25 @@ final class AudioInputCaptureSession {
     var sampleStorage: UnsafeMutablePointer<Float>?
     var channels = 1
     var format = AudioStreamBasicDescription()
+    private let renderStatus = Atomic<Int32>(noErr)
+    private let lastRenderedAt = Atomic<UInt64>(0)
+    private var startedAt: UInt64 = 0
+
+    var captureState: AudioCaptureState {
+        let status = renderStatus.load(ordering: .relaxed)
+        if status != noErr {
+            return .unavailable("Microphone capture failed with Core Audio status \(status).")
+        }
+        let renderedAt = lastRenderedAt.load(ordering: .acquiring)
+        let now = DispatchTime.now().uptimeNanoseconds
+        if renderedAt > 0, now &- renderedAt <= 500_000_000 {
+            return .capturing
+        }
+        if startedAt > 0, now &- startedAt > 1_000_000_000 {
+            return .unavailable("The microphone is not delivering audio. Check microphone access in System Settings.")
+        }
+        return .starting
+    }
 
     init(uid: String, deviceID: AudioDeviceID, owner: AudioCaptureCoordinator) throws {
         captureID = "input:\(uid)"
@@ -97,6 +117,7 @@ final class AudioInputCaptureSession {
         guard initializeStatus == noErr else { throw AudioCaptureCoordinator.CaptureError.audioStatus(initializeStatus) }
         let startStatus = AudioOutputUnitStart(unit)
         guard startStatus == noErr else { throw AudioCaptureCoordinator.CaptureError.audioStatus(startStatus) }
+        startedAt = DispatchTime.now().uptimeNanoseconds
     }
 
     func stop() {
@@ -134,14 +155,26 @@ final class AudioInputCaptureSession {
     }
 
     private func configureClientFormat(_ unit: AudioUnit) throws {
+        var hardwareFormat = AudioStreamBasicDescription()
+        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        let status = AudioUnitGetProperty(
+            unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 1, &hardwareFormat, &size
+        )
+        guard status == noErr else { throw AudioCaptureCoordinator.CaptureError.audioStatus(status) }
+        guard hardwareFormat.mSampleRate.isFinite, hardwareFormat.mSampleRate > 0,
+              (1 ... 2).contains(hardwareFormat.mChannelsPerFrame)
+        else { throw AudioCaptureCoordinator.CaptureError.unsupportedFormat }
+        // AUHAL input must use the device rate. The source fanout resamples to
+        // 48 kHz later; preserving mono also keeps placement controls accurate.
+        let bytesPerFrame = hardwareFormat.mChannelsPerFrame * UInt32(MemoryLayout<Float>.size)
         var clientFormat = AudioStreamBasicDescription(
-            mSampleRate: 48000,
+            mSampleRate: hardwareFormat.mSampleRate,
             mFormatID: kAudioFormatLinearPCM,
             mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
-            mBytesPerPacket: UInt32(2 * MemoryLayout<Float>.size),
+            mBytesPerPacket: bytesPerFrame,
             mFramesPerPacket: 1,
-            mBytesPerFrame: UInt32(2 * MemoryLayout<Float>.size),
-            mChannelsPerFrame: 2,
+            mBytesPerFrame: bytesPerFrame,
+            mChannelsPerFrame: hardwareFormat.mChannelsPerFrame,
             mBitsPerChannel: 32,
             mReserved: 0
         )
@@ -149,18 +182,25 @@ final class AudioInputCaptureSession {
     }
 
     private func installInputCallback(_ unit: AudioUnit) throws {
-        var callback = AURenderCallbackStruct(inputProc: { ref, flags, time, bus, frames, _ in
+        var callback = AURenderCallbackStruct(inputProc: { ref, flags, time, _, frames, _ in
             let session = Unmanaged<AudioInputCaptureSession>.fromOpaque(ref).takeUnretainedValue()
-            guard let unit = session.unit, let storage = session.sampleStorage, frames <= 8192 else { return kAudio_ParamError }
+            guard let unit = session.unit, let storage = session.sampleStorage, frames <= 8192 else {
+                session.renderStatus.store(kAudio_ParamError, ordering: .relaxed)
+                return kAudio_ParamError
+            }
             var list = AudioBufferList(mNumberBuffers: 1, mBuffers: AudioBuffer(
                 mNumberChannels: UInt32(session.channels),
                 mDataByteSize: frames * UInt32(session.format.mBytesPerFrame),
                 mData: storage
             ))
-            let status = AudioUnitRender(unit, flags, time, bus, frames, &list)
+            let status = AudioUnitRender(unit, flags, time, 1, frames, &list)
+            session.renderStatus.store(status, ordering: .relaxed)
             if status == noErr, let owner = session.owner {
                 withUnsafePointer(to: &list) { buffers in
                     owner.deliver(id: session.captureID, buffers: buffers, frames: frames, format: session.format)
+                }
+                if frames > 0 {
+                    session.lastRenderedAt.store(DispatchTime.now().uptimeNanoseconds, ordering: .releasing)
                 }
             }
             return status

@@ -25,3 +25,11 @@
 ## Acceptance limits
 
 Manual checks requiring installed BlackHole or multiple physical devices cannot be marked complete based only on unit tests. Record results and test Mac details in a verification report before release.
+
+## Built-in microphone regression — September 24, 2026
+
+- Environment: macOS 27.0 (26A428), Xcode 27.0, built-in input reporting 44.1 kHz and one channel. A standalone diagnostic compiled the production capture coordinator, input session, and peak meter. It ran capture for three seconds, stored no audio, and started no output.
+- Baseline: the fixed 48 kHz stereo input client format started successfully, but 259 callbacks returned `AudioUnitRender` status -10863. No frames reached the meter, reproducing Capturing together with Inactive.
+- Corrected format: using the device's input stream rate and mono channel count produced 258 successful callbacks and 132,096 delivered frames, with render status 0 and a fresh peak of approximately 0.0121.
+- Final production source check: 132,096 delivered frames, fresh peak approximately 0.0116, and runtime capture health Capturing. The callback counter used for the baseline was diagnostic instrumentation; the final check used the unmodified production session and counted delivered frames at its consumer.
+- The web and native app build passed. SwiftLint passed for the affected audio files. This verifies live native microphone capture and metering, not the complete window flow, signed-app permission denial, or device reconnection; those checks remain pending.
