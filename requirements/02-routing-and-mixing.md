@@ -3,6 +3,7 @@
 ## Mix contents
 
 - After selecting an item on the left, the user sees its mix on the right and can add sources from available input devices, applications with available audio output, and internal virtual buses.
+- Adding the first source to a discovered, live physical output creates and saves that output's mix in the same atomic configuration update. Selecting an output alone does not create a saved mix; adding a source must remain available as the way to configure it.
 - A configured BlackHole stereo route can also be selected as a source, in which case its assigned input-side channel pair is captured as stereo. Route source references use the route UUID and participate in cycle validation with buses.
 - Each source in a mix has its own 0–100% level, a removal action, and an availability state. A source has at most one row in a given mix.
 - Sources can participate in several mixes at once. Where possible, the engine shares capture of the same source to avoid inconsistent copies.

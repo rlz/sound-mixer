@@ -54,5 +54,6 @@
 ## Accessibility
 
 - All actions are keyboard accessible; sliders have text labels and numeric values.
+- Level sliders keep their in-progress value stable while native state snapshots arrive. Commit the value on pointer release or keyboard adjustment, then reconcile the displayed value with the confirmed native state; rejected edits return to the last confirmed value.
 - Respect the macOS system text size, contrast, and dark mode.
 - Convey device state and errors in text, not only with an icon or color.

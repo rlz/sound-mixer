@@ -353,7 +353,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         return try store.update(discoveredDevices: discoveredDescriptors()) { config in
             switch target {
             case "output":
-                guard let index = config.outputMixes.firstIndex(where: { $0.deviceUID.rawValue == id }) else { throw BridgeError.unknownOutput }
+                let index: Int
+                if let existingIndex = config.outputMixes.firstIndex(where: { $0.deviceUID.rawValue == id }) {
+                    index = existingIndex
+                } else {
+                    guard operation == .add,
+                          let device = audioDevices.first(where: { $0.uid == id }),
+                          device.isAlive, device.outputChannels > 0
+                    else { throw BridgeError.unknownOutput }
+                    config.outputMixes.append(OutputMix(deviceUID: DeviceUID(rawValue: id)))
+                    index = config.outputMixes.count - 1
+                }
                 var value = config.outputMixes[index].mix
                 try applyInput(operation, reference: reference, level: level, placement: placement, to: &value)
                 config.outputMixes[index].mix = value

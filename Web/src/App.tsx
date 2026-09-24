@@ -13,6 +13,7 @@ import { ItemGroup } from "./components/ItemGroup";
 import { AppHeader } from "./components/AppHeader";
 import { MasterSwitch } from "./components/MasterSwitch";
 import { PeakMeter } from "./components/PeakMeter";
+import { StableRange } from "./components/StableRange";
 import "./styles.css";
 
 export function App() {
@@ -84,7 +85,7 @@ export function App() {
                 mix.id === selectedTarget.id,
         );
     const addSourceToSelectedMix = (kind: string, sourceID: string) => {
-        if (!selectedTarget || !selectedMix || pending !== null) return;
+        if (!selectedTarget || pending !== null) return;
         void send(`mix-add:${sourceID}`, {
             command: "addMixInput",
             ...selectedTarget,
@@ -907,11 +908,7 @@ export function App() {
                                                     </div>
                                                     <label className="flex items-center gap-3 text-xs">
                                                         Source level{" "}
-                                                        <input
-                                                            type="range"
-                                                            min="0"
-                                                            max="1"
-                                                            step="0.01"
+                                                        <StableRange
                                                             value={input.level}
                                                             aria-label={`${name} source level`}
                                                             disabled={
@@ -1154,11 +1151,7 @@ export function App() {
                                                                                         </option>
                                                                                     </select>
                                                                                     <label className="flex items-center gap-2">
-                                                                                        <input
-                                                                                            type="range"
-                                                                                            min="0"
-                                                                                            max="1"
-                                                                                            step="0.01"
+                                                                                        <StableRange
                                                                                             value={
                                                                                                 input.channelsLinked
                                                                                                     ? Math.max(
@@ -1465,11 +1458,7 @@ export function App() {
                                                         <span>
                                                             Master level
                                                         </span>
-                                                        <input
-                                                            type="range"
-                                                            min="0"
-                                                            max="1"
-                                                            step="0.01"
+                                                        <StableRange
                                                             value={output.level}
                                                             aria-label={`${output.name} master level`}
                                                             aria-valuetext={`${Math.round(output.level * 100)} percent`}
@@ -1747,7 +1736,6 @@ export function App() {
                                             type="button"
                                             disabled={
                                                 !selectedTarget ||
-                                                !selectedMix ||
                                                 alreadyInSelectedMix ||
                                                 pending !== null
                                             }
@@ -1847,7 +1835,6 @@ export function App() {
                                             type="button"
                                             disabled={
                                                 !selectedTarget ||
-                                                !selectedMix ||
                                                 alreadyInSelectedMix ||
                                                 pending !== null
                                             }
