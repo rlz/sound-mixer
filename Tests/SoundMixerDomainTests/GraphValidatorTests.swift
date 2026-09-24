@@ -32,6 +32,29 @@ final class GraphValidatorTests: XCTestCase {
         assertError(.busCycle, in: MixerConfiguration(buses: [selfReferencing]))
     }
 
+    func testRouteReferencesAreValidatedAndParticipateInMixedCycles() {
+        let routeID = UUID()
+        let missingRouteID = UUID()
+        let referencingRoute = BlackHoleRoute(
+            name: "Reference",
+            deviceUID: blackHoleUID,
+            channels: .stereo(left: 1, right: 2),
+            mix: Mix(inputs: [MixInput(source: .blackHoleRoute(missingRouteID))])
+        )
+        assertError(.missingRoute(missingRouteID), in: MixerConfiguration(blackHoleRoutes: [referencingRoute]))
+
+        let busID = UUID()
+        let bus = VirtualBus(id: busID, name: "Bus", mix: Mix(inputs: [MixInput(source: .blackHoleRoute(routeID))]))
+        let linkedRoute = BlackHoleRoute(
+            id: routeID,
+            name: "Route",
+            deviceUID: blackHoleUID,
+            channels: .stereo(left: 1, right: 2),
+            mix: Mix(inputs: [MixInput(source: .bus(busID))])
+        )
+        assertError(.busCycle, in: MixerConfiguration(buses: [bus], blackHoleRoutes: [linkedRoute]))
+    }
+
     func testBlackHoleChannelSelectionsAndConflictsAreRejected() {
         assertError(.invalidChannels, in: MixerConfiguration(blackHoleRoutes: [route(channels: .mono(0))]))
         assertError(.invalidChannels, in: MixerConfiguration(blackHoleRoutes: [route(channels: .stereo(left: 3, right: 3))]))

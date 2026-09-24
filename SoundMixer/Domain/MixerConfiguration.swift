@@ -51,6 +51,7 @@ public enum SourceReference: Hashable, Sendable {
     case inputDevice(DeviceUID)
     case application(ApplicationID)
     case bus(UUID)
+    case blackHoleRoute(UUID)
 }
 
 extension SourceReference: Codable {
@@ -63,6 +64,7 @@ extension SourceReference: Codable {
         case inputDevice
         case application
         case bus
+        case blackHoleRoute
     }
 
     public init(from decoder: Decoder) throws {
@@ -74,6 +76,8 @@ extension SourceReference: Codable {
             self = try .application(ApplicationID(rawValue: container.decode(String.self, forKey: .id)))
         case .bus:
             self = try .bus(container.decode(UUID.self, forKey: .id))
+        case .blackHoleRoute:
+            self = try .blackHoleRoute(container.decode(UUID.self, forKey: .id))
         }
     }
 
@@ -88,6 +92,9 @@ extension SourceReference: Codable {
             try container.encode(id.rawValue, forKey: .id)
         case let .bus(id):
             try container.encode(Kind.bus, forKey: .kind)
+            try container.encode(id, forKey: .id)
+        case let .blackHoleRoute(id):
+            try container.encode(Kind.blackHoleRoute, forKey: .kind)
             try container.encode(id, forKey: .id)
         }
     }

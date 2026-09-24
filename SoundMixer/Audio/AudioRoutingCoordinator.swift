@@ -246,6 +246,8 @@ final class AudioRoutingCoordinator {
                     if visitedBuses.insert(id).inserted, let bus = busesByID[id] {
                         pending.append(bus.mix)
                     }
+                case let .blackHoleRoute(id):
+                    keys.insert("route:\(id.uuidString)")
                 }
             }
         }

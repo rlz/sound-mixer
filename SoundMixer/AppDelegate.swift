@@ -337,6 +337,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case "bus":
             guard let busID = UUID(uuidString: sourceID) else { throw BridgeError.invalidPayload }
             reference = .bus(busID)
+        case "blackHoleRoute":
+            guard let routeID = UUID(uuidString: sourceID) else { throw BridgeError.invalidPayload }
+            reference = .blackHoleRoute(routeID)
         default: throw BridgeError.invalidPayload
         }
         let level = body["level"] as? Double
@@ -496,6 +499,7 @@ extension AppDelegate {
                 case let .inputDevice(uid): kind = "inputDevice"; sourceID = uid.rawValue
                 case let .application(app): kind = "application"; sourceID = app.rawValue
                 case let .bus(bus): kind = "bus"; sourceID = bus.uuidString
+                case let .blackHoleRoute(route): kind = "blackHoleRoute"; sourceID = route.uuidString
                 }
                 return BridgeMixInput(
                     kind: kind,

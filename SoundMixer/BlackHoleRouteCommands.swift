@@ -38,6 +38,17 @@ extension AppDelegate {
         return try store.update(discoveredDevices: discoveredDescriptors()) { config in
             guard config.blackHoleRoutes.contains(where: { $0.id == id }) else { throw BridgeError.unknownRoute }
             config.blackHoleRoutes.removeAll { $0.id == id }
+            let source = SourceReference.blackHoleRoute(id)
+            for index in config.outputMixes.indices {
+                config.outputMixes[index].mix.inputs.removeAll { $0.source == source }
+            }
+            for index in config.buses.indices {
+                config.buses[index].mix.inputs.removeAll { $0.source == source }
+            }
+            for index in config.blackHoleRoutes.indices {
+                config.blackHoleRoutes[index].mix.inputs.removeAll { $0.source == source }
+            }
+            config.mutedSources.removeAll { $0 == source }
         }
     }
 }

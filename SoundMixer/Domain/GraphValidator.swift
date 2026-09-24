@@ -9,6 +9,7 @@ public enum GraphValidationError: Error, Equatable {
     case emptyName
     case invalidLevel
     case missingBus(UUID)
+    case missingRoute(UUID)
     case busCycle
     case invalidChannels
     case invalidChannelSettings
@@ -26,6 +27,7 @@ extension GraphValidationError: LocalizedError {
         case .emptyName: "Names must contain at least one non-space character."
         case .invalidLevel: "Levels must be between 0 and 100 percent."
         case let .missingBus(id): "The referenced virtual bus \(id.uuidString) no longer exists."
+        case let .missingRoute(id): "The referenced BlackHole route \(id.uuidString) no longer exists."
         case .busCycle: "This change would create a cycle between virtual buses."
         case .invalidChannels: "Choose distinct channel numbers starting at 1."
         case .invalidChannelSettings: "Physical input routing and gain settings must have matching channel counts and valid linked levels."
@@ -54,7 +56,7 @@ public enum GraphValidator {
     public static func validate(_ configuration: MixerConfiguration) throws {
         try validateIdentities(configuration)
         try validateMixes(configuration)
-        try validateBusGraph(configuration.buses)
+        try validateMixGraph(configuration)
         try validateBlackHoleReservations(configuration)
     }
 
@@ -129,6 +131,7 @@ public enum GraphValidator {
 
     private static func validateMixes(_ configuration: MixerConfiguration) throws {
         let busIDs = Set(configuration.buses.map(\.id))
+        let routeIDs = Set(configuration.blackHoleRoutes.map(\.id))
         let mixes = configuration.outputMixes.map(\.mix) + configuration.buses.map(\.mix) + configuration.blackHoleRoutes.map(\.mix)
         for mix in mixes {
             try validateLevel(mix.level)
@@ -146,6 +149,8 @@ public enum GraphValidator {
                 switch input.source {
                 case let .bus(id):
                     guard busIDs.contains(id) else { throw GraphValidationError.missingBus(id) }
+                case let .blackHoleRoute(id):
+                    guard routeIDs.contains(id) else { throw GraphValidationError.missingRoute(id) }
                 case let .inputDevice(uid):
                     guard !uid.rawValue.isEmpty else { throw GraphValidationError.emptyIdentifier }
                 case let .application(id):
@@ -159,36 +164,34 @@ public enum GraphValidator {
         guard level.isFinite, (0 ... 1).contains(level) else { throw GraphValidationError.invalidLevel }
     }
 
-    private static func validateBusGraph(_ buses: [VirtualBus]) throws {
-        let dependencies = Dictionary(uniqueKeysWithValues: buses.map { bus in
-            (bus.id, bus.mix.inputs.compactMap { input -> UUID? in
-                if case let .bus(id) = input.source {
-                    return id
+    private static func validateMixGraph(_ configuration: MixerConfiguration) throws {
+        let nodes = configuration.buses.map { MixNode.bus($0.id, $0.mix) }
+            + configuration.blackHoleRoutes.map { MixNode.route($0.id, $0.mix) }
+        let nodeIDs = Set(nodes.map(\.id))
+        let dependencies = Dictionary(uniqueKeysWithValues: nodes.map { node in
+            (node.id, node.mix.inputs.compactMap { input -> MixNode.ID? in
+                switch input.source {
+                case let .bus(id): MixNode.ID.bus(id)
+                case let .blackHoleRoute(id): MixNode.ID.route(id)
+                case .inputDevice, .application: nil
                 }
-                return nil
             })
         })
-        var visited = Set<UUID>()
-        var visiting = Set<UUID>()
+        var visited = Set<MixNode.ID>()
+        var visiting = Set<MixNode.ID>()
 
-        func visit(_ id: UUID) throws {
-            if visiting.contains(id) {
-                throw GraphValidationError.busCycle
-            }
-            if visited.contains(id) {
-                return
-            }
+        func visit(_ id: MixNode.ID) throws {
+            if visiting.contains(id) { throw GraphValidationError.busCycle }
+            if visited.contains(id) { return }
             visiting.insert(id)
-            for dependency in dependencies[id, default: []] {
+            for dependency in dependencies[id, default: []] where nodeIDs.contains(dependency) {
                 try visit(dependency)
             }
             visiting.remove(id)
             visited.insert(id)
         }
 
-        for bus in buses {
-            try visit(bus.id)
-        }
+        for node in nodes { try visit(node.id) }
     }
 
     private static func validateBlackHoleReservations(_ configuration: MixerConfiguration) throws {
@@ -274,12 +277,33 @@ private enum SourceKey: Hashable {
     case inputDevice(DeviceUID)
     case application(ApplicationID)
     case bus(UUID)
+    case blackHoleRoute(UUID)
 
     init(_ source: SourceReference) {
         switch source {
         case let .inputDevice(uid): self = .inputDevice(uid)
         case let .application(id): self = .application(id)
         case let .bus(id): self = .bus(id)
+        case let .blackHoleRoute(id): self = .blackHoleRoute(id)
+        }
+    }
+}
+
+private enum MixNode {
+    enum ID: Hashable { case bus(UUID); case route(UUID) }
+    case bus(UUID, Mix)
+    case route(UUID, Mix)
+
+    var id: ID {
+        switch self {
+        case let .bus(id, _): .bus(id)
+        case let .route(id, _): .route(id)
+        }
+    }
+
+    var mix: Mix {
+        switch self {
+        case let .bus(_, mix), let .route(_, mix): mix
         }
     }
 }

@@ -109,7 +109,7 @@ final class AudioGraphRenderer {
             let state = states[index]
             let source: StereoStorage? = switch input.source {
             case let .bus(id): busBuffers[id]
-            case .inputDevice, .application:
+            case .inputDevice, .application, .blackHoleRoute:
                 sourceBuffers[state.sourceKey]
             }
             guard let source else { continue }
@@ -140,7 +140,7 @@ final class AudioGraphRenderer {
     ) -> [MixInputState] {
         mix.inputs.map { input in
             let isMono: Bool = switch input.source {
-            case .bus: false
+            case .bus, .blackHoleRoute: false
             case .inputDevice, .application: monoSourceKeys.contains(sourceKey(input.source))
             }
             let sourceKey = sourceKey(input.source)
@@ -154,6 +154,7 @@ final class AudioGraphRenderer {
         case let .inputDevice(uid): "input:\(uid.rawValue)"
         case let .application(id): "application:\(id.rawValue)"
         case let .bus(id): "bus:\(id.uuidString)"
+        case let .blackHoleRoute(id): "route:\(id.uuidString)"
         }
     }
 
