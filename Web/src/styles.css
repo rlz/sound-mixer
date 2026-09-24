@@ -38,21 +38,21 @@ body,
 
 .app-toolbar {
     display: flex;
-    min-height: 68px;
+    min-height: 56px;
     align-items: center;
     justify-content: space-between;
-    gap: 24px;
-    padding: 10px 24px;
+    gap: 16px;
+    padding: 8px 16px;
     border-bottom: 1px solid #334155;
     background: #0f172a;
 }
 
 .mixer-workspace {
     display: grid;
-    grid-template-columns: clamp(180px, 20vw, 270px) minmax(280px, 1fr) clamp(
-            210px,
-            22vw,
-            300px
+    grid-template-columns: clamp(160px, 19vw, 250px) minmax(260px, 1fr) clamp(
+            185px,
+            21vw,
+            275px
         );
     min-height: 0;
     flex: 1;
@@ -65,7 +65,7 @@ body,
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 24px;
+    padding: 14px;
     scrollbar-gutter: stable;
 }
 
@@ -86,12 +86,41 @@ body,
     background: #020617;
 }
 
+.mixer-pane > .space-y-5 > * + * {
+    margin-top: 0.875rem;
+}
+
+.mixer-pane h1 {
+    font-size: 1.25rem;
+    line-height: 1.5rem;
+}
+
+.mixer-pane .rounded-2xl {
+    border-radius: 0.75rem;
+}
+
+.mixer-pane .p-6 {
+    padding: 0.875rem;
+}
+
+.mixer-pane .p-5 {
+    padding: 0.875rem;
+}
+
+.mixer-pane .mb-5 {
+    margin-bottom: 0.875rem;
+}
+
+.mixer-pane .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.5rem;
+}
+
 @media (max-width: 900px) {
     .mixer-pane {
-        padding: 16px;
+        padding: 10px;
     }
 
     .app-toolbar {
-        padding-inline: 16px;
+        padding-inline: 12px;
     }
 }
