@@ -51,8 +51,9 @@ export type MixerState = {
         available: boolean;
         muted: boolean;
         captureState: string;
+        level: number | null;
     }[];
-    inputCaptureStates: { uid: string; state: string }[];
+    inputCaptureStates: { uid: string; state: string; level: number | null }[];
     mixes: MixState[];
 };
 

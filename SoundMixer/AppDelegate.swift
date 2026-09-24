@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var processCatalog: CoreAudioProcessCatalog?
     private var captureCoordinator: AudioCaptureCoordinator?
     private var audioRoutingCoordinator: AudioRoutingCoordinator?
+    private var meterTimer: DispatchSourceTimer?
     var audioDevices: [AudioDeviceSnapshot] = []
     private var audioProcesses: [AudioProcessSnapshot] = []
     private var captureStates: [String: String] = [:]
@@ -80,6 +81,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
         self.audioRoutingCoordinator = audioRoutingCoordinator
         updateAudioRouting()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now(), repeating: .milliseconds(67), leeway: .milliseconds(8))
+        timer.setEventHandler { [weak self] in self?.publishState() }
+        timer.resume()
+        meterTimer = timer
     }
 
     private static func bridgeCaptureState(_ state: AudioCaptureState) -> String {
@@ -137,6 +143,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     func applicationWillTerminate(_: Notification) {
+        meterTimer?.cancel()
+        meterTimer = nil
         deviceCatalog?.stop()
         processCatalog?.stop()
         audioRoutingCoordinator?.stop()
@@ -404,6 +412,7 @@ extension AppDelegate {
     func publishState(configuration: MixerConfiguration? = nil) {
         guard let configuration = configuration ?? configurationStore?.configuration else { return }
         let discovered = Dictionary(uniqueKeysWithValues: audioDevices.map { ($0.uid, $0) })
+        let sourceLevels = audioRoutingCoordinator?.sourceLevelReadings() ?? [:]
         let state = BridgeState(
             schemaVersion: MixerConfiguration.currentSchemaVersion,
             isEnabled: configuration.isEnabled,
@@ -414,9 +423,9 @@ extension AppDelegate {
                 BridgeRoute(id: $0.id.uuidString, name: $0.name, deviceUID: $0.deviceUID.rawValue,
                             channels: Self.bridgeChannels($0.channels))
             },
-            applications: bridgeApplications(configuration: configuration),
+            applications: bridgeApplications(configuration: configuration, sourceLevels: sourceLevels),
             inputCaptureStates: captureStates.filter { id, _ in audioDevices.contains(where: { $0.uid == id }) }
-                .map { BridgeInputCaptureState(uid: $0.key, state: $0.value) },
+                .map { BridgeInputCaptureState(uid: $0.key, state: $0.value, level: sourceLevels["input:\($0.key)"]) },
             mixes: bridgeMixes(configuration)
         )
         guard let data = try? JSONEncoder().encode(state),
@@ -443,7 +452,7 @@ extension AppDelegate {
             + configuration.blackHoleRoutes.map { item("route", $0.id.uuidString, $0.mix) }
     }
 
-    func bridgeApplications(configuration: MixerConfiguration) -> [BridgeApplication] {
+    func bridgeApplications(configuration: MixerConfiguration, sourceLevels: [String: Double]) -> [BridgeApplication] {
         let configuredIDs = (configuration.outputMixes.map(\.mix)
             + configuration.buses.map(\.mix)
             + configuration.blackHoleRoutes.map(\.mix))
@@ -468,7 +477,8 @@ extension AppDelegate {
                 name: process?.name ?? id,
                 available: process?.isProducingOutput ?? false,
                 captureState: captureStates[id] ?? "stopped",
-                muted: configuration.mutedSources.contains(.application(ApplicationID(rawValue: id)))
+                muted: configuration.mutedSources.contains(.application(ApplicationID(rawValue: id))),
+                level: sourceLevels["application:\(id)"]
             )
         }
     }

@@ -12,6 +12,7 @@ import "./bridge";
 import { ItemGroup } from "./components/ItemGroup";
 import { AppHeader } from "./components/AppHeader";
 import { MasterSwitch } from "./components/MasterSwitch";
+import { PeakMeter } from "./components/PeakMeter";
 import "./styles.css";
 
 export function App() {
@@ -107,6 +108,7 @@ export function App() {
                 available: false,
                 muted: false,
                 captureState: "stopped",
+                level: null,
             },
     );
 
@@ -1250,10 +1252,11 @@ export function App() {
                                 </p>
                             )}
                             {sourceDevices.map((device) => {
-                                const captureState =
+                                const inputState =
                                     mixerState?.inputCaptureStates.find(
                                         (state) => state.uid === device.uid,
-                                    )?.state ?? "stopped";
+                                    );
+                                const captureState = inputState?.state ?? "stopped";
                                 return (
                                     <div
                                         key={device.uid}
@@ -1336,6 +1339,7 @@ export function App() {
                                                 Open System Settings
                                             </button>
                                         )}
+                                        <PeakMeter level={inputState?.level} label={device.name} />
                                     </div>
                                 );
                             })}
@@ -1400,6 +1404,7 @@ export function App() {
                                                 : "Available"
                                             : "Application is not running or producing audio."}
                                     </p>
+                                    <PeakMeter level={application.level} label={application.name} />
                                 </div>
                             ))}
                         </ItemGroup>

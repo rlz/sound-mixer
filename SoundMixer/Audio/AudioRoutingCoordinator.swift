@@ -12,6 +12,7 @@ final class AudioRoutingCoordinator {
     private var fanout: AudioSourceFanout?
     private var renderers: [String: AudioGraphRenderer] = [:]
     private var ringsByRoute: [String: [String: RealtimeStereoRingBuffer]] = [:]
+    private var sourceMeters: [String: RealtimePeakMeter] = [:]
     private var lastGraph: MixGraphSnapshot?
     private var lastDevices: [AudioDeviceSnapshot] = []
     private var lastProcesses: [AudioProcessSnapshot] = []
@@ -42,6 +43,7 @@ final class AudioRoutingCoordinator {
         var captureSources = Set<String>()
         startOutputRoutes(graph: graph, devices: deviceByUID, queues: &queuesBySource, sources: &captureSources)
         fanout = AudioSourceFanout(queuesBySource: queuesBySource)
+        sourceMeters = fanout?.metersBySource ?? [:]
         startCapture(sources: captureSources, devices: deviceByUID, processes: processByID)
         return true
     }
@@ -51,6 +53,7 @@ final class AudioRoutingCoordinator {
         output.stopAll()
         renderers.removeAll()
         ringsByRoute.removeAll()
+        sourceMeters.removeAll()
         fanout = nil
         lastEnabled = false
     }
@@ -81,6 +84,7 @@ final class AudioRoutingCoordinator {
         output.stopAll()
         renderers.removeAll()
         ringsByRoute.removeAll()
+        sourceMeters.removeAll()
         fanout = nil
     }
 
@@ -180,6 +184,10 @@ final class AudioRoutingCoordinator {
         return result
     }
 
+    func sourceLevelReadings() -> [String: Double] {
+        sourceMeters.compactMapValues { $0.reading() }
+    }
+
     private func makeRoutes(_ configuration: MixerConfiguration) -> [RenderRoute] {
         var routes = configuration.outputMixes.map { output in
             RenderRoute(key: "output:\(output.deviceUID.rawValue)", uid: output.deviceUID.rawValue, channels: [0, 1], mix: output.mix)
@@ -227,11 +235,13 @@ private struct RenderRoute {
 private final class AudioSourceFanout {
     private let queuesBySource: [String: [RealtimeStereoRingBuffer]]
     private let buffersBySource: [String: SourceBuffer]
+    let metersBySource: [String: RealtimePeakMeter]
     private let capacity = 8192
 
     init(queuesBySource: [String: [RealtimeStereoRingBuffer]]) {
         self.queuesBySource = queuesBySource
         buffersBySource = Dictionary(uniqueKeysWithValues: queuesBySource.keys.map { ($0, SourceBuffer(capacity: 8192)) })
+        metersBySource = Dictionary(uniqueKeysWithValues: queuesBySource.keys.map { ($0, RealtimePeakMeter()) })
     }
 
     func consume(id: String, buffers: UnsafePointer<AudioBufferList>, frames: UInt32, format: AudioStreamBasicDescription) {
@@ -240,6 +250,7 @@ private final class AudioSourceFanout {
         else { return }
         let sourceLeft = UnsafeBufferPointer(start: storage.left, count: converted.frameCount)
         let sourceRight = UnsafeBufferPointer(start: storage.right, count: converted.frameCount)
+        metersBySource[id]?.record(left: sourceLeft, right: sourceRight, frameCount: converted.frameCount)
         for queue in queues {
             if converted.droppedFrames > 0 {
                 queue.recordDroppedFrames(converted.droppedFrames)

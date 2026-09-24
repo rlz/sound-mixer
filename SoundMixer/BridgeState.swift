@@ -32,11 +32,13 @@ struct BridgeApplication: Encodable {
     let available: Bool
     let captureState: String
     let muted: Bool
+    let level: Double?
 }
 
 struct BridgeInputCaptureState: Encodable {
     let uid: String
     let state: String
+    let level: Double?
 }
 
 struct BridgeDevice: Encodable {
