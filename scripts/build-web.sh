@@ -3,5 +3,6 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-"$root/scripts/build-web.sh"
-"$root/scripts/build-core.sh"
+cd "$root/Web"
+npm ci
+npm run build
