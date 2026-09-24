@@ -258,6 +258,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         switch kind {
         case "inputDevice": source = .inputDevice(DeviceUID(rawValue: sourceID))
         case "application": source = .application(ApplicationID(rawValue: sourceID))
+        case "blackHoleRoute":
+            guard let routeID = UUID(uuidString: sourceID) else { throw BridgeError.invalidPayload }
+            source = .blackHoleRoute(routeID)
         default: throw BridgeError.invalidPayload
         }
         return try store.update(discoveredDevices: discoveredDescriptors()) { config in
@@ -485,9 +488,19 @@ extension AppDelegate {
             devices: bridgeDevices(configuration: configuration, discovered: discovered),
             outputs: bridgeOutputs(configuration: configuration, discovered: discovered, renderLevels: renderLevels),
             buses: configuration.buses.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) },
-            blackHoleRoutes: configuration.blackHoleRoutes.map {
-                BridgeRoute(id: $0.id.uuidString, name: $0.name, deviceUID: $0.deviceUID.rawValue,
-                            channels: Self.bridgeChannels($0.channels))
+            blackHoleRoutes: configuration.blackHoleRoutes.map { route in
+                let device = discovered[route.deviceUID.rawValue]
+                let selected = Self.bridgeChannels(route.channels)
+                let pairAvailable = device.map {
+                    $0.isAlive && selected.count == 2 && $0.inputChannels >= (selected.max() ?? Int.max)
+                } ?? false
+                return BridgeRoute(
+                    id: route.id.uuidString, name: route.name, deviceUID: route.deviceUID.rawValue,
+                    channels: selected, available: pairAvailable,
+                    captureState: captureStates["route:\(route.id.uuidString)"] ?? (pairAvailable ? "stopped" : "unavailable"),
+                    level: sourceLevels["route:\(route.id.uuidString)"],
+                    muted: configuration.mutedSources.contains(.blackHoleRoute(route.id))
+                )
             },
             applications: bridgeApplications(configuration: configuration, sourceLevels: sourceLevels),
             inputCaptureStates: captureStates.filter { id, _ in audioDevices.contains(where: { $0.uid == id }) }

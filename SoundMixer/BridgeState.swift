@@ -80,6 +80,10 @@ struct BridgeRoute: Encodable {
     let name: String
     let deviceUID: String
     let channels: [Int]
+    let available: Bool
+    let captureState: String
+    let level: Double?
+    let muted: Bool
 }
 
 enum BridgeError: LocalizedError {

@@ -49,12 +49,19 @@ final class AudioRoutingCoordinator {
             captureSources.insert(key)
         }
         startOutputRoutes(graph: graph, devices: deviceByUID, queues: &queuesBySource, sources: &captureSources)
+        for route in graph.configuration.blackHoleRoutes {
+            let key = "route:\(route.id.uuidString)"
+            queuesBySource[key] = queuesBySource[key] ?? []
+            captureSources.insert(key)
+        }
         let inputChannelCounts = Dictionary(uniqueKeysWithValues: deviceByUID.values.map {
             ("input:\($0.uid)", min(max($0.inputChannels, 1), 64))
-        })
+        }).merging(Dictionary(uniqueKeysWithValues: graph.configuration.blackHoleRoutes.map {
+            ("route:\($0.id.uuidString)", 2)
+        }), uniquingKeysWith: { first, _ in first })
         fanout = AudioSourceFanout(queuesBySource: queuesBySource, inputChannelCounts: inputChannelCounts)
         sourceMeters = fanout?.metersBySource ?? [:]
-        startCapture(sources: captureSources, devices: deviceByUID, processes: processByID)
+        startCapture(sources: captureSources, graph: graph, devices: deviceByUID, processes: processByID)
         return true
     }
 
@@ -169,16 +176,40 @@ final class AudioRoutingCoordinator {
 
     private func startCapture(
         sources: Set<String>,
+        graph: MixGraphSnapshot,
         devices: [String: AudioDeviceSnapshot],
         processes: [String: AudioProcessSnapshot]
     ) {
         for source in sources {
             if source.hasPrefix("input:") {
                 startInput(source: source, devices: devices)
+            } else if source.hasPrefix("route:") {
+                startBlackHoleRoute(source: source, routes: graph.configuration.blackHoleRoutes, devices: devices)
             } else if source.hasPrefix("application:") {
                 startApplication(source: source, processes: processes)
             }
         }
+    }
+
+    private func startBlackHoleRoute(source: String, routes: [BlackHoleRoute], devices: [String: AudioDeviceSnapshot]) {
+        let id = String(source.dropFirst("route:".count))
+        guard let uuid = UUID(uuidString: id),
+              let route = routes.first(where: { $0.id == uuid }),
+              let device = devices[route.deviceUID.rawValue], device.isAlive,
+              let channels = Self.selectedInputChannels(route.channels),
+              device.inputChannels > (channels.max() ?? Int.max)
+        else {
+            let reason = "The assigned BlackHole input channel pair is unavailable."
+            capture.reportUnavailable(id: source, reason: reason)
+            onRouteError?(source, reason)
+            return
+        }
+        capture.startBlackHoleRoute(id: id, deviceID: device.deviceID, channels: channels)
+    }
+
+    private static func selectedInputChannels(_ channels: BlackHoleChannels) -> [Int]? {
+        guard case let .stereo(left, right) = channels else { return nil }
+        return [left - 1, right - 1]
     }
 
     private func startInput(source: String, devices: [String: AudioDeviceSnapshot]) {

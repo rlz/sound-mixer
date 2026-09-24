@@ -50,6 +50,10 @@ export type MixerState = {
         name: string;
         deviceUID: string;
         channels: number[];
+        available: boolean;
+        captureState: string;
+        level: number | null;
+        muted: boolean;
     }[];
     applications: {
         id: string;
@@ -76,7 +80,7 @@ export type BridgeCommand =
     | { command: "deleteOutputMix"; uid: string }
     | {
           command: "setSourceMuted";
-          kind: "inputDevice" | "application";
+          kind: "inputDevice" | "application" | "blackHoleRoute";
           sourceID: string;
           muted: boolean;
       }

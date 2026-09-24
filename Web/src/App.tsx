@@ -43,12 +43,13 @@ export function App() {
         key: string,
         command: BridgeCommand,
         rollback?: () => void,
-    ) => {
-        if (!window.soundMixerBridge || pending) return;
+    ): Promise<boolean> => {
+        if (!window.soundMixerBridge || pending) return false;
         setPending(key);
         setCommandError(null);
         try {
             await window.soundMixerBridge.send(command);
+            return true;
         } catch (error) {
             rollback?.();
             setCommandError(
@@ -56,6 +57,7 @@ export function App() {
                     ? error.message
                     : "The change could not be saved.",
             );
+            return false;
         } finally {
             setPending(null);
         }
@@ -646,6 +648,17 @@ export function App() {
                                                         {device.name} · input
                                                     </option>
                                                 ))}
+                                            {mixerState?.blackHoleRoutes.map(
+                                                (route) => (
+                                                    <option
+                                                        key={`route:${route.id}`}
+                                                        value={`blackHoleRoute|${route.id}`}
+                                                    >
+                                                        {route.name} · BlackHole
+                                                        input pair
+                                                    </option>
+                                                ),
+                                            )}
                                             {mixerState?.applications
                                                 .filter((app) => app.available)
                                                 .map((app) => (
@@ -910,14 +923,12 @@ export function App() {
                                                         Source level{" "}
                                                         <StableRange
                                                             value={input.level}
-                                                            aria-label={`${name} source level`}
+                                                            label={`${name} source level`}
                                                             disabled={
                                                                 pending !== null
                                                             }
-                                                            onPointerUp={(
-                                                                event,
-                                                            ) =>
-                                                                void send(
+                                                            onCommit={(level) =>
+                                                                send(
                                                                     `mix-level:${input.id}`,
                                                                     {
                                                                         command:
@@ -926,57 +937,10 @@ export function App() {
                                                                         kind: input.kind,
                                                                         sourceID:
                                                                             input.id,
-                                                                        level: Number(
-                                                                            event
-                                                                                .currentTarget
-                                                                                .value,
-                                                                        ),
+                                                                        level,
                                                                     },
                                                                 )
                                                             }
-                                                            onChange={(
-                                                                event,
-                                                            ) => {
-                                                                const level =
-                                                                    Number(
-                                                                        event
-                                                                            .currentTarget
-                                                                            .value,
-                                                                    );
-                                                                setMixerState(
-                                                                    (state) =>
-                                                                        state && {
-                                                                            ...state,
-                                                                            mixes: state.mixes.map(
-                                                                                (
-                                                                                    mix,
-                                                                                ) =>
-                                                                                    mix.target ===
-                                                                                        selectedTarget.target &&
-                                                                                    mix.id ===
-                                                                                        selectedTarget.id
-                                                                                        ? {
-                                                                                              ...mix,
-                                                                                              inputs: mix.inputs.map(
-                                                                                                  (
-                                                                                                      row,
-                                                                                                  ) =>
-                                                                                                      row.kind ===
-                                                                                                          input.kind &&
-                                                                                                      row.id ===
-                                                                                                          input.id
-                                                                                                          ? {
-                                                                                                                ...row,
-                                                                                                                level,
-                                                                                                            }
-                                                                                                          : row,
-                                                                                              ),
-                                                                                          }
-                                                                                        : mix,
-                                                                            ),
-                                                                        },
-                                                                );
-                                                            }}
                                                         />
                                                         <span>
                                                             {Math.round(
@@ -1163,7 +1127,7 @@ export function App() {
                                                                                                       ] ??
                                                                                                       1)
                                                                                             }
-                                                                                            aria-label={
+                                                                                            label={
                                                                                                 input.channelsLinked
                                                                                                     ? "Linked channel gain"
                                                                                                     : `Channel ${index + 1} gain`
@@ -1175,15 +1139,9 @@ export function App() {
                                                                                                     index >
                                                                                                         0)
                                                                                             }
-                                                                                            onPointerUp={(
-                                                                                                event,
+                                                                                            onCommit={(
+                                                                                                value,
                                                                                             ) => {
-                                                                                                const value =
-                                                                                                    Number(
-                                                                                                        event
-                                                                                                            .currentTarget
-                                                                                                            .value,
-                                                                                                    );
                                                                                                 const nextLevels =
                                                                                                     input.channelsLinked
                                                                                                         ? scaleLinkedLevels(
@@ -1194,59 +1152,13 @@ export function App() {
                                                                                                           ];
                                                                                                 if (
                                                                                                     !input.channelsLinked
-                                                                                                )
+                                                                                                ) {
                                                                                                     nextLevels[
                                                                                                         index
                                                                                                     ] =
                                                                                                         value;
-                                                                                                void send(
-                                                                                                    `channels:${input.id}`,
-                                                                                                    {
-                                                                                                        command:
-                                                                                                            "setPhysicalInputChannels",
-                                                                                                        ...selectedTarget,
-                                                                                                        sourceID:
-                                                                                                            input.id,
-                                                                                                        channelRouting:
-                                                                                                            routing,
-                                                                                                        channelLevels:
-                                                                                                            nextLevels,
-                                                                                                        channelsLinked:
-                                                                                                            input.channelsLinked,
-                                                                                                    },
-                                                                                                );
-                                                                                            }}
-                                                                                            onBlur={(
-                                                                                                event,
-                                                                                            ) => {
-                                                                                                if (
-                                                                                                    input.channelsLinked &&
-                                                                                                    index >
-                                                                                                        0
-                                                                                                )
-                                                                                                    return;
-                                                                                                const value =
-                                                                                                    Number(
-                                                                                                        event
-                                                                                                            .currentTarget
-                                                                                                            .value,
-                                                                                                    );
-                                                                                                const nextLevels =
-                                                                                                    input.channelsLinked
-                                                                                                        ? scaleLinkedLevels(
-                                                                                                              value,
-                                                                                                          )
-                                                                                                        : [
-                                                                                                              ...levels,
-                                                                                                          ];
-                                                                                                if (
-                                                                                                    !input.channelsLinked
-                                                                                                )
-                                                                                                    nextLevels[
-                                                                                                        index
-                                                                                                    ] =
-                                                                                                        value;
-                                                                                                void send(
+                                                                                                }
+                                                                                                return send(
                                                                                                     `channels:${input.id}`,
                                                                                                     {
                                                                                                         command:
@@ -1460,128 +1372,23 @@ export function App() {
                                                         </span>
                                                         <StableRange
                                                             value={output.level}
-                                                            aria-label={`${output.name} master level`}
-                                                            aria-valuetext={`${Math.round(output.level * 100)} percent`}
+                                                            label={`${output.name} master level`}
                                                             disabled={
                                                                 pending !==
                                                                     null ||
                                                                 !output.available
                                                             }
-                                                            onChange={(
-                                                                event,
-                                                            ) => {
-                                                                const level =
-                                                                    Number(
-                                                                        event
-                                                                            .currentTarget
-                                                                            .value,
-                                                                    );
-                                                                setMixerState(
-                                                                    (current) =>
-                                                                        current && {
-                                                                            ...current,
-                                                                            outputs:
-                                                                                current.outputs.map(
-                                                                                    (
-                                                                                        item,
-                                                                                    ) =>
-                                                                                        item.uid ===
-                                                                                        output.uid
-                                                                                            ? {
-                                                                                                  ...item,
-                                                                                                  level,
-                                                                                              }
-                                                                                            : item,
-                                                                                ),
-                                                                        },
-                                                                );
-                                                            }}
-                                                            onPointerUp={(
-                                                                event,
-                                                            ) => {
-                                                                void send(
+                                                            onCommit={(level) =>
+                                                                send(
                                                                     `output:${output.uid}`,
                                                                     {
                                                                         command:
                                                                             "setOutputLevel",
                                                                         uid: output.uid,
-                                                                        level: Number(
-                                                                            event
-                                                                                .currentTarget
-                                                                                .value,
-                                                                        ),
+                                                                        level,
                                                                     },
-                                                                    () => {
-                                                                        setMixerState(
-                                                                            (
-                                                                                current,
-                                                                            ) =>
-                                                                                current && {
-                                                                                    ...current,
-                                                                                    outputs:
-                                                                                        current.outputs.map(
-                                                                                            (
-                                                                                                item,
-                                                                                            ) =>
-                                                                                                item.uid ===
-                                                                                                output.uid
-                                                                                                    ? {
-                                                                                                          ...item,
-                                                                                                          level: output.level,
-                                                                                                      }
-                                                                                                    : item,
-                                                                                        ),
-                                                                                },
-                                                                        );
-                                                                    },
-                                                                );
-                                                            }}
-                                                            onKeyUp={(
-                                                                event,
-                                                            ) => {
-                                                                if (
-                                                                    event.key.startsWith(
-                                                                        "Arrow",
-                                                                    )
-                                                                ) {
-                                                                    void send(
-                                                                        `output:${output.uid}`,
-                                                                        {
-                                                                            command:
-                                                                                "setOutputLevel",
-                                                                            uid: output.uid,
-                                                                            level: Number(
-                                                                                event
-                                                                                    .currentTarget
-                                                                                    .value,
-                                                                            ),
-                                                                        },
-                                                                        () => {
-                                                                            setMixerState(
-                                                                                (
-                                                                                    current,
-                                                                                ) =>
-                                                                                    current && {
-                                                                                        ...current,
-                                                                                        outputs:
-                                                                                            current.outputs.map(
-                                                                                                (
-                                                                                                    item,
-                                                                                                ) =>
-                                                                                                    item.uid ===
-                                                                                                    output.uid
-                                                                                                        ? {
-                                                                                                              ...item,
-                                                                                                              level: output.level,
-                                                                                                          }
-                                                                                                        : item,
-                                                                                            ),
-                                                                                    },
-                                                                            );
-                                                                        },
-                                                                    );
-                                                                }
-                                                            }}
+                                                                )
+                                                            }
                                                         />
                                                         <span className="w-9 text-right tabular-nums">
                                                             {Math.round(
@@ -1629,7 +1436,9 @@ export function App() {
                     >
                         <ItemGroup title="Inputs">
                             {sourceDevices.length === 0 &&
-                                (mixerState?.buses.length ?? 0) === 0 && (
+                                (mixerState?.buses.length ?? 0) === 0 &&
+                                (mixerState?.blackHoleRoutes.length ?? 0) ===
+                                    0 && (
                                     <p className="px-3 text-sm text-slate-500">
                                         No inputs found.
                                     </p>
@@ -1823,6 +1632,110 @@ export function App() {
                                     </div>
                                 );
                             })}
+                            {(mixerState?.blackHoleRoutes ?? []).map(
+                                (route) => {
+                                    const alreadyInSelectedMix =
+                                        selectedMix?.inputs.some(
+                                            (input) =>
+                                                input.kind ===
+                                                    "blackHoleRoute" &&
+                                                input.id === route.id,
+                                        ) ?? false;
+                                    const captureState = route.captureState;
+                                    return (
+                                        <div
+                                            key={route.id}
+                                            className="item-panel rounded-lg border border-slate-800 px-3 py-2"
+                                        >
+                                            <div className="flex items-start justify-between gap-2">
+                                                <span className="flex min-w-0 items-center gap-2 truncate text-sm">
+                                                    <FontAwesomeIcon
+                                                        icon={faVolumeHigh}
+                                                        aria-hidden="true"
+                                                        className="text-slate-400"
+                                                    />
+                                                    {route.name}
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    disabled={pending !== null}
+                                                    aria-pressed={route.muted}
+                                                    aria-label={`${route.muted ? "Unmute" : "Mute"} ${route.name} globally`}
+                                                    title={`${route.muted ? "Unmute" : "Mute"} ${route.name} globally`}
+                                                    className="icon-button text-sky-300 disabled:opacity-50"
+                                                    onClick={() =>
+                                                        void send(
+                                                            `mute-route:${route.id}`,
+                                                            {
+                                                                command:
+                                                                    "setSourceMuted",
+                                                                kind: "blackHoleRoute",
+                                                                sourceID:
+                                                                    route.id,
+                                                                muted: !route.muted,
+                                                            },
+                                                        )
+                                                    }
+                                                >
+                                                    <FontAwesomeIcon
+                                                        icon={
+                                                            route.muted
+                                                                ? faVolumeXmark
+                                                                : faVolumeHigh
+                                                        }
+                                                        aria-hidden="true"
+                                                    />
+                                                </button>
+                                            </div>
+                                            <p className="mt-1 text-xs text-slate-400">
+                                                {route.available
+                                                    ? captureState ===
+                                                      "capturing"
+                                                        ? `Capturing input channels ${route.channels.join("/")}`
+                                                        : captureState.startsWith(
+                                                                "unavailable:",
+                                                            )
+                                                          ? captureState
+                                                                .slice(
+                                                                    "unavailable:"
+                                                                        .length,
+                                                                )
+                                                                .trim()
+                                                          : `Input channels ${route.channels.join("/")} available`
+                                                    : `Input channels ${route.channels.join("/")} unavailable`}
+                                            </p>
+                                            <PeakMeter
+                                                level={route.level}
+                                                label={`${route.name} input pair`}
+                                            />
+                                            <button
+                                                type="button"
+                                                disabled={
+                                                    !selectedTarget ||
+                                                    alreadyInSelectedMix ||
+                                                    pending !== null
+                                                }
+                                                aria-label={
+                                                    alreadyInSelectedMix
+                                                        ? `${route.name} is already in the selected mix`
+                                                        : `Add ${route.name} to the selected mix`
+                                                }
+                                                className="mt-1 rounded px-2 py-1 text-xs text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                                onClick={() =>
+                                                    addSourceToSelectedMix(
+                                                        "blackHoleRoute",
+                                                        route.id,
+                                                    )
+                                                }
+                                            >
+                                                {alreadyInSelectedMix
+                                                    ? "Added"
+                                                    : "Add to mix"}
+                                            </button>
+                                        </div>
+                                    );
+                                },
+                            )}
                         </ItemGroup>
                         <ItemGroup title="Added Applications">
                             {sourceApplications.length === 0 && (
