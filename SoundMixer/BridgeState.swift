@@ -95,7 +95,7 @@ enum BridgeError: LocalizedError {
     case unknownRoute
     case invalidName
     case unavailableBlackHole
-    case invalidChannels
+    case noBlackHoleChannels
 
     var errorDescription: String? {
         switch self {
@@ -107,7 +107,7 @@ enum BridgeError: LocalizedError {
         case .unknownRoute: "The BlackHole route is not present in the saved configuration."
         case .invalidName: "Names must contain 1 to 64 characters."
         case .unavailableBlackHole: "Select an available BlackHole output device."
-        case .invalidChannels: "The selected channels are unavailable or already used."
+        case .noBlackHoleChannels: "No adjacent stereo pair is available on this BlackHole device. Remove another route or choose a device with more output channels."
         }
     }
 }

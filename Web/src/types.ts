@@ -89,10 +89,7 @@ export type BridgeCommand =
     | { command: "renameRoute"; id: string; name: string }
     | {
           command: "createRoute";
-          name: string;
           deviceUID: string;
-          mode: "mono" | "stereo";
-          channels: number[];
       }
     | { command: "deleteRoute"; id: string }
     | { command: "deleteBus"; id: string }

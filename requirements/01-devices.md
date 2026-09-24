@@ -21,12 +21,12 @@
 ## BlackHole routes
 
 - Creation requires an installed, available BlackHole device. The user selects a specific instance by UID; Sound Mixer automatically assigns the lowest available adjacent stereo pair (1/2, 3/4, 5/6, and so on).
-- A route has an editable name, its own mix, and master volume. Selected channel indices are saved within the selected device.
-- For a stereo mix, the user can select two distinct channels. A mono route can use one channel. Other channel layouts require separate design after prototype verification.
+- A route has an editable name, its own mix, and master volume. It always uses a stereo pair.
+- Route creation does not ask for a name or channel numbers. Assign the lowest free adjacent pair in order (1/2, 3/4, 5/6, …) and generate the initial name as `BlackHole {first}/{second}`. The user can rename it after creation.
 - Overlapping channels in two active routes on the same device are forbidden so the mixes cannot overwrite each other.
 - If a mix is configured for a BlackHole device in the physical-output row, it occupies that device's output channels and prevents creating routes on that device. Otherwise each route reserves its automatically assigned stereo pair; overlapping reservations are forbidden.
 - The `prototypes/channel-routing/` prototype confirmed writing to any single channel or two distinct channels of BlackHole 64ch using a full multichannel client buffer. Product routes use sequential stereo pairs only. The base physical-output row continues to reserve every output channel of its device.
-- If the driver is missing, channel count changes, or the device disconnects, the route is retained as unavailable and does not start. The interface offers selection of available channels or a device.
+- If the driver is missing, channel count changes, or the device disconnects, the route is retained as unavailable and does not start. The interface reports the unavailable pair; users cannot change its channels.
 - A saved BlackHole route stays visible and removable even if the driver was missing at launch. When an instance with the same UID returns, it can start only after its assigned pair and conflicts are checked again.
 - Sound Mixer does not install or update BlackHole automatically.
 

@@ -2,31 +2,28 @@ import Foundation
 
 extension AppDelegate {
     func createRoute(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
-        guard Set(body.keys) == ["requestId", "command", "name", "deviceUID", "mode", "channels"],
-              let name = body["name"] as? String,
-              let uid = body["deviceUID"] as? String, !uid.isEmpty,
-              let mode = body["mode"] as? String,
-              let channels = body["channels"] as? [Int]
+        guard Set(body.keys) == ["requestId", "command", "deviceUID"],
+              let uid = body["deviceUID"] as? String, !uid.isEmpty
         else { throw BridgeError.invalidPayload }
-        let selection: BlackHoleChannels
-        switch (mode, channels) {
-        case let ("mono", values) where values.count == 1:
-            selection = .mono(values[0])
-        case let ("stereo", values) where values.count == 2:
-            selection = .stereo(left: values[0], right: values[1])
-        default: throw BridgeError.invalidPayload
-        }
-        let trimmedName = try validatedName(name)
         return try store.update(discoveredDevices: discoveredDescriptors()) { config in
             guard let device = audioDevices.first(where: { $0.uid == uid }),
                   device.isAlive, device.outputChannels > 0,
                   device.name.localizedCaseInsensitiveContains("BlackHole")
             else { throw BridgeError.unavailableBlackHole }
-            guard channels.allSatisfy({ $0 > 0 && $0 <= device.outputChannels }) else {
-                throw BridgeError.invalidChannels
+            guard !config.outputMixes.contains(where: { $0.deviceUID.rawValue == uid }) else {
+                throw BridgeError.noBlackHoleChannels
             }
+            let reserved = Set(config.blackHoleRoutes
+                .filter { $0.deviceUID.rawValue == uid }
+                .flatMap { Self.bridgeChannels($0.channels) })
+            guard let first = stride(from: 1, through: max(0, device.outputChannels - 1), by: 2)
+                .first(where: { !reserved.contains($0) && !reserved.contains($0 + 1) })
+            else { throw BridgeError.noBlackHoleChannels }
+            let second = first + 1
             config.blackHoleRoutes.append(BlackHoleRoute(
-                name: trimmedName, deviceUID: DeviceUID(rawValue: uid), channels: selection
+                name: "BlackHole \(first)/\(second)",
+                deviceUID: DeviceUID(rawValue: uid),
+                channels: .stereo(left: first, right: second)
             ))
         }
     }

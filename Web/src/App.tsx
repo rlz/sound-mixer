@@ -32,9 +32,6 @@ export function App() {
     const editingRouteId = useMixerStore((state) => state.editingRouteId);
     const setEditingRouteId = useMixerStore((state) => state.setEditingRouteId);
     const [routeDeviceUID, setRouteDeviceUID] = useState("");
-    const [routeMode, setRouteMode] = useState<"mono" | "stereo">("stereo");
-    const [routeLeft, setRouteLeft] = useState("1");
-    const [routeRight, setRouteRight] = useState("2");
     const [openChannelEditor, setOpenChannelEditor] = useState<string | null>(
         null,
     );
@@ -300,7 +297,6 @@ export function App() {
                                     setEditingBusId(null);
                                     setEditingRouteId(null);
                                     setSelectedItem("route:new");
-                                    setBusNameDraft("New BlackHole Route");
                                     setRouteDeviceUID(
                                         mixerState?.outputs.find(
                                             (output) =>
@@ -399,18 +395,7 @@ export function App() {
                                         ) {
                                             void send("route-create", {
                                                 command: "createRoute",
-                                                name: busNameDraft ?? "",
                                                 deviceUID: routeDeviceUID,
-                                                mode: routeMode,
-                                                channels:
-                                                    routeMode === "mono"
-                                                        ? [Number(routeLeft)]
-                                                        : [
-                                                              Number(routeLeft),
-                                                              Number(
-                                                                  routeRight,
-                                                              ),
-                                                          ],
                                             });
                                         } else {
                                             void send("bus-create", {
@@ -420,25 +405,28 @@ export function App() {
                                         }
                                     }}
                                 >
-                                    <label
-                                        htmlFor="selected-virtual-name"
-                                        className="block text-sm font-medium text-slate-200"
-                                    >
-                                        {selectedRoute
-                                            ? "Route name"
-                                            : selectedItem === "route:new"
-                                              ? "Route name"
-                                              : "Virtual bus name"}
-                                    </label>
+                                    {selectedItem !== "route:new" && (
+                                        <label
+                                            htmlFor="selected-virtual-name"
+                                            className="block text-sm font-medium text-slate-200"
+                                        >
+                                            {selectedRoute
+                                                ? "Route name"
+                                                : "Virtual bus name"}
+                                        </label>
+                                    )}
                                     <input
                                         id="selected-virtual-name"
                                         maxLength={64}
-                                        required
+                                        required={selectedItem !== "route:new"}
+                                        hidden={selectedItem === "route:new"}
                                         value={
-                                            busNameDraft ??
-                                            selectedBus?.name ??
-                                            selectedRoute?.name ??
-                                            ""
+                                            selectedItem === "route:new"
+                                                ? ""
+                                                : busNameDraft ??
+                                                  selectedBus?.name ??
+                                                  selectedRoute?.name ??
+                                                  ""
                                         }
                                         onChange={(event) =>
                                             setBusNameDraft(
@@ -488,81 +476,12 @@ export function App() {
                                                         ))}
                                                 </select>
                                             </label>
-                                            <label className="text-sm">
-                                                Route layout
-                                                <select
-                                                    value={routeMode}
-                                                    onChange={(event) =>
-                                                        setRouteMode(
-                                                            event.currentTarget
-                                                                .value as
-                                                                | "mono"
-                                                                | "stereo",
-                                                        )
-                                                    }
-                                                    className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
-                                                >
-                                                    <option value="stereo">
-                                                        Stereo pair
-                                                    </option>
-                                                    <option value="mono">
-                                                        Mono
-                                                    </option>
-                                                </select>
-                                            </label>
-                                            <label className="text-sm">
-                                                {routeMode === "stereo"
-                                                    ? "Left channel"
-                                                    : "Channel"}
-                                                <input
-                                                    type="number"
-                                                    min="1"
-                                                    max={
-                                                        mixerState?.outputs.find(
-                                                            (output) =>
-                                                                output.uid ===
-                                                                routeDeviceUID,
-                                                        )?.outputChannels ?? 1
-                                                    }
-                                                    required
-                                                    value={routeLeft}
-                                                    onChange={(event) =>
-                                                        setRouteLeft(
-                                                            event.currentTarget
-                                                                .value,
-                                                        )
-                                                    }
-                                                    className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
-                                                />
-                                            </label>
-                                            {routeMode === "stereo" && (
-                                                <label className="text-sm">
-                                                    Right channel
-                                                    <input
-                                                        type="number"
-                                                        min="1"
-                                                        max={
-                                                            mixerState?.outputs.find(
-                                                                (output) =>
-                                                                    output.uid ===
-                                                                    routeDeviceUID,
-                                                            )?.outputChannels ??
-                                                            1
-                                                        }
-                                                        required
-                                                        value={routeRight}
-                                                        onChange={(event) =>
-                                                            setRouteRight(
-                                                                event
-                                                                    .currentTarget
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
-                                                    />
-                                                </label>
-                                            )}
                                         </div>
+                                    )}
+                                    {selectedItem === "route:new" && (
+                                        <p className="text-xs text-slate-400">
+                                            Sound Mixer assigns the lowest free adjacent stereo pair and names the route from its channels.
+                                        </p>
                                     )}
                                     {selectedRoute && (
                                         <p className="font-mono text-xs text-slate-500">
@@ -587,7 +506,7 @@ export function App() {
                                             onClick={() => {
                                                 if (
                                                     window.confirm(
-                                                        `Delete “${selectedRoute.name}” and its saved mix?`,
+                                                        `Delete “${selectedRoute.name}” and its saved mix? This also removes it as a source from every mix that uses it.`,
                                                     )
                                                 ) {
                                                     void send(

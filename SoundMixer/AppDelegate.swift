@@ -1,7 +1,7 @@
 import AppKit
 import WebKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScriptMessageHandler {
+final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     private var window: NSWindow?
     private var webView: WKWebView?
     private var configurationStore: ConfigurationStore?
@@ -111,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
         let webView = WKWebView(frame: window.contentView?.bounds ?? .zero)
         webView.navigationDelegate = self
+        webView.uiDelegate = self
         webView.configuration.userContentController.add(self, name: "soundMixer")
         webView.autoresizingMask = [.width, .height]
         window.contentView = webView
@@ -136,6 +137,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             showLoadError(warning)
         }
         publishState()
+    }
+
+    func webView(
+        _: WKWebView,
+        runJavaScriptConfirmPanelWithMessage message: String,
+        initiatedByFrame _: WKFrameInfo,
+        completionHandler: @escaping (Bool) -> Void
+    ) {
+        let alert = NSAlert()
+        alert.messageText = message
+        alert.addButton(withTitle: "Continue")
+        alert.addButton(withTitle: "Cancel")
+        completionHandler(alert.runModal() == .alertFirstButtonReturn)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
