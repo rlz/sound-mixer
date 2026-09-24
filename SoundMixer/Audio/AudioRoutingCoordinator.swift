@@ -43,6 +43,11 @@ final class AudioRoutingCoordinator {
         var queuesBySource: [String: [RealtimeAudioRingBuffer]] = [:]
         var captureSources = Set<String>()
         renderMeters = Dictionary(uniqueKeysWithValues: Self.renderMeterKeys(graph.configuration).map { ($0, RealtimePeakMeter()) })
+        for device in orderedDevices where device.inputChannels > 0 {
+            let key = "input:\(device.uid)"
+            queuesBySource[key] = []
+            captureSources.insert(key)
+        }
         startOutputRoutes(graph: graph, devices: deviceByUID, queues: &queuesBySource, sources: &captureSources)
         let inputChannelCounts = Dictionary(uniqueKeysWithValues: deviceByUID.values.map {
             ("input:\($0.uid)", min(max($0.inputChannels, 1), 64))

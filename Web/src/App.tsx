@@ -1627,12 +1627,13 @@ export function App() {
                         className="mixer-pane mixer-pane-right space-y-5"
                         aria-label="Audio sources"
                     >
-                        <ItemGroup title="Physical Inputs">
-                            {sourceDevices.length === 0 && (
-                                <p className="px-3 text-sm text-slate-500">
-                                    No physical inputs found.
-                                </p>
-                            )}
+                        <ItemGroup title="Inputs">
+                            {sourceDevices.length === 0 &&
+                                (mixerState?.buses.length ?? 0) === 0 && (
+                                    <p className="px-3 text-sm text-slate-500">
+                                        No inputs found.
+                                    </p>
+                                )}
                             {sourceDevices.map((device) => {
                                 const inputState =
                                     mixerState?.inputCaptureStates.find(
@@ -1749,6 +1750,69 @@ export function App() {
                                                 addSourceToSelectedMix(
                                                     "inputDevice",
                                                     device.uid,
+                                                )
+                                            }
+                                        >
+                                            {alreadyInSelectedMix
+                                                ? "Added"
+                                                : "Add to mix"}
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                            {(mixerState?.buses ?? []).map((bus) => {
+                                const alreadyInSelectedMix =
+                                    selectedMix?.inputs.some(
+                                        (input) =>
+                                            input.kind === "bus" &&
+                                            input.id === bus.id,
+                                    ) ?? false;
+                                const busMix = mixerState?.mixes.find(
+                                    (mix) =>
+                                        mix.target === "bus" &&
+                                        mix.id === bus.id,
+                                );
+                                return (
+                                    <div
+                                        key={`bus-input:${bus.id}`}
+                                        className="item-panel rounded-lg border border-slate-800 px-3 py-2"
+                                    >
+                                        <div className="flex min-w-0 items-center gap-2 truncate text-sm">
+                                            <FontAwesomeIcon
+                                                icon={faVolumeHigh}
+                                                aria-hidden="true"
+                                                className="text-slate-400"
+                                            />
+                                            {bus.name}
+                                        </div>
+                                        <p className="mt-1 text-xs text-slate-400">
+                                            Internal virtual input
+                                        </p>
+                                        <PeakMeter
+                                            level={busMix?.levelReading}
+                                            label={`${bus.name} output`}
+                                        />
+                                        <button
+                                            type="button"
+                                            disabled={
+                                                !selectedTarget ||
+                                                alreadyInSelectedMix ||
+                                                pending !== null ||
+                                                (selectedTarget.target ===
+                                                    "bus" &&
+                                                    selectedTarget.id ===
+                                                        bus.id)
+                                            }
+                                            aria-label={
+                                                alreadyInSelectedMix
+                                                    ? `${bus.name} is already in the selected mix`
+                                                    : `Add ${bus.name} to the selected mix`
+                                            }
+                                            className="mt-1 rounded px-2 py-1 text-xs text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                            onClick={() =>
+                                                addSourceToSelectedMix(
+                                                    "bus",
+                                                    bus.id,
                                                 )
                                             }
                                         >
