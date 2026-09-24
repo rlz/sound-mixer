@@ -25,6 +25,9 @@ export type MixInputState = {
     id: string;
     level: number;
     monoPlacement: "left" | "right" | "both";
+    channelRouting: ("ignore" | "first" | "second" | "both")[];
+    channelLevels: number[];
+    channelsLinked: boolean;
     levelReading: number | null;
 };
 
@@ -107,6 +110,15 @@ export type BridgeCommand =
           kind: string;
           sourceID: string;
           monoPlacement: "left" | "right" | "both";
+      }
+    | {
+          command: "setPhysicalInputChannels";
+          target: "output" | "bus" | "route";
+          id: string;
+          sourceID: string;
+          channelRouting: ("ignore" | "first" | "second" | "both")[];
+          channelLevels: number[];
+          channelsLinked: boolean;
       };
 
 declare global {

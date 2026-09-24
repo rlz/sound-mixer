@@ -11,6 +11,7 @@ public enum GraphValidationError: Error, Equatable {
     case missingBus(UUID)
     case busCycle
     case invalidChannels
+    case invalidChannelSettings
     case blackHoleChannelConflict(DeviceUID)
 }
 
@@ -27,6 +28,7 @@ extension GraphValidationError: LocalizedError {
         case let .missingBus(id): "The referenced virtual bus \(id.uuidString) no longer exists."
         case .busCycle: "This change would create a cycle between virtual buses."
         case .invalidChannels: "Choose distinct channel numbers starting at 1."
+        case .invalidChannelSettings: "Physical input routing and gain settings must have matching channel counts and valid linked levels."
         case let .blackHoleChannelConflict(uid):
             "Those channels are already reserved by another route or output mix on \(uid.rawValue)."
         }
@@ -133,6 +135,17 @@ public enum GraphValidator {
             var sources = Set<SourceKey>()
             for input in mix.inputs {
                 try validateLevel(input.level)
+                guard input.channelRouting.count == input.channelLevels.count else {
+                    throw GraphValidationError.invalidChannelSettings
+                }
+                for channelLevel in input.channelLevels {
+                    try validateLevel(channelLevel)
+                }
+                if input.channelsLinked, let firstLevel = input.channelLevels.first,
+                   input.channelLevels.contains(where: { $0 != firstLevel })
+                {
+                    throw GraphValidationError.invalidChannelSettings
+                }
                 let key = SourceKey(input.source)
                 guard sources.insert(key).inserted else { throw GraphValidationError.duplicateSource }
                 switch input.source {

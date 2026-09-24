@@ -215,6 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case "removeMixInput": return try editMixInput(body: body, store: store, operation: .remove)
         case "setMixInputLevel": return try editMixInput(body: body, store: store, operation: .level)
         case "setMonoPlacement": return try editMixInput(body: body, store: store, operation: .placement)
+        case "setPhysicalInputChannels": return try setPhysicalInputChannels(body: body, store: store)
         default:
             throw BridgeError.unknownCommand
         }
@@ -351,27 +352,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             case "output":
                 guard let index = config.outputMixes.firstIndex(where: { $0.deviceUID.rawValue == id }) else { throw BridgeError.unknownOutput }
                 var value = config.outputMixes[index].mix
-                try Self.applyInput(operation, reference: reference, level: level, placement: placement, to: &value)
+                try applyInput(operation, reference: reference, level: level, placement: placement, to: &value)
                 config.outputMixes[index].mix = value
             case "bus":
                 guard let uuid = UUID(uuidString: id), let index = config.buses.firstIndex(where: { $0.id == uuid }) else { throw BridgeError.unknownBus }
                 var value = config.buses[index].mix
-                try Self.applyInput(operation, reference: reference, level: level, placement: placement, to: &value)
+                try applyInput(operation, reference: reference, level: level, placement: placement, to: &value)
                 config.buses[index].mix = value
             default:
                 guard let uuid = UUID(uuidString: id), let index = config.blackHoleRoutes.firstIndex(where: { $0.id == uuid }) else { throw BridgeError.unknownRoute }
                 var value = config.blackHoleRoutes[index].mix
-                try Self.applyInput(operation, reference: reference, level: level, placement: placement, to: &value)
+                try applyInput(operation, reference: reference, level: level, placement: placement, to: &value)
                 config.blackHoleRoutes[index].mix = value
             }
         }
     }
 
-    private static func applyInput(_ operation: MixInputOperation, reference: SourceReference, level: Double?, placement: MonoPlacement?, to mix: inout Mix) throws {
+    private func applyInput(_ operation: MixInputOperation, reference: SourceReference, level: Double?, placement: MonoPlacement?, to mix: inout Mix) throws {
         switch operation {
         case .add:
             guard !mix.inputs.contains(where: { $0.source == reference }), let placement else { throw BridgeError.invalidPayload }
-            mix.inputs.append(MixInput(source: reference, monoPlacement: placement))
+            if case let .inputDevice(uid) = reference,
+               let device = audioDevices.first(where: { $0.uid == uid.rawValue })
+            {
+                let defaults = MixInput.physicalInputDefaults(channelCount: device.inputChannels, mono: device.inputChannels == 1)
+                mix.inputs.append(MixInput(source: reference, monoPlacement: placement ?? .both,
+                                           channelRouting: defaults.routing, channelLevels: defaults.levels))
+            } else {
+                mix.inputs.append(MixInput(source: reference, monoPlacement: placement ?? .both))
+            }
         case .remove:
             guard let index = mix.inputs.firstIndex(where: { $0.source == reference }) else { throw BridgeError.invalidPayload }
             mix.inputs.remove(at: index)
@@ -382,6 +391,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             guard let index = mix.inputs.firstIndex(where: { $0.source == reference }), let placement else { throw BridgeError.invalidPayload }
             mix.inputs[index].monoPlacement = placement
         }
+    }
+
+    private func setPhysicalInputChannels(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        let expected: Set<String> = ["requestId", "command", "target", "id", "sourceID", "channelRouting", "channelLevels", "channelsLinked"]
+        guard Set(body.keys) == expected,
+              let target = body["target"] as? String, ["output", "bus", "route"].contains(target),
+              let id = body["id"] as? String,
+              let sourceID = body["sourceID"] as? String, !sourceID.isEmpty,
+              let routingValues = body["channelRouting"] as? [String],
+              let routing = Optional(routingValues.compactMap { ChannelRouting(rawValue: $0) }), routing.count == routingValues.count,
+              let levels = body["channelLevels"] as? [Double], levels.count == routing.count,
+              levels.allSatisfy({ $0.isFinite && (0 ... 1).contains($0) }),
+              let linked = body["channelsLinked"] as? Bool,
+              !linked || levels.isEmpty || levels.allSatisfy({ $0 == levels[0] })
+        else { throw BridgeError.invalidPayload }
+        let reference = SourceReference.inputDevice(DeviceUID(rawValue: sourceID))
+        return try store.update(discoveredDevices: discoveredDescriptors()) { config in
+            var mix: Mix
+            switch target {
+            case "output":
+                guard let index = config.outputMixes.firstIndex(where: { $0.deviceUID.rawValue == id }) else { throw BridgeError.unknownOutput }
+                mix = config.outputMixes[index].mix
+                try Self.assignChannels(reference, routing, levels, linked, to: &mix)
+                config.outputMixes[index].mix = mix
+            case "bus":
+                guard let uuid = UUID(uuidString: id), let index = config.buses.firstIndex(where: { $0.id == uuid }) else { throw BridgeError.unknownBus }
+                mix = config.buses[index].mix
+                try Self.assignChannels(reference, routing, levels, linked, to: &mix)
+                config.buses[index].mix = mix
+            default:
+                guard let uuid = UUID(uuidString: id), let index = config.blackHoleRoutes.firstIndex(where: { $0.id == uuid }) else { throw BridgeError.unknownRoute }
+                mix = config.blackHoleRoutes[index].mix
+                try Self.assignChannels(reference, routing, levels, linked, to: &mix)
+                config.blackHoleRoutes[index].mix = mix
+            }
+        }
+    }
+
+    private static func assignChannels(_ reference: SourceReference, _ routing: [ChannelRouting], _ levels: [Double], _ linked: Bool, to mix: inout Mix) throws {
+        guard let index = mix.inputs.firstIndex(where: { $0.source == reference }) else { throw BridgeError.invalidPayload }
+        mix.inputs[index].channelRouting = routing
+        mix.inputs[index].channelLevels = levels
+        mix.inputs[index].channelsLinked = linked
     }
 
     func validatedName(_ name: String) throws -> String {
@@ -451,6 +503,9 @@ extension AppDelegate {
                     id: sourceID,
                     level: input.level,
                     monoPlacement: input.monoPlacement.rawValue,
+                    channelRouting: input.channelRouting.map(\.rawValue),
+                    channelLevels: input.channelLevels,
+                    channelsLinked: input.channelsLinked,
                     levelReading: renderLevels["\(targetKey)/\(AudioGraphRenderer.sourceMeterKey(input.source))"]
                 )
             }
