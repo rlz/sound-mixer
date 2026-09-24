@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { faVolumeHigh, faVolumeXmark } from "@fortawesome/free-solid-svg-icons";
+import {
+    faVolumeHigh,
+    faVolumeXmark,
+    faMicrophone,
+    faDesktop,
+} from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useMixerStore } from "./store";
 import type { BridgeCommand } from "./types";
@@ -170,7 +175,7 @@ export function App() {
                                             setEditingBusId(null);
                                             setEditingRouteId(null);
                                         }}
-                                        className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `output:${output.uid}` ? "bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "text-slate-300 hover:bg-slate-800"}`}
+                                        className={`item-panel flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `output:${output.uid}` ? "border-sky-300 bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "border-slate-800 text-slate-300 hover:bg-slate-800"}`}
                                     >
                                         <span className="min-w-0 truncate">
                                             {output.name}
@@ -225,7 +230,7 @@ export function App() {
                                         setEditingBusId(bus.id);
                                         setEditingRouteId(null);
                                     }}
-                                    className={`w-full rounded-lg px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `bus:${bus.id}` ? "bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "text-slate-300 hover:bg-slate-800"}`}
+                                    className={`item-panel w-full rounded-lg border px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `bus:${bus.id}` ? "border-sky-300 bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "border-slate-800 text-slate-300 hover:bg-slate-800"}`}
                                 >
                                     {bus.name}
                                 </button>
@@ -307,7 +312,7 @@ export function App() {
                                         setEditingRouteId(route.id);
                                         setEditingBusId(null);
                                     }}
-                                    className={`w-full rounded-lg px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `blackHole:${route.id}` ? "bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "text-slate-300 hover:bg-slate-800"}`}
+                                    className={`item-panel w-full rounded-lg border px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `blackHole:${route.id}` ? "border-sky-300 bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "border-slate-800 text-slate-300 hover:bg-slate-800"}`}
                                 >
                                     {route.name}
                                 </button>
@@ -758,7 +763,7 @@ export function App() {
                                             return (
                                                 <li
                                                     key={`${input.kind}:${input.id}`}
-                                                    className="rounded-xl border border-slate-800 p-3"
+                                                    className="item-panel rounded-xl border border-slate-800 p-3"
                                                 >
                                                     <div className="mb-2 flex items-center justify-between gap-3">
                                                         <div className="min-w-0">
@@ -1252,10 +1257,15 @@ export function App() {
                                 return (
                                     <div
                                         key={device.uid}
-                                        className="rounded-lg px-3 py-2"
+                                        className="item-panel rounded-lg border border-slate-800 px-3 py-2"
                                     >
                                         <div className="flex items-start justify-between gap-2">
-                                            <span className="min-w-0 truncate text-sm">
+                                            <span className="flex min-w-0 items-center gap-2 truncate text-sm">
+                                                <FontAwesomeIcon
+                                                    icon={faMicrophone}
+                                                    aria-hidden="true"
+                                                    className="text-slate-400"
+                                                />
                                                 {device.name}
                                             </span>
                                             <button
@@ -1263,7 +1273,8 @@ export function App() {
                                                 disabled={pending !== null}
                                                 aria-pressed={device.muted}
                                                 aria-label={`${device.muted ? "Unmute" : "Mute"} ${device.name} globally`}
-                                                className="text-xs text-sky-300 underline disabled:opacity-50"
+                                                title={`${device.muted ? "Unmute" : "Mute"} ${device.name} globally`}
+                                                className="icon-button text-sky-300 disabled:opacity-50"
                                                 onClick={() =>
                                                     void send(
                                                         `mute-input:${device.uid}`,
@@ -1278,9 +1289,14 @@ export function App() {
                                                     )
                                                 }
                                             >
-                                                {device.muted
-                                                    ? "Unmute"
-                                                    : "Mute"}
+                                                <FontAwesomeIcon
+                                                    icon={
+                                                        device.muted
+                                                            ? faVolumeXmark
+                                                            : faVolumeHigh
+                                                    }
+                                                    aria-hidden="true"
+                                                />
                                             </button>
                                         </div>
                                         <p className="mt-1 text-xs text-slate-400">
@@ -1334,10 +1350,15 @@ export function App() {
                             {sourceApplications.map((application) => (
                                 <div
                                     key={application.id}
-                                    className="rounded-lg px-3 py-2"
+                                    className="item-panel rounded-lg border border-slate-800 px-3 py-2"
                                 >
                                     <div className="flex items-start justify-between gap-2">
-                                        <span className="min-w-0 truncate text-sm">
+                                        <span className="flex min-w-0 items-center gap-2 truncate text-sm">
+                                            <FontAwesomeIcon
+                                                icon={faDesktop}
+                                                aria-hidden="true"
+                                                className="text-slate-400"
+                                            />
                                             {application.name}
                                         </span>
                                         <button
@@ -1345,7 +1366,8 @@ export function App() {
                                             disabled={pending !== null}
                                             aria-pressed={application.muted}
                                             aria-label={`${application.muted ? "Unmute" : "Mute"} ${application.name} globally`}
-                                            className="text-xs text-sky-300 underline disabled:opacity-50"
+                                            title={`${application.muted ? "Unmute" : "Mute"} ${application.name} globally`}
+                                            className="icon-button text-sky-300 disabled:opacity-50"
                                             onClick={() =>
                                                 void send(
                                                     `mute-app:${application.id}`,
@@ -1360,9 +1382,14 @@ export function App() {
                                                 )
                                             }
                                         >
-                                            {application.muted
-                                                ? "Unmute"
-                                                : "Mute"}
+                                            <FontAwesomeIcon
+                                                icon={
+                                                    application.muted
+                                                        ? faVolumeXmark
+                                                        : faVolumeHigh
+                                                }
+                                                aria-hidden="true"
+                                            />
                                         </button>
                                     </div>
                                     <p className="mt-1 text-xs text-slate-400">

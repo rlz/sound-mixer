@@ -82,6 +82,24 @@ body,
     border-left: 1px solid #334155;
 }
 
+.item-panel {
+    background: rgb(15 23 42 / 0.72);
+}
+
+.icon-button {
+    display: inline-flex;
+    min-width: 28px;
+    min-height: 28px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+}
+
+.icon-button:focus-visible {
+    outline: 2px solid #7dd3fc;
+    outline-offset: 2px;
+}
+
 .mixer-pane-center {
     background: #020617;
 }
