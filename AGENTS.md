@@ -22,6 +22,8 @@ These rules apply to the entire repository. User requirements and files in `requ
 
 ## Style
 
+- Prefer a dense interface that avoids large spacing and unnecessary labels. Use icon buttons where they remain clear and accessible, to conserve space.
+- Present inputs, outputs, and mixes as consistent compact panels rather than text-list rows. Show live signal-level meters for inputs and outputs, and show levels in mix settings. Panels also show the item's name, state, and icon-based controls, with accessible names and clear status text.
 - Use four spaces for indentation in Swift, TypeScript, TSX, JavaScript, JSON, configuration files, and Markdown code blocks. Do not use tabs.
 - Format Swift with SwiftFormat and lint it with SwiftLint; format TypeScript and TSX with Prettier and lint them with ESLint. Sort Tailwind classes with the Prettier plugin.
 - Pin tool versions and configuration in the repository. CI checks formatting, linting, tests, and builds.
