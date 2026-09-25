@@ -5,7 +5,7 @@ import Synchronization
 /// once per block, and each shared bus is rendered once in dependency order.
 final class AudioGraphRenderer {
     private let outputMix: Mix
-    private let outputDeviceUID: DeviceUID
+    private let targetKey: String
     private let busesByID: [UUID: VirtualBus]
     private let busOrder: [UUID]
     private let sourceRings: [String: RealtimeAudioRingBuffer]
@@ -28,7 +28,7 @@ final class AudioGraphRenderer {
         meters: [String: RealtimePeakMeter]
     ) {
         outputMix = output.mix
-        outputDeviceUID = output.deviceUID
+        self.targetKey = targetKey
         mutedSources = Set(graph.configuration.mutedSources)
         busDestinationMeters = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map {
             ($0.id, meters["bus:\($0.id.uuidString)/destination"])
@@ -101,7 +101,12 @@ final class AudioGraphRenderer {
             guard let mix = busMixes[id] else { continue }
             Self.update(states: states, mix: mix, mutedSources: Set(graph.configuration.mutedSources))
         }
-        if let mix = graph.configuration.outputMixes.first(where: { $0.deviceUID == outputDeviceUID })?.mix {
+        let mix: Mix? = if targetKey.hasPrefix("output:") {
+            graph.configuration.outputMixes.first(where: { targetKey == "output:\($0.deviceUID.rawValue)" })?.mix
+        } else {
+            graph.configuration.blackHoleRoutes.first(where: { targetKey == "route:\($0.id.uuidString)" })?.mix
+        }
+        if let mix {
             Self.update(states: outputState, mix: mix, mutedSources: Set(graph.configuration.mutedSources))
         }
     }

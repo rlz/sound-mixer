@@ -569,6 +569,7 @@ export function App() {
 
                         {selectedMix && selectedTarget && (
                             <section
+                                key={`${selectedTarget.target}:${selectedTarget.id}`}
                                 className="mb-5 rounded-2xl border border-slate-800 bg-slate-900 p-5"
                                 aria-label="Mix sources"
                             >

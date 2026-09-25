@@ -47,7 +47,8 @@ final class AudioRoutingCoordinator {
         if let lastGraph, enabled, Self.hasOnlyGainChanges(from: lastGraph.configuration, to: graph.configuration),
            lastDevices.count == orderedDevices.count,
            zip(lastDevices, orderedDevices).allSatisfy({ $0.hasSameRouting(as: $1) }),
-           lastProcesses == orderedProcesses {
+           lastProcesses == orderedProcesses
+        {
             for renderer in renderers.values {
                 renderer.updateGains(from: graph)
             }
@@ -208,8 +209,15 @@ final class AudioRoutingCoordinator {
                     mix.inputs[index].channelLevels = Array(repeating: 1, count: mix.inputs[index].channelLevels.count)
                 }
             }
-            for index in copy.outputMixes.indices { normalize(&copy.outputMixes[index].mix) }
-            for index in copy.buses.indices { normalize(&copy.buses[index].mix) }
+            for index in copy.outputMixes.indices {
+                normalize(&copy.outputMixes[index].mix)
+            }
+            for index in copy.buses.indices {
+                normalize(&copy.buses[index].mix)
+            }
+            for index in copy.blackHoleRoutes.indices {
+                normalize(&copy.blackHoleRoutes[index].mix)
+            }
             return copy
         }
         return normalized(old) == normalized(new)
