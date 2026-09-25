@@ -18,7 +18,7 @@ Statuses: `[ ]` = not started, `[~]` = in progress. Tasks are ordered by depende
 - [~] Finish master-switch and app-exit lifecycle checks. **Done when:** Off, exit, and relaunch release resources and resume only when the saved state and current devices allow it. Native stop behavior is implemented; Mac verification remains.
 - [~] Finish startup restoration and unavailable-route reporting. **Done when:** saved Off stays off, saved On starts available routes, and unavailable routes remain editable with a specific reason. Startup restoration is connected; user-visible verification remains.
 
-- [~] Use real device volume for physical outputs and software Mix gain for virtual destinations. **Done when:** the physical output slider reads and sets writable Core Audio main volume, follows external changes, remains available before configuring a mix, and shows a clear unsupported state; physical mix masters render at unity, virtual bus and BlackHole route gains remain saved, and app-set device volume is restored on normal exit when unchanged externally. Live hardware behavior still needs Mac verification.
+- [~] Use real device volume for physical outputs and software Mix gain for virtual destinations. **Done when:** the physical output slider reads and sets writable Core Audio main volume, follows external changes, remains available before configuring a mix, and shows a clear unsupported state; pointer movement coalesces intermediate writes while keeping the slider responsive; physical mix masters render at unity, virtual bus and BlackHole route gains remain saved, and app-set device volume is restored on normal exit when unchanged externally. Live hardware behavior still needs Mac verification.
 
 ## 3. Bridge and interface
 

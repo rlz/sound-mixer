@@ -8,6 +8,7 @@ type StableRangeProps = {
     max?: number;
     step?: number;
     formatValue?: (value: number) => string;
+    coalesceMs?: number;
     onCommit: (value: number) => Promise<boolean>;
 };
 
@@ -18,6 +19,7 @@ export function StableRange({
     min = 0,
     max = 1,
     step = 0.01,
+    coalesceMs = 0,
     formatValue = (current) => `${Math.round(current * 100)} percent`,
     onCommit,
 }: StableRangeProps) {
@@ -26,6 +28,7 @@ export function StableRange({
     const committedValue = useRef<number | null>(null);
     const latestValue = useRef<number | null>(null);
     const applying = useRef(false);
+    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         if (
@@ -60,10 +63,18 @@ export function StableRange({
         applying.current = false;
     };
 
-    const requestApply = (next: number) => {
+    const requestApply = (next: number, immediate = false) => {
         if (committedValue.current === next && latestValue.current === null)
             return;
         latestValue.current = next;
+        if (timer.current !== null) clearTimeout(timer.current);
+        if (coalesceMs > 0 && !immediate) {
+            timer.current = setTimeout(() => {
+                timer.current = null;
+                void applyLatest();
+            }, coalesceMs);
+            return;
+        }
         void applyLatest();
     };
 
@@ -82,7 +93,7 @@ export function StableRange({
             }}
             onPointerUp={(event) => {
                 interaction.current = false;
-                requestApply(Number(event.currentTarget.value));
+                requestApply(Number(event.currentTarget.value), true);
             }}
             onPointerCancel={() => {
                 interaction.current = false;
@@ -118,13 +129,13 @@ export function StableRange({
                     ].includes(event.key)
                 ) {
                     interaction.current = false;
-                    requestApply(Number(event.currentTarget.value));
+                    requestApply(Number(event.currentTarget.value), true);
                 }
             }}
             onBlur={(event) => {
                 if (interaction.current) {
                     interaction.current = false;
-                    requestApply(Number(event.currentTarget.value));
+                    requestApply(Number(event.currentTarget.value), true);
                 }
             }}
             onChange={(event) => {

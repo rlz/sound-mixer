@@ -50,9 +50,10 @@ export function App() {
         key: string,
         command: BridgeCommand,
         rollback?: () => void,
+        concurrent = false,
     ): Promise<boolean> => {
-        if (!window.soundMixerBridge || pending) return false;
-        setPending(key);
+        if (!window.soundMixerBridge || (!concurrent && pending)) return false;
+        if (!concurrent) setPending(key);
         setCommandError(null);
         try {
             await window.soundMixerBridge.send(command);
@@ -66,7 +67,7 @@ export function App() {
             );
             return false;
         } finally {
-            setPending(null);
+            if (!concurrent) setPending(null);
         }
     };
 
@@ -1380,8 +1381,8 @@ export function App() {
                                                             output.volume ?? 0
                                                         }
                                                         label={`${output.name} device volume`}
+                                                        coalesceMs={75}
                                                         disabled={
-                                                            pending !== null ||
                                                             !output.available ||
                                                             !output.volumeWritable
                                                         }
@@ -1394,6 +1395,8 @@ export function App() {
                                                                     uid: output.uid,
                                                                     level,
                                                                 },
+                                                                undefined,
+                                                                true,
                                                             )
                                                         }
                                                     />
