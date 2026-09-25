@@ -6,10 +6,13 @@ type PeakMeterProps = {
 export function PeakMeter({ level, label }: PeakMeterProps) {
     const active = typeof level === "number" && Number.isFinite(level);
     const peak = active ? Math.min(Math.max(level, 0), 1) : 0;
-    const decibels = peak === 0 ? "−∞" : (20 * Math.log10(peak)).toFixed(1);
-    const description = active ? `${decibels} dBFS` : "Inactive";
-    const visualLevel =
-        peak === 0 ? 0 : Math.max(0.02, (20 * Math.log10(peak) + 60) / 60);
+    const decibels = peak > 0 ? 20 * Math.log10(peak) : -Infinity;
+    const description = !active
+        ? "Inactive"
+        : decibels <= -60
+          ? "No signal"
+          : `${decibels.toFixed(1)} dBFS`;
+    const visualLevel = peak === 0 ? 0 : Math.max(0.02, (decibels + 60) / 60);
 
     return (
         <div

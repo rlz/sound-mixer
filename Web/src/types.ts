@@ -29,6 +29,7 @@ export type MixInputState = {
     channelRouting: ("ignore" | "first" | "second" | "both")[];
     channelLevels: number[];
     channelsLinked: boolean;
+    muted: boolean;
     levelReading: number | null;
 };
 

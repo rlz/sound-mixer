@@ -634,6 +634,7 @@ extension AppDelegate {
                     channelRouting: input.channelRouting.map(\.rawValue),
                     channelLevels: input.channelLevels,
                     channelsLinked: input.channelsLinked,
+                    muted: configuration.mutedSources.contains(input.source),
                     levelReading: renderLevels["\(targetKey)/\(AudioGraphRenderer.sourceMeterKey(input.source))"]
                 )
             }

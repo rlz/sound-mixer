@@ -833,14 +833,16 @@ export function App() {
                                                                 {name}
                                                             </span>
                                                             <span
-                                                                className={`text-xs ${available ? "text-emerald-300" : "text-amber-300"}`}
+                                                                className={`text-xs ${input.muted ? "text-amber-300" : available ? "text-emerald-300" : "text-amber-300"}`}
                                                             >
-                                                                {available
-                                                                    ? captureState ===
-                                                                      "capturing"
-                                                                        ? "Capturing"
-                                                                        : "Available"
-                                                                    : "Unavailable"}
+                                                                {input.muted
+                                                                    ? "Muted"
+                                                                    : available
+                                                                      ? captureState ===
+                                                                        "capturing"
+                                                                          ? "Capturing"
+                                                                          : "Available"
+                                                                      : "Unavailable"}
                                                             </span>
                                                             {unavailableReason && (
                                                                 <span
