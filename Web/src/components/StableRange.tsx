@@ -24,9 +24,16 @@ export function StableRange({
     const [draft, setDraft] = useState(value);
     const interaction = useRef(false);
     const committedValue = useRef<number | null>(null);
+    const latestValue = useRef<number | null>(null);
+    const applying = useRef(false);
 
     useEffect(() => {
-        if (interaction.current) return;
+        if (
+            interaction.current ||
+            applying.current ||
+            latestValue.current !== null
+        )
+            return;
         if (
             committedValue.current !== null &&
             Math.abs(value - committedValue.current) < 0.000001
@@ -36,14 +43,28 @@ export function StableRange({
         if (committedValue.current === null) setDraft(value);
     }, [value]);
 
-    const commit = async (next: number) => {
-        interaction.current = false;
-        committedValue.current = next;
-        setDraft(next);
-        if (!(await onCommit(next))) {
-            committedValue.current = null;
-            setDraft(value);
+    const applyLatest = async () => {
+        if (applying.current) return;
+        applying.current = true;
+        while (latestValue.current !== null) {
+            const next = latestValue.current;
+            latestValue.current = null;
+            committedValue.current = next;
+            if (!(await onCommit(next))) {
+                committedValue.current = null;
+                setDraft(value);
+                latestValue.current = null;
+                break;
+            }
         }
+        applying.current = false;
+    };
+
+    const requestApply = (next: number) => {
+        if (committedValue.current === next && latestValue.current === null)
+            return;
+        latestValue.current = next;
+        void applyLatest();
     };
 
     return (
@@ -60,7 +81,8 @@ export function StableRange({
                 interaction.current = true;
             }}
             onPointerUp={(event) => {
-                void commit(Number(event.currentTarget.value));
+                interaction.current = false;
+                requestApply(Number(event.currentTarget.value));
             }}
             onPointerCancel={() => {
                 interaction.current = false;
@@ -95,15 +117,22 @@ export function StableRange({
                         "PageDown",
                     ].includes(event.key)
                 ) {
-                    void commit(Number(event.currentTarget.value));
+                    interaction.current = false;
+                    requestApply(Number(event.currentTarget.value));
                 }
             }}
             onBlur={(event) => {
                 if (interaction.current) {
-                    void commit(Number(event.currentTarget.value));
+                    interaction.current = false;
+                    requestApply(Number(event.currentTarget.value));
                 }
             }}
-            onChange={(event) => setDraft(Number(event.currentTarget.value))}
+            onChange={(event) => {
+                const next = Number(event.currentTarget.value);
+                interaction.current = true;
+                setDraft(next);
+                requestApply(next);
+            }}
         />
     );
 }

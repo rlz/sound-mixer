@@ -1,9 +1,11 @@
 import Foundation
+import Synchronization
 
 /// Renders one configured output from a validated graph. Source queues are drained
 /// once per block, and each shared bus is rendered once in dependency order.
 final class AudioGraphRenderer {
     private let outputMix: Mix
+    private let outputDeviceUID: DeviceUID
     private let busesByID: [UUID: VirtualBus]
     private let busOrder: [UUID]
     private let sourceRings: [String: RealtimeAudioRingBuffer]
@@ -26,6 +28,7 @@ final class AudioGraphRenderer {
         meters: [String: RealtimePeakMeter]
     ) {
         outputMix = output.mix
+        outputDeviceUID = output.deviceUID
         mutedSources = Set(graph.configuration.mutedSources)
         busDestinationMeters = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map {
             ($0.id, meters["bus:\($0.id.uuidString)/destination"])
@@ -91,6 +94,18 @@ final class AudioGraphRenderer {
         outputDestinationMeter?.record(left: UnsafeBufferPointer(left), right: UnsafeBufferPointer(right), frameCount: frames)
     }
 
+    /// Publishes gain changes to the render thread without rebuilding its audio graph.
+    func updateGains(from graph: MixGraphSnapshot) {
+        let busMixes = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map { ($0.id, $0.mix) })
+        for (id, states) in mixStates {
+            guard let mix = busMixes[id] else { continue }
+            Self.update(states: states, mix: mix, mutedSources: Set(graph.configuration.mutedSources))
+        }
+        if let mix = graph.configuration.outputMixes.first(where: { $0.deviceUID == outputDeviceUID })?.mix {
+            Self.update(states: outputState, mix: mix, mutedSources: Set(graph.configuration.mutedSources))
+        }
+    }
+
     private func renderMix(
         _ mix: Mix,
         states: [MixInputState],
@@ -110,7 +125,7 @@ final class AudioGraphRenderer {
         for (index, input) in mix.inputs.enumerated() where index < states.count {
             let state = states[index]
             if case .inputDevice = input.source {
-                renderPhysicalInput(input, state: state, mixLevel: mix.level, into: destination, frames: frames)
+                renderPhysicalInput(input, state: state, into: destination, frames: frames)
                 continue
             }
             let sourceLeft: UnsafeBufferPointer<Float>
@@ -127,8 +142,8 @@ final class AudioGraphRenderer {
             case .inputDevice:
                 continue
             }
-            state.engine.setSourceGain(Float(mutedSources.contains(input.source) ? 0 : input.level))
-            state.engine.setMainGain(Float(mix.level))
+            state.engine.setSourceGain(state.sourceGain.load(ordering: .relaxed))
+            state.engine.setMainGain(state.mainGain.load(ordering: .relaxed))
             if state.isMono {
                 _ = state.engine.mix(
                     mono: sourceLeft, placement: input.monoPlacement,
@@ -148,7 +163,6 @@ final class AudioGraphRenderer {
     private func renderPhysicalInput(
         _ input: MixInput,
         state: MixInputState,
-        mixLevel: Double,
         into destination: (UnsafeMutableBufferPointer<Float>, UnsafeMutableBufferPointer<Float>),
         frames: Int
     ) {
@@ -158,9 +172,9 @@ final class AudioGraphRenderer {
             let routing = channel < input.channelRouting.count ? input.channelRouting[channel] : .ignore
             guard let placement = Self.placement(for: routing) else { continue }
             var engine = state.channelEngines[channel]
-            let channelGain = channel < input.channelLevels.count ? input.channelLevels[channel] : 1
-            engine.setSourceGain(Float(mutedSources.contains(input.source) ? 0 : input.level * channelGain))
-            engine.setMainGain(Float(mixLevel))
+            let channelGain = channel < state.channelGains.count ? state.channelGains[channel].value.load(ordering: .relaxed) : 1
+            engine.setSourceGain(channelGain)
+            engine.setMainGain(state.mainGain.load(ordering: .relaxed))
             rowPeak = max(
                 rowPeak,
                 engine.mix(
@@ -171,6 +185,19 @@ final class AudioGraphRenderer {
             state.channelEngines[channel] = engine
         }
         state.peakMeter?.record(peak: rowPeak)
+    }
+
+    private static func update(states: [MixInputState], mix: Mix, mutedSources: Set<SourceReference>) {
+        for (index, input) in mix.inputs.enumerated() where index < states.count {
+            let state = states[index]
+            let muted = mutedSources.contains(input.source)
+            state.sourceGain.store(Float(muted ? 0 : input.level), ordering: .relaxed)
+            state.mainGain.store(Float(mix.level), ordering: .relaxed)
+            for channel in state.channelGains.indices {
+                let gain = channel < input.channelLevels.count ? input.channelLevels[channel] : 1
+                state.channelGains[channel].value.store(Float(muted ? 0 : input.level * gain), ordering: .relaxed)
+            }
+        }
     }
 
     private static func placement(for routing: ChannelRouting) -> MonoPlacement? {
@@ -227,6 +254,9 @@ private final class MixInputState {
     let isMono: Bool
     let sourceKey: String
     let peakMeter: RealtimePeakMeter?
+    let sourceGain = Atomic<Float>(1)
+    let mainGain = Atomic<Float>(1)
+    let channelGains: [RealtimeGain]
 
     init(sampleRate: Double, isMono: Bool, sourceKey: String, peakMeter: RealtimePeakMeter?, channelCount: Int) {
         engine = StereoMixingEngine(sampleRate: sampleRate)
@@ -234,6 +264,15 @@ private final class MixInputState {
         self.isMono = isMono
         self.sourceKey = sourceKey
         self.peakMeter = peakMeter
+        channelGains = (0 ..< channelCount).map { _ in RealtimeGain(1) }
+    }
+}
+
+private final class RealtimeGain {
+    let value: Atomic<Float>
+
+    init(_ initialValue: Float) {
+        value = Atomic(initialValue)
     }
 }
 

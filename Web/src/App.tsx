@@ -581,7 +581,6 @@ export function App() {
                                         <StableRange
                                             value={selectedMix.level}
                                             label="Virtual destination mix gain"
-                                            disabled={pending !== null}
                                             onCommit={(level) =>
                                                 send(
                                                     `virtual-level:${selectedTarget.id}`,
@@ -874,9 +873,6 @@ export function App() {
                                                         </div>
                                                         <button
                                                             type="button"
-                                                            disabled={
-                                                                pending !== null
-                                                            }
                                                             className="text-xs text-rose-300 underline"
                                                             onClick={() =>
                                                                 void send(
@@ -933,9 +929,6 @@ export function App() {
                                                                 "application"
                                                                     ? formatApplicationGain
                                                                     : undefined
-                                                            }
-                                                            disabled={
-                                                                pending !== null
                                                             }
                                                             onCommit={(value) =>
                                                                 send(
@@ -1012,10 +1005,6 @@ export function App() {
                                                                             type="checkbox"
                                                                             checked={
                                                                                 input.channelsLinked
-                                                                            }
-                                                                            disabled={
-                                                                                pending !==
-                                                                                null
                                                                             }
                                                                             onChange={(
                                                                                 event,
@@ -1154,11 +1143,9 @@ export function App() {
                                                                                                     : `${name} channel ${index + 1} level`
                                                                                             }
                                                                                             disabled={
-                                                                                                pending !==
-                                                                                                    null ||
-                                                                                                (input.channelsLinked &&
-                                                                                                    index >
-                                                                                                        0)
+                                                                                                input.channelsLinked &&
+                                                                                                index >
+                                                                                                    0
                                                                                             }
                                                                                             onCommit={(
                                                                                                 value,

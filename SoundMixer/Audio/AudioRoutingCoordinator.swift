@@ -44,6 +44,16 @@ final class AudioRoutingCoordinator {
         }
         let enabled = graph.configuration.isEnabled
         guard needsUpdate(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled) else { return false }
+        if let lastGraph, enabled, Self.hasOnlyGainChanges(from: lastGraph.configuration, to: graph.configuration),
+           lastDevices.count == orderedDevices.count,
+           zip(lastDevices, orderedDevices).allSatisfy({ $0.hasSameRouting(as: $1) }),
+           lastProcesses == orderedProcesses {
+            for renderer in renderers.values {
+                renderer.updateGains(from: graph)
+            }
+            remember(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled)
+            return false
+        }
         onRoutingReset?()
         remember(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled)
         stopCurrentRouting()
@@ -168,6 +178,7 @@ final class AudioRoutingCoordinator {
             targetKey: route.targetKey,
             meters: renderMeters
         )
+        renderer.updateGains(from: graph)
         do {
             try output.start(
                 route: CoreAudioOutputCoordinator.Route(
@@ -185,6 +196,23 @@ final class AudioRoutingCoordinator {
             onRouteError?(route.key, error.localizedDescription)
             return nil
         }
+    }
+
+    private static func hasOnlyGainChanges(from old: MixerConfiguration, to new: MixerConfiguration) -> Bool {
+        func normalized(_ source: MixerConfiguration) -> MixerConfiguration {
+            var copy = source
+            func normalize(_ mix: inout Mix) {
+                mix.level = 1
+                for index in mix.inputs.indices {
+                    mix.inputs[index].level = 1
+                    mix.inputs[index].channelLevels = Array(repeating: 1, count: mix.inputs[index].channelLevels.count)
+                }
+            }
+            for index in copy.outputMixes.indices { normalize(&copy.outputMixes[index].mix) }
+            for index in copy.buses.indices { normalize(&copy.buses[index].mix) }
+            return copy
+        }
+        return normalized(old) == normalized(new)
     }
 
     private func startCapture(
