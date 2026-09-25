@@ -27,6 +27,8 @@ final class CoreAudioDeviceCatalog {
         let original: Float32
         let lastSet: Float32
         let selector: AudioObjectPropertySelector
+        let originalMute: Bool?
+        let lastSetMute: Bool?
     }
 
     private let queue = DispatchQueue(label: "com.rlz.soundmixer.core-audio-catalog")
@@ -86,32 +88,66 @@ final class CoreAudioDeviceCatalog {
         else { throw VolumeError.unsupported }
 
         let requested = Float32(level)
+        let mute = CoreAudioOutputMute.read(deviceID: device.deviceID)
+        if originalVolumes[uid] == nil {
+            originalVolumes[uid] = VolumeRestoreState(
+                original: control.value,
+                lastSet: control.value,
+                selector: control.address.mSelector,
+                originalMute: mute?.value,
+                lastSetMute: mute?.value
+            )
+        }
         try CoreAudioOutputVolume.write(requested, deviceID: device.deviceID, address: control.address)
         let readback = CoreAudioOutputVolume.read(deviceID: device.deviceID)?.value
         let actual = readback ?? requested
         let lastSet = actual == control.value && requested != control.value ? requested : actual
         if let previous = originalVolumes[uid] {
             originalVolumes[uid] = VolumeRestoreState(
-                original: previous.original, lastSet: lastSet, selector: control.address.mSelector
+                original: previous.original,
+                lastSet: lastSet,
+                selector: control.address.mSelector,
+                originalMute: previous.originalMute,
+                lastSetMute: previous.lastSetMute
             )
-        } else {
-            originalVolumes[uid] = VolumeRestoreState(
-                original: control.value, lastSet: lastSet, selector: control.address.mSelector
-            )
+        }
+        if let mute, mute.writable {
+            let shouldMute = requested == 0
+            try CoreAudioOutputMute.write(shouldMute, deviceID: device.deviceID, address: mute.address)
+            if let previous = originalVolumes[uid] {
+                originalVolumes[uid] = VolumeRestoreState(
+                    original: previous.original,
+                    lastSet: previous.lastSet,
+                    selector: previous.selector,
+                    originalMute: previous.originalMute,
+                    lastSetMute: shouldMute
+                )
+            }
         }
         return Double(actual)
     }
 
     private func restoreOutputVolumes() {
         for (uid, saved) in originalVolumes {
-            guard let device = latestDevices.first(where: { $0.uid == uid }), device.isAlive,
-                  let current = CoreAudioOutputVolume.read(deviceID: device.deviceID), current.writable,
-                  current.address.mSelector == saved.selector,
-                  abs(current.value - saved.lastSet) <= 0.015
-            else { continue }
-            try? CoreAudioOutputVolume.write(saved.original, deviceID: device.deviceID, address: current.address)
+            guard let device = latestDevices.first(where: { $0.uid == uid }), device.isAlive else { continue }
+            restoreVolume(saved, deviceID: device.deviceID)
+            restoreMute(saved, deviceID: device.deviceID)
         }
         originalVolumes.removeAll()
+    }
+
+    private func restoreVolume(_ saved: VolumeRestoreState, deviceID: AudioDeviceID) {
+        guard let current = CoreAudioOutputVolume.read(deviceID: deviceID), current.writable,
+              current.address.mSelector == saved.selector,
+              abs(current.value - saved.lastSet) <= 0.015 else { return }
+        try? CoreAudioOutputVolume.write(saved.original, deviceID: deviceID, address: current.address)
+    }
+
+    private func restoreMute(_ saved: VolumeRestoreState, deviceID: AudioDeviceID) {
+        guard let originalMute = saved.originalMute, let lastSetMute = saved.lastSetMute,
+              let current = CoreAudioOutputMute.read(deviceID: deviceID), current.writable,
+              current.value == lastSetMute else { return }
+        try? CoreAudioOutputMute.write(originalMute, deviceID: deviceID, address: current.address)
     }
 
     private func refresh() {
@@ -168,7 +204,8 @@ final class CoreAudioDeviceCatalog {
             Self.address(kAudioDevicePropertyStreamConfiguration, scope: kAudioDevicePropertyScopeOutput),
             Self.address(kAudioDevicePropertyNominalSampleRate),
             Self.address(kAudioHardwareServiceDeviceProperty_VirtualMainVolume, scope: kAudioDevicePropertyScopeOutput),
-            Self.address(kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeOutput)
+            Self.address(kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeOutput),
+            Self.address(kAudioDevicePropertyMute, scope: kAudioDevicePropertyScopeOutput)
         ]
         var listeners: [(AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)] = []
         for var address in selectors {
@@ -285,6 +322,38 @@ private enum CoreAudioOutputVolume {
         var value = value
         let status = AudioObjectSetPropertyData(
             deviceID, &address, 0, nil, UInt32(MemoryLayout<Float32>.size), &value
+        )
+        guard status == noErr else { throw VolumeError.audioStatus(status) }
+    }
+}
+
+private enum CoreAudioOutputMute {
+    struct Control {
+        let address: AudioObjectPropertyAddress
+        let value: Bool
+        let writable: Bool
+    }
+
+    static func read(deviceID: AudioDeviceID) -> Control? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyMute,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        guard AudioObjectHasProperty(deviceID, &address) else { return nil }
+        var rawValue = UInt32(0)
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &rawValue) == noErr else { return nil }
+        var settable = DarwinBoolean(false)
+        let writable = AudioObjectIsPropertySettable(deviceID, &address, &settable) == noErr && settable.boolValue
+        return Control(address: address, value: rawValue != 0, writable: writable)
+    }
+
+    static func write(_ muted: Bool, deviceID: AudioDeviceID, address: AudioObjectPropertyAddress) throws {
+        var address = address
+        var value: UInt32 = muted ? 1 : 0
+        let status = AudioObjectSetPropertyData(
+            deviceID, &address, 0, nil, UInt32(MemoryLayout<UInt32>.size), &value
         )
         guard status == noErr else { throw VolumeError.audioStatus(status) }
     }

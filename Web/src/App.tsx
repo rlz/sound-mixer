@@ -1381,7 +1381,6 @@ export function App() {
                                                             output.volume ?? 0
                                                         }
                                                         label={`${output.name} device volume`}
-                                                        coalesceMs={75}
                                                         disabled={
                                                             !output.available ||
                                                             !output.volumeWritable
@@ -1410,7 +1409,8 @@ export function App() {
                                                     output.volumeWritable && (
                                                         <p className="mt-1 text-slate-500">
                                                             Previous device
-                                                            volume is restored
+                                                            volume and mute
+                                                            state are restored
                                                             on exit.
                                                         </p>
                                                     )}

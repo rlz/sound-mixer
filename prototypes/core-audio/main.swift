@@ -94,6 +94,58 @@ func devices() throws -> [Device] {
     }
 }
 
+func outputVolumeControls(_ id: AudioDeviceID) -> [String] {
+    let controls = [
+        ("VirtualMainVolume", kAudioHardwareServiceDeviceProperty_VirtualMainVolume),
+        ("VolumeScalar", kAudioDevicePropertyVolumeScalar)
+    ]
+    let volumeReadings = controls.compactMap { name, selector in
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        guard AudioObjectHasProperty(id, &address) else { return "\(name)=unavailable" }
+        var value = Float32(0)
+        var size = UInt32(MemoryLayout<Float32>.size)
+        guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr else {
+            return "\(name)=read-error"
+        }
+        var settable = DarwinBoolean(false)
+        let canSet = AudioObjectIsPropertySettable(id, &address, &settable) == noErr && settable.boolValue
+        return "\(name)=\(value) writable=\(canSet)"
+    }
+    var muteAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioDevicePropertyMute,
+        mScope: kAudioDevicePropertyScopeOutput,
+        mElement: kAudioObjectPropertyElementMain
+    )
+    let muteReading: String
+    if AudioObjectHasProperty(id, &muteAddress) {
+        var value = UInt32(0)
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        if AudioObjectGetPropertyData(id, &muteAddress, 0, nil, &size, &value) == noErr {
+            var settable = DarwinBoolean(false)
+            let canSet = AudioObjectIsPropertySettable(id, &muteAddress, &settable) == noErr && settable.boolValue
+            muteReading = "Mute=\(value != 0) writable=\(canSet)"
+        } else {
+            muteReading = "Mute=read-error"
+        }
+    } else {
+        muteReading = "Mute=unavailable"
+    }
+    return volumeReadings + [muteReading]
+}
+
+func defaultOutputDeviceID() -> AudioDeviceID? {
+    try? property(
+        object: AudioObjectID(kAudioObjectSystemObject),
+        selector: kAudioHardwarePropertyDefaultOutputDevice,
+        scope: kAudioObjectPropertyScopeGlobal,
+        as: AudioDeviceID.self
+    )
+}
+
 func makeUnit(_ id: AudioDeviceID, input: Bool) throws -> AudioUnit {
     var description = AudioComponentDescription(
         componentType: kAudioUnitType_Output,
@@ -336,8 +388,11 @@ func runProbe(_ options: ProbeOptions) throws {
 
 do {
     let all = try devices()
+    let defaultOutputID = defaultOutputDeviceID()
     for device in all {
-        print("\(device.uid) | \(device.name) | input=\(device.inputs) output=\(device.outputs) rate=\(device.rate)")
+        let isDefault = device.id == defaultOutputID
+        let volumes = outputVolumeControls(device.id).joined(separator: " | ")
+        print("\(isDefault ? "[default] " : "")\(device.uid) | \(device.name) | input=\(device.inputs) output=\(device.outputs) rate=\(device.rate) | \(volumes)")
     }
     if CommandLine.arguments.dropFirst().first == "probe" {
         try runProbe(parseOptions(CommandLine.arguments, devices: all))
