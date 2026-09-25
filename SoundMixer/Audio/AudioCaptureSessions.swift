@@ -10,6 +10,22 @@ final class AudioProcessCaptureSession {
     weak var owner: AudioCaptureCoordinator?
     var procID: AudioDeviceIOProcID?
     var format = AudioStreamBasicDescription()
+    private let lastDeliveredAt = Atomic<UInt64>(0)
+    private var startedAt: UInt64 = 0
+
+    var captureState: AudioCaptureState {
+        let now = DispatchTime.now().uptimeNanoseconds
+        let deliveredAt = lastDeliveredAt.load(ordering: .acquiring)
+        if deliveredAt > 0, now >= deliveredAt, now - deliveredAt <= 500_000_000 {
+            return .capturing
+        }
+        if startedAt > 0, now >= startedAt, now - startedAt > 1_000_000_000 {
+            return .unavailable(
+                "The system audio tap is not delivering audio. Check System Audio Recording permission and app playback."
+            )
+        }
+        return .starting
+    }
 
     init(id: String, tap: AudioObjectID, aggregate: AudioObjectID, owner: AudioCaptureCoordinator) {
         captureID = "application:\(id)"
@@ -34,10 +50,14 @@ final class AudioProcessCaptureSession {
             let buffers = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input))
             let bytesPerFrame = max(1, Int(session.format.mBytesPerFrame))
             let frames = buffers.first.map { UInt32(Int($0.mDataByteSize) / bytesPerFrame) } ?? 0
+            if frames > 0 {
+                session.lastDeliveredAt.store(DispatchTime.now().uptimeNanoseconds, ordering: .releasing)
+            }
             session.owner?.deliver(id: session.captureID, buffers: input, frames: frames, format: session.format)
             return noErr
         }, Unmanaged.passUnretained(self).toOpaque(), &procID)
         guard status == noErr, let procID else { throw AudioCaptureCoordinator.CaptureError.audioStatus(status) }
+        startedAt = DispatchTime.now().uptimeNanoseconds
         let startStatus = AudioDeviceStart(aggregate, procID)
         guard startStatus == noErr else { throw AudioCaptureCoordinator.CaptureError.audioStatus(startStatus) }
     }

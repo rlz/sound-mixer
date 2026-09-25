@@ -4,7 +4,8 @@ export type OutputState = {
     isBlackHole: boolean;
     available: boolean;
     outputChannels: number;
-    level: number;
+    volume: number | null;
+    volumeWritable: boolean;
     configured: boolean;
     levelReading: number | null;
     routeError?: string | null;
@@ -76,7 +77,13 @@ export type BridgeCommand =
     | { command: "ready" }
     | { command: "openPrivacySettings" }
     | { command: "setMasterEnabled"; enabled: boolean }
-    | { command: "setOutputLevel"; uid: string; level: number }
+    | { command: "setDeviceVolume"; uid: string; level: number }
+    | {
+          command: "setVirtualMixLevel";
+          target: "bus" | "route";
+          id: string;
+          level: number;
+      }
     | { command: "deleteOutputMix"; uid: string }
     | {
           command: "setSourceMuted";

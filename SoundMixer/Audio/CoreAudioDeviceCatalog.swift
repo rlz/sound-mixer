@@ -1,3 +1,4 @@
+import AudioToolbox
 import CoreAudio
 import Foundation
 
@@ -9,14 +10,30 @@ struct AudioDeviceSnapshot: Equatable, Sendable {
     let inputChannels: Int
     let outputChannels: Int
     let nominalSampleRate: Double
+    let outputVolume: Double?
+    let canSetOutputVolume: Bool
+
+    func hasSameRouting(as other: AudioDeviceSnapshot) -> Bool {
+        deviceID == other.deviceID && uid == other.uid && isAlive == other.isAlive &&
+            inputChannels == other.inputChannels && outputChannels == other.outputChannels &&
+            nominalSampleRate == other.nominalSampleRate
+    }
 }
 
 final class CoreAudioDeviceCatalog {
     var onChange: (([AudioDeviceSnapshot]) -> Void)?
 
+    private struct VolumeRestoreState {
+        let original: Float32
+        let lastSet: Float32
+        let selector: AudioObjectPropertySelector
+    }
+
     private let queue = DispatchQueue(label: "com.rlz.soundmixer.core-audio-catalog")
     private var deviceListeners: [AudioDeviceID: [(AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)]] = [:]
     private var deviceListListener: AudioObjectPropertyListenerBlock?
+    private var latestDevices: [AudioDeviceSnapshot] = []
+    private var originalVolumes: [String: VolumeRestoreState] = [:]
     private var started = false
 
     deinit { stop() }
@@ -37,6 +54,7 @@ final class CoreAudioDeviceCatalog {
         queue.sync {
             guard started else { return }
             started = false
+            restoreOutputVolumes()
             var address = Self.address(kAudioHardwarePropertyDevices)
             if let deviceListListener {
                 AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, queue, deviceListListener)
@@ -46,7 +64,58 @@ final class CoreAudioDeviceCatalog {
         }
     }
 
+    func setOutputVolume(uid: String, level: Double, completion: @escaping (Result<Double, Error>) -> Void) {
+        queue.async { [weak self] in
+            let result: Result<Double, Error>
+            do {
+                guard let self else { throw VolumeError.deviceUnavailable }
+                result = try .success(setOutputVolume(uid: uid, level: level))
+                refresh()
+            } catch {
+                result = .failure(error)
+            }
+            DispatchQueue.main.async { completion(result) }
+        }
+    }
+
+    private func setOutputVolume(uid: String, level: Double) throws -> Double {
+        guard started, let device = latestDevices.first(where: { $0.uid == uid }),
+              device.isAlive, device.outputChannels > 0 else { throw VolumeError.deviceUnavailable }
+        guard !device.name.localizedCaseInsensitiveContains("BlackHole"),
+              let control = CoreAudioOutputVolume.read(deviceID: device.deviceID), control.writable
+        else { throw VolumeError.unsupported }
+
+        let requested = Float32(level)
+        try CoreAudioOutputVolume.write(requested, deviceID: device.deviceID, address: control.address)
+        let readback = CoreAudioOutputVolume.read(deviceID: device.deviceID)?.value
+        let actual = readback ?? requested
+        let lastSet = actual == control.value && requested != control.value ? requested : actual
+        if let previous = originalVolumes[uid] {
+            originalVolumes[uid] = VolumeRestoreState(
+                original: previous.original, lastSet: lastSet, selector: control.address.mSelector
+            )
+        } else {
+            originalVolumes[uid] = VolumeRestoreState(
+                original: control.value, lastSet: lastSet, selector: control.address.mSelector
+            )
+        }
+        return Double(actual)
+    }
+
+    private func restoreOutputVolumes() {
+        for (uid, saved) in originalVolumes {
+            guard let device = latestDevices.first(where: { $0.uid == uid }), device.isAlive,
+                  let current = CoreAudioOutputVolume.read(deviceID: device.deviceID), current.writable,
+                  current.address.mSelector == saved.selector,
+                  abs(current.value - saved.lastSet) <= 0.015
+            else { continue }
+            try? CoreAudioOutputVolume.write(saved.original, deviceID: device.deviceID, address: current.address)
+        }
+        originalVolumes.removeAll()
+    }
+
     private func refresh() {
+        guard started else { return }
         guard let ids = readDeviceIDs() else { return }
         let present = Set(ids)
         for id in Array(deviceListeners.keys) where !present.contains(id) {
@@ -54,10 +123,15 @@ final class CoreAudioDeviceCatalog {
         }
 
         let snapshots = ids.compactMap { id -> AudioDeviceSnapshot? in
+            guard let uid = stringProperty(id, kAudioDevicePropertyDeviceUID) else { return nil }
+            // A process tap's private aggregate is an implementation resource, not a user input device.
+            guard !uid.hasPrefix(AudioCaptureCoordinator.tapAggregateUIDPrefix) else {
+                removeListeners(for: id)
+                return nil
+            }
             installListeners(for: id)
-            guard let uid = stringProperty(id, kAudioDevicePropertyDeviceUID),
-                  let name = stringProperty(id, kAudioObjectPropertyName)
-            else { return nil }
+            guard let name = stringProperty(id, kAudioObjectPropertyName) else { return nil }
+            let volume = CoreAudioOutputVolume.read(deviceID: id)
             return AudioDeviceSnapshot(
                 deviceID: id,
                 uid: uid,
@@ -65,9 +139,12 @@ final class CoreAudioDeviceCatalog {
                 isAlive: boolProperty(id, kAudioDevicePropertyDeviceIsAlive) ?? false,
                 inputChannels: channelCount(id, kAudioDevicePropertyScopeInput),
                 outputChannels: channelCount(id, kAudioDevicePropertyScopeOutput),
-                nominalSampleRate: doubleProperty(id, kAudioDevicePropertyNominalSampleRate) ?? 0
+                nominalSampleRate: doubleProperty(id, kAudioDevicePropertyNominalSampleRate) ?? 0,
+                outputVolume: volume.map { Double($0.value) },
+                canSetOutputVolume: volume?.writable ?? false
             )
         }
+        latestDevices = snapshots
         DispatchQueue.main.async { [weak self] in self?.onChange?(snapshots) }
     }
 
@@ -89,13 +166,16 @@ final class CoreAudioDeviceCatalog {
             Self.address(kAudioObjectPropertyName), Self.address(kAudioDevicePropertyDeviceIsAlive),
             Self.address(kAudioDevicePropertyStreamConfiguration, scope: kAudioDevicePropertyScopeInput),
             Self.address(kAudioDevicePropertyStreamConfiguration, scope: kAudioDevicePropertyScopeOutput),
-            Self.address(kAudioDevicePropertyNominalSampleRate)
+            Self.address(kAudioDevicePropertyNominalSampleRate),
+            Self.address(kAudioHardwareServiceDeviceProperty_VirtualMainVolume, scope: kAudioDevicePropertyScopeOutput),
+            Self.address(kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeOutput)
         ]
         var listeners: [(AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)] = []
         for var address in selectors {
             let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.refresh() }
-            AudioObjectAddPropertyListenerBlock(id, &address, queue, listener)
-            listeners.append((address, listener))
+            if AudioObjectAddPropertyListenerBlock(id, &address, queue, listener) == noErr {
+                listeners.append((address, listener))
+            }
         }
         deviceListeners[id] = listeners
     }
@@ -154,5 +234,58 @@ final class CoreAudioDeviceCatalog {
         scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal
     ) -> AudioObjectPropertyAddress {
         AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
+    }
+}
+
+private enum VolumeError: LocalizedError {
+    case deviceUnavailable
+    case unsupported
+    case audioStatus(OSStatus)
+
+    var errorDescription: String? {
+        switch self {
+        case .deviceUnavailable: "The output device is unavailable."
+        case .unsupported: "This output device does not expose a writable main volume control."
+        case let .audioStatus(status): "Core Audio could not set device volume (status \(status))."
+        }
+    }
+}
+
+private enum CoreAudioOutputVolume {
+    struct Control {
+        let address: AudioObjectPropertyAddress
+        let value: Float32
+        let writable: Bool
+    }
+
+    static func read(deviceID: AudioDeviceID) -> Control? {
+        var readable: Control?
+        for selector in [kAudioHardwareServiceDeviceProperty_VirtualMainVolume, kAudioDevicePropertyVolumeScalar] {
+            var address = AudioObjectPropertyAddress(
+                mSelector: selector, mScope: kAudioDevicePropertyScopeOutput, mElement: kAudioObjectPropertyElementMain
+            )
+            guard AudioObjectHasProperty(deviceID, &address) else { continue }
+            var value = Float32(0)
+            var size = UInt32(MemoryLayout<Float32>.size)
+            guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &value) == noErr,
+                  value.isFinite, (0 ... 1).contains(value) else { continue }
+            var settable = DarwinBoolean(false)
+            let writable = AudioObjectIsPropertySettable(deviceID, &address, &settable) == noErr && settable.boolValue
+            let control = Control(address: address, value: value, writable: writable)
+            if writable {
+                return control
+            }
+            readable = readable ?? control
+        }
+        return readable
+    }
+
+    static func write(_ value: Float32, deviceID: AudioDeviceID, address: AudioObjectPropertyAddress) throws {
+        var address = address
+        var value = value
+        let status = AudioObjectSetPropertyData(
+            deviceID, &address, 0, nil, UInt32(MemoryLayout<Float32>.size), &value
+        )
+        guard status == noErr else { throw VolumeError.audioStatus(status) }
     }
 }

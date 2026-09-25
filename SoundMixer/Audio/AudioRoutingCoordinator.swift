@@ -6,6 +6,7 @@ import Foundation
 /// replaced only after capture has stopped, so each ring keeps one producer.
 final class AudioRoutingCoordinator {
     var onRouteError: ((String, String) -> Void)?
+    var onRoutingReset: (() -> Void)?
 
     private let capture: AudioCaptureCoordinator
     private let output = CoreAudioOutputCoordinator()
@@ -29,11 +30,21 @@ final class AudioRoutingCoordinator {
     @discardableResult
     func update(graph: MixGraphSnapshot, devices: [AudioDeviceSnapshot], processes: [AudioProcessSnapshot]) -> Bool {
         let orderedDevices = devices.sorted { $0.uid < $1.uid }
-        let orderedProcesses = processes.sorted {
-            $0.applicationID == $1.applicationID ? $0.processID < $1.processID : $0.applicationID < $1.applicationID
+        let applicationKeys = Set(makeRoutes(graph.configuration).flatMap {
+            Self.sourceKeys(in: $0.mix, buses: graph.configuration.buses).filter { $0.hasPrefix("application:") }
+        })
+        let orderedProcesses = processes.filter { applicationKeys.contains("application:\($0.applicationID)") }.sorted {
+            if $0.applicationID != $1.applicationID {
+                return $0.applicationID < $1.applicationID
+            }
+            if $0.isProducingOutput != $1.isProducingOutput {
+                return $0.isProducingOutput
+            }
+            return $0.processID < $1.processID
         }
         let enabled = graph.configuration.isEnabled
         guard needsUpdate(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled) else { return false }
+        onRoutingReset?()
         remember(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled)
         stopCurrentRouting()
         guard enabled else { return true }
@@ -82,7 +93,9 @@ final class AudioRoutingCoordinator {
         processes: [AudioProcessSnapshot],
         enabled: Bool
     ) -> Bool {
-        lastGraph != graph || lastDevices != devices || lastProcesses != processes || lastEnabled != enabled
+        lastGraph != graph || lastDevices.count != devices.count ||
+            !zip(lastDevices, devices).allSatisfy { $0.hasSameRouting(as: $1) } ||
+            lastProcesses != processes || lastEnabled != enabled
     }
 
     private func remember(
@@ -273,11 +286,13 @@ extension AudioRoutingCoordinator {
 
     private func makeRoutes(_ configuration: MixerConfiguration) -> [RenderRoute] {
         var routes = configuration.outputMixes.map { output in
-            RenderRoute(
+            var mix = output.mix
+            mix.level = 1
+            return RenderRoute(
                 key: "output:\(output.deviceUID.rawValue)",
                 uid: output.deviceUID.rawValue,
                 channels: [0, 1],
-                mix: output.mix,
+                mix: mix,
                 targetKey: "output:\(output.deviceUID.rawValue)"
             )
         }

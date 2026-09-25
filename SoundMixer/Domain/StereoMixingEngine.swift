@@ -20,7 +20,7 @@ public struct StereoMixingEngine: Sendable {
     }
 
     public mutating func setSourceGain(_ gain: Float) {
-        targetSourceGain = gain.isFinite ? min(max(gain, 0), 1) : 0
+        targetSourceGain = gain.isFinite ? min(max(gain, 0), Float(MixInput.maximumApplicationGain)) : 0
     }
 
     public mutating func setMainGain(_ gain: Float) {

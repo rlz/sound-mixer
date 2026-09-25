@@ -16,6 +16,14 @@ import { PeakMeter } from "./components/PeakMeter";
 import { StableRange } from "./components/StableRange";
 import "./styles.css";
 
+const applicationGainToDecibels = (gain: number) =>
+    gain <= 0 ? -60 : Math.max(-60, 20 * Math.log10(gain));
+
+const formatApplicationGain = (decibels: number) =>
+    decibels <= -60
+        ? "Mute"
+        : `${decibels > 0 ? "+" : ""}${decibels.toFixed(1)} dB`;
+
 export function App() {
     const mixerState = useMixerStore((state) => state.mixerState);
     const setMixerState = useMixerStore((state) => state.setMixerState);
@@ -32,6 +40,8 @@ export function App() {
     const editingRouteId = useMixerStore((state) => state.editingRouteId);
     const setEditingRouteId = useMixerStore((state) => state.setEditingRouteId);
     const [routeDeviceUID, setRouteDeviceUID] = useState("");
+    const [applicationCatalogOpen, setApplicationCatalogOpen] = useState(false);
+    const [applicationSearch, setApplicationSearch] = useState("");
     const [openChannelEditor, setOpenChannelEditor] = useState<string | null>(
         null,
     );
@@ -124,6 +134,14 @@ export function App() {
                 level: null,
             },
     );
+    const availableApplications = (mixerState?.applications ?? [])
+        .filter((application) => application.available)
+        .filter((application) => !configuredApplicationIDs.has(application.id))
+        .filter((application) =>
+            `${application.name} ${application.id}`
+                .toLocaleLowerCase()
+                .includes(applicationSearch.trim().toLocaleLowerCase()),
+        );
 
     useEffect(() => {
         if (window.soundMixerBridge) {
@@ -135,6 +153,24 @@ export function App() {
                 });
         }
     }, [setMixerState]);
+
+    useEffect(() => {
+        if (selectedItem !== null || !mixerState) return;
+        const firstDestination =
+            mixerState.outputs.find(
+                (output) => output.available && !output.isBlackHole,
+            ) ??
+            mixerState.buses[0] ??
+            mixerState.blackHoleRoutes[0];
+        if (!firstDestination) return;
+        if ("uid" in firstDestination) {
+            setSelectedItem(`output:${firstDestination.uid}`);
+        } else if ("deviceUID" in firstDestination) {
+            setSelectedItem(`blackHole:${firstDestination.id}`);
+        } else {
+            setSelectedItem(`bus:${firstDestination.id}`);
+        }
+    }, [mixerState, selectedItem, setSelectedItem]);
 
     return (
         <main className="app-shell text-slate-100">
@@ -423,10 +459,10 @@ export function App() {
                                         value={
                                             selectedItem === "route:new"
                                                 ? ""
-                                                : busNameDraft ??
+                                                : (busNameDraft ??
                                                   selectedBus?.name ??
                                                   selectedRoute?.name ??
-                                                  ""
+                                                  "")
                                         }
                                         onChange={(event) =>
                                             setBusNameDraft(
@@ -480,7 +516,9 @@ export function App() {
                                     )}
                                     {selectedItem === "route:new" && (
                                         <p className="text-xs text-slate-400">
-                                            Sound Mixer assigns the lowest free adjacent stereo pair and names the route from its channels.
+                                            Sound Mixer assigns the lowest free
+                                            adjacent stereo pair and names the
+                                            route from its channels.
                                         </p>
                                     )}
                                     {selectedRoute && (
@@ -537,6 +575,36 @@ export function App() {
                                     level={selectedMix.levelReading}
                                     label="Destination output"
                                 />
+                                {selectedTarget.target !== "output" && (
+                                    <label className="mb-3 flex items-center gap-3 text-xs text-slate-300">
+                                        Mix gain
+                                        <StableRange
+                                            value={selectedMix.level}
+                                            label="Virtual destination mix gain"
+                                            disabled={pending !== null}
+                                            onCommit={(level) =>
+                                                send(
+                                                    `virtual-level:${selectedTarget.id}`,
+                                                    {
+                                                        command:
+                                                            "setVirtualMixLevel",
+                                                        target: selectedTarget.target as
+                                                            | "bus"
+                                                            | "route",
+                                                        id: selectedTarget.id,
+                                                        level,
+                                                    },
+                                                )
+                                            }
+                                        />
+                                        <span className="w-9 text-right tabular-nums">
+                                            {Math.round(
+                                                selectedMix.level * 100,
+                                            )}
+                                            %
+                                        </span>
+                                    </label>
+                                )}
                                 <div className="mb-4 flex flex-wrap items-end gap-3">
                                     <label className="min-w-56 flex-1 text-sm">
                                         Add a source
@@ -578,16 +646,6 @@ export function App() {
                                                     </option>
                                                 ),
                                             )}
-                                            {mixerState?.applications
-                                                .filter((app) => app.available)
-                                                .map((app) => (
-                                                    <option
-                                                        key={`application:${app.id}`}
-                                                        value={`application|${app.id}`}
-                                                    >
-                                                        {app.name} · application
-                                                    </option>
-                                                ))}
                                             {mixerState?.buses
                                                 .filter(
                                                     (bus) =>
@@ -634,8 +692,7 @@ export function App() {
                                 {selectedMix.inputs.length === 0 ? (
                                     <p className="text-sm text-slate-400">
                                         This mix is empty. Choose an input,
-                                        active application, or virtual bus
-                                        above.
+                                        input or virtual bus above.
                                     </p>
                                 ) : (
                                     <ul className="space-y-3">
@@ -839,14 +896,48 @@ export function App() {
                                                         </button>
                                                     </div>
                                                     <label className="flex items-center gap-3 text-xs">
-                                                        Source level{" "}
+                                                        {input.kind ===
+                                                        "application"
+                                                            ? "App gain"
+                                                            : "Source level"}{" "}
                                                         <StableRange
-                                                            value={input.level}
-                                                            label={`${name} source level`}
+                                                            value={
+                                                                input.kind ===
+                                                                "application"
+                                                                    ? applicationGainToDecibels(
+                                                                          input.level,
+                                                                      )
+                                                                    : input.level
+                                                            }
+                                                            label={`${name} ${input.kind === "application" ? "app gain" : "source level"}`}
+                                                            min={
+                                                                input.kind ===
+                                                                "application"
+                                                                    ? -60
+                                                                    : 0
+                                                            }
+                                                            max={
+                                                                input.kind ===
+                                                                "application"
+                                                                    ? 30
+                                                                    : 1
+                                                            }
+                                                            step={
+                                                                input.kind ===
+                                                                "application"
+                                                                    ? 0.5
+                                                                    : 0.01
+                                                            }
+                                                            formatValue={
+                                                                input.kind ===
+                                                                "application"
+                                                                    ? formatApplicationGain
+                                                                    : undefined
+                                                            }
                                                             disabled={
                                                                 pending !== null
                                                             }
-                                                            onCommit={(level) =>
+                                                            onCommit={(value) =>
                                                                 send(
                                                                     `mix-level:${input.id}`,
                                                                     {
@@ -856,17 +947,31 @@ export function App() {
                                                                         kind: input.kind,
                                                                         sourceID:
                                                                             input.id,
-                                                                        level,
+                                                                        level:
+                                                                            input.kind ===
+                                                                            "application"
+                                                                                ? value <=
+                                                                                  -60
+                                                                                    ? 0
+                                                                                    : Math.pow(
+                                                                                          10,
+                                                                                          value /
+                                                                                              20,
+                                                                                      )
+                                                                                : value,
                                                                     },
                                                                 )
                                                             }
                                                         />
                                                         <span>
-                                                            {Math.round(
-                                                                input.level *
-                                                                    100,
-                                                            )}
-                                                            %
+                                                            {input.kind ===
+                                                            "application"
+                                                                ? formatApplicationGain(
+                                                                      applicationGainToDecibels(
+                                                                          input.level,
+                                                                      ),
+                                                                  )
+                                                                : `${Math.round(input.level * 100)}%`}
                                                         </span>
                                                     </label>
                                                     {input.kind ===
@@ -1060,10 +1165,12 @@ export function App() {
                                                                                             ) => {
                                                                                                 const nextLevels =
                                                                                                     input.channelsLinked
-                                                                                                    ? scaleLinkedLevels(
-                                                                                                          value,
-                                                                                                      )
-                                                                                                        : [...levels];
+                                                                                                        ? scaleLinkedLevels(
+                                                                                                              value,
+                                                                                                          )
+                                                                                                        : [
+                                                                                                              ...levels,
+                                                                                                          ];
                                                                                                 if (
                                                                                                     !input.channelsLinked
                                                                                                 ) {
@@ -1278,66 +1385,81 @@ export function App() {
                                                     ? "channel"
                                                     : "channels"}
                                             </span>
-                                            {output.configured && (
-                                                <>
-                                                    <label className="flex min-w-48 flex-1 items-center gap-3 text-xs text-slate-300">
-                                                        <span>
-                                                            Master level
-                                                        </span>
-                                                        <StableRange
-                                                            value={output.level}
-                                                            label={`${output.name} master level`}
-                                                            disabled={
-                                                                pending !==
-                                                                    null ||
-                                                                !output.available
-                                                            }
-                                                            onCommit={(level) =>
-                                                                send(
-                                                                    `output:${output.uid}`,
-                                                                    {
-                                                                        command:
-                                                                            "setOutputLevel",
-                                                                        uid: output.uid,
-                                                                        level,
-                                                                    },
-                                                                )
-                                                            }
-                                                        />
-                                                        <span className="w-9 text-right tabular-nums">
-                                                            {Math.round(
-                                                                output.level *
-                                                                    100,
-                                                            )}
-                                                            %
-                                                        </span>
-                                                    </label>
-                                                    <button
-                                                        type="button"
-                                                        disabled={
-                                                            pending !== null
+                                            <div className="min-w-48 flex-1 text-xs text-slate-300">
+                                                <label className="flex items-center gap-3">
+                                                    Device volume
+                                                    <StableRange
+                                                        value={
+                                                            output.volume ?? 0
                                                         }
-                                                        className="text-xs text-rose-300 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
-                                                        onClick={() => {
-                                                            const confirmed =
-                                                                window.confirm(
-                                                                    `Remove the saved mix for “${output.name}”? This removes only Sound Mixer settings; it does not remove the device.`,
-                                                                );
-                                                            if (confirmed) {
-                                                                void send(
-                                                                    `output-delete:${output.uid}`,
-                                                                    {
-                                                                        command:
-                                                                            "deleteOutputMix",
-                                                                        uid: output.uid,
-                                                                    },
-                                                                );
-                                                            }
-                                                        }}
-                                                    >
-                                                        Remove saved mix
-                                                    </button>
-                                                </>
+                                                        label={`${output.name} device volume`}
+                                                        disabled={
+                                                            pending !== null ||
+                                                            !output.available ||
+                                                            !output.volumeWritable
+                                                        }
+                                                        onCommit={(level) =>
+                                                            send(
+                                                                `device-volume:${output.uid}`,
+                                                                {
+                                                                    command:
+                                                                        "setDeviceVolume",
+                                                                    uid: output.uid,
+                                                                    level,
+                                                                },
+                                                            )
+                                                        }
+                                                    />
+                                                    <span className="w-9 text-right tabular-nums">
+                                                        {output.volume === null
+                                                            ? "—"
+                                                            : `${Math.round(output.volume * 100)}%`}
+                                                    </span>
+                                                </label>
+                                                {output.available &&
+                                                    output.volumeWritable && (
+                                                        <p className="mt-1 text-slate-500">
+                                                            Previous device
+                                                            volume is restored
+                                                            on exit.
+                                                        </p>
+                                                    )}
+                                                {output.available &&
+                                                    !output.volumeWritable && (
+                                                        <p
+                                                            className="mt-1 text-amber-300"
+                                                            role="status"
+                                                        >
+                                                            This device has no
+                                                            writable main volume
+                                                            control.
+                                                        </p>
+                                                    )}
+                                            </div>
+                                            {output.configured && (
+                                                <button
+                                                    type="button"
+                                                    disabled={pending !== null}
+                                                    className="text-xs text-rose-300 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
+                                                    onClick={() => {
+                                                        const confirmed =
+                                                            window.confirm(
+                                                                `Remove the saved mix for “${output.name}”? This removes only Sound Mixer settings; it does not remove the device.`,
+                                                            );
+                                                        if (confirmed) {
+                                                            void send(
+                                                                `output-delete:${output.uid}`,
+                                                                {
+                                                                    command:
+                                                                        "deleteOutputMix",
+                                                                    uid: output.uid,
+                                                                },
+                                                            );
+                                                        }
+                                                    }}
+                                                >
+                                                    Remove saved mix
+                                                </button>
                                             )}
                                         </li>
                                     ))}
@@ -1651,11 +1773,21 @@ export function App() {
                                 },
                             )}
                         </ItemGroup>
-                        <ItemGroup title="Added Applications">
+                        <ItemGroup title="Applications">
+                            <button
+                                type="button"
+                                disabled={pending !== null}
+                                className="mx-3 mb-2 rounded-lg bg-slate-800 px-3 py-2 text-sm text-sky-300 hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
+                                onClick={() => {
+                                    setApplicationSearch("");
+                                    setApplicationCatalogOpen(true);
+                                }}
+                            >
+                                Add application
+                            </button>
                             {sourceApplications.length === 0 && (
                                 <p className="px-3 text-sm text-slate-500">
-                                    Add an application from a mix source
-                                    selector.
+                                    No applications have been added.
                                 </p>
                             )}
                             {sourceApplications.map((application) => {
@@ -1710,14 +1842,59 @@ export function App() {
                                                 />
                                             </button>
                                         </div>
-                                        <p className="mt-1 text-xs text-slate-400">
-                                            {application.available
-                                                ? application.captureState ===
-                                                  "capturing"
-                                                    ? "Capturing"
-                                                    : "Available"
-                                                : "Application is not running or producing audio."}
+                                        <p
+                                            className={`mt-1 text-xs ${application.captureState.startsWith("unavailable:") || application.captureState === "permissionDenied" ? "text-amber-200" : "text-slate-400"}`}
+                                            role={
+                                                application.captureState.startsWith(
+                                                    "unavailable:",
+                                                ) ||
+                                                application.captureState ===
+                                                    "permissionDenied"
+                                                    ? "status"
+                                                    : undefined
+                                            }
+                                        >
+                                            {!application.available
+                                                ? "Application is not running or producing audio."
+                                                : application.captureState ===
+                                                    "capturing"
+                                                  ? "Capturing audio buffers."
+                                                  : application.captureState ===
+                                                      "starting"
+                                                    ? "Starting audio capture…"
+                                                    : application.captureState ===
+                                                        "permissionDenied"
+                                                      ? "System Audio Recording permission denied."
+                                                      : application.captureState.startsWith(
+                                                              "unavailable:",
+                                                          )
+                                                        ? application.captureState
+                                                              .slice(
+                                                                  "unavailable:"
+                                                                      .length,
+                                                              )
+                                                              .trim()
+                                                        : "Available"}
                                         </p>
+                                        {application.available &&
+                                            application.captureState ===
+                                                "permissionDenied" && (
+                                                <button
+                                                    type="button"
+                                                    className="mt-1 text-xs text-sky-300 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
+                                                    onClick={() =>
+                                                        void send(
+                                                            `privacy:${application.id}`,
+                                                            {
+                                                                command:
+                                                                    "openPrivacySettings",
+                                                            },
+                                                        )
+                                                    }
+                                                >
+                                                    Open System Settings
+                                                </button>
+                                            )}
                                         <PeakMeter
                                             level={application.level}
                                             label={application.name}
@@ -1757,6 +1934,105 @@ export function App() {
                     </aside>
                 </div>
             </section>
+            {applicationCatalogOpen && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+                    onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) {
+                            setApplicationCatalogOpen(false);
+                        }
+                    }}
+                >
+                    <section
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="application-catalog-title"
+                        onKeyDown={(event) => {
+                            if (event.key === "Escape") {
+                                setApplicationCatalogOpen(false);
+                            }
+                        }}
+                        className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-2xl"
+                    >
+                        <div className="flex items-center justify-between gap-3">
+                            <h2
+                                id="application-catalog-title"
+                                className="text-base font-semibold"
+                            >
+                                Add an application
+                            </h2>
+                            <button
+                                type="button"
+                                className="rounded px-2 py-1 text-sm text-slate-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
+                                onClick={() => setApplicationCatalogOpen(false)}
+                            >
+                                Close
+                            </button>
+                        </div>
+                        <label className="mt-3 block text-sm">
+                            Search running applications
+                            <input
+                                autoFocus
+                                type="search"
+                                value={applicationSearch}
+                                onChange={(event) =>
+                                    setApplicationSearch(
+                                        event.currentTarget.value,
+                                    )
+                                }
+                                placeholder="Name or bundle identifier"
+                                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500"
+                            />
+                        </label>
+                        <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto">
+                            {availableApplications.map((application) => (
+                                <li
+                                    key={application.id}
+                                    className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 px-3 py-2"
+                                >
+                                    <span className="min-w-0">
+                                        <span className="block truncate text-sm">
+                                            {application.name}
+                                        </span>
+                                        <span className="block truncate text-xs text-slate-400">
+                                            {application.id}
+                                        </span>
+                                    </span>
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            !selectedTarget || pending !== null
+                                        }
+                                        className="shrink-0 rounded bg-sky-300 px-3 py-1.5 text-sm font-semibold text-slate-950 disabled:opacity-50"
+                                        onClick={() => {
+                                            addSourceToSelectedMix(
+                                                "application",
+                                                application.id,
+                                            );
+                                            setApplicationCatalogOpen(false);
+                                        }}
+                                    >
+                                        Add to mix
+                                    </button>
+                                </li>
+                            ))}
+                            {availableApplications.length === 0 && (
+                                <li className="px-2 py-4 text-sm text-slate-400">
+                                    {mixerState?.applications.some(
+                                        (application) =>
+                                            application.available &&
+                                            !configuredApplicationIDs.has(
+                                                application.id,
+                                            ),
+                                    )
+                                        ? "No applications match this search."
+                                        : "No eligible running applications are available."}
+                                </li>
+                            )}
+                        </ul>
+                    </section>
+                </div>
+            )}
         </main>
     );
 }

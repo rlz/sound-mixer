@@ -4,6 +4,10 @@ type StableRangeProps = {
     value: number;
     label: string;
     disabled?: boolean;
+    min?: number;
+    max?: number;
+    step?: number;
+    formatValue?: (value: number) => string;
     onCommit: (value: number) => Promise<boolean>;
 };
 
@@ -11,6 +15,10 @@ export function StableRange({
     value,
     label,
     disabled = false,
+    min = 0,
+    max = 1,
+    step = 0.01,
+    formatValue = (current) => `${Math.round(current * 100)} percent`,
     onCommit,
 }: StableRangeProps) {
     const [draft, setDraft] = useState(value);
@@ -41,12 +49,12 @@ export function StableRange({
     return (
         <input
             type="range"
-            min="0"
-            max="1"
-            step="0.01"
+            min={min}
+            max={max}
+            step={step}
             value={draft}
             aria-label={label}
-            aria-valuetext={`${Math.round(draft * 100)} percent`}
+            aria-valuetext={formatValue(draft)}
             disabled={disabled}
             onPointerDown={() => {
                 interaction.current = true;

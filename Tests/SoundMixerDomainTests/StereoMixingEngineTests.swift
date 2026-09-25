@@ -52,6 +52,37 @@ final class StereoMixingEngineTests: XCTestCase {
         }
     }
 
+    func testBoostedSourceDoublesQuietSamplesAndLimitsPeaks() throws {
+        var engine = StereoMixingEngine(sampleRate: 48000, smoothingTime: 0.0001)
+        engine.setSourceGain(2)
+        let source = [Float](repeating: 0.2, count: 100)
+        var left = [Float](repeating: 0, count: source.count)
+        var right = [Float](repeating: 0, count: source.count)
+        source.withUnsafeBufferPointer { input in
+            left.withUnsafeMutableBufferPointer { outputLeft in
+                right.withUnsafeMutableBufferPointer { outputRight in
+                    engine.mix(left: input, right: input, into: outputLeft, outputRight: outputRight, frameCount: source.count)
+                }
+            }
+        }
+        XCTAssertEqual(try XCTUnwrap(left.last), 0.4, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(right.last), 0.4, accuracy: 0.001)
+
+        engine.setSourceGain(Float(MixInput.maximumApplicationGain))
+        let loud = [Float](repeating: 0.9, count: 100)
+        var limited = [Float](repeating: 0, count: loud.count)
+        var limitedRight = [Float](repeating: 0, count: loud.count)
+        loud.withUnsafeBufferPointer { input in
+            limited.withUnsafeMutableBufferPointer { outputLeft in
+                limitedRight.withUnsafeMutableBufferPointer { outputRight in
+                    engine.mix(left: input, right: input, into: outputLeft, outputRight: outputRight, frameCount: loud.count)
+                }
+            }
+        }
+        XCTAssertEqual(limited.last, 1)
+        XCTAssertEqual(limitedRight.last, 1)
+    }
+
     func testGainChangeRampsWithoutDiscontinuityAndClipsSafely() {
         var engine = StereoMixingEngine(sampleRate: 48000, smoothingTime: 0.01)
         engine.setSourceGain(0.5)

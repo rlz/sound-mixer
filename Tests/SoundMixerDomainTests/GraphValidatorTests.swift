@@ -81,8 +81,17 @@ final class GraphValidatorTests: XCTestCase {
         ))
         assertError(.invalidLevel, in: MixerConfiguration(buses: [VirtualBus(name: "Invalid", mix: Mix(level: .nan))]))
         assertError(.invalidLevel, in: MixerConfiguration(buses: [VirtualBus(name: "Invalid", mix: Mix(inputs: [
-            MixInput(source: .application(ApplicationID(rawValue: "app")), level: 1.1)
+            MixInput(source: .application(ApplicationID(rawValue: "app")), level: MixInput.maximumApplicationGain + 0.01)
         ]))]))
+    }
+
+    func testApplicationGainCanExceedUnityOnlyWithinItsOwnRow() throws {
+        let app = MixInput(source: .application(ApplicationID(rawValue: "app")), level: MixInput.maximumApplicationGain)
+        XCTAssertNoThrow(try GraphValidator.validate(MixerConfiguration(buses: [VirtualBus(name: "Boosted", mix: Mix(inputs: [app]))])))
+
+        let device = MixInput(source: .inputDevice(DeviceUID(rawValue: "mic")), level: 2)
+        assertError(.invalidLevel, in: MixerConfiguration(buses: [VirtualBus(name: "Invalid", mix: Mix(inputs: [device]))]))
+        assertError(.invalidLevel, in: MixerConfiguration(buses: [VirtualBus(name: "Invalid", mix: Mix(level: 2, inputs: [app]))]))
     }
 
     func testMissingDevicesAreRetainedButIncompatibleFormatsAreReported() throws {

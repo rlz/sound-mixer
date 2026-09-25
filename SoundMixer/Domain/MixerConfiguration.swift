@@ -114,6 +114,8 @@ public enum ChannelRouting: String, Codable, Sendable {
 }
 
 public struct MixInput: Codable, Equatable, Sendable {
+    public static let maximumApplicationGain = pow(10.0, 30.0 / 20.0)
+
     public var source: SourceReference
     public var level: Double
     public var monoPlacement: MonoPlacement
@@ -139,7 +141,9 @@ public struct MixInput: Codable, Equatable, Sendable {
 
     public static func physicalInputDefaults(channelCount: Int, mono: Bool) -> (routing: [ChannelRouting], levels: [Double]) {
         let routing = (0 ..< max(0, channelCount)).map { channel -> ChannelRouting in
-            if mono { return .both }
+            if mono {
+                return .both
+            }
             switch channel {
             case 0: return .first
             case 1: return .second

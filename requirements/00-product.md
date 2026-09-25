@@ -10,7 +10,9 @@ A user manages several independent audio mixes on a Mac: selects sources, sets l
 - **Internal virtual bus** — a user-created mixing graph node that exists only in Sound Mixer.
 - **BlackHole route** — a user-created stereo mixer output tied to a specific installed BlackHole device and automatically assigned the next available adjacent channel pair.
 - **Source** — an audio input device, audio from a particular application, or an internal virtual bus added to a mix.
-- **Master volume** — a software gain for the selected output or bus mix. It does not change the device's system volume.
+- **Device volume** — the selected physical output device's live Core Audio main volume, when the device exposes a writable control. It changes that device's actual output volume and is independent of Sound Mixer's digital signal meter. Sound Mixer restores the pre-change value on normal exit if it has not changed externally.
+- **Mix gain** — a saved software gain from 0% (silence) to 100% (unity) for an internal virtual bus or BlackHole route. Physical output mixes render at unity.
+- **Application gain** — a saved gain for one application's row in one mix, from mute through 0 dB (unity) to +30 dB (about 31.62×). Other mixes containing the same application keep their own gain.
 - **Master switch** — the on/off state of Sound Mixer's entire audio pipeline. It persists across launches.
 
 ## User scenarios

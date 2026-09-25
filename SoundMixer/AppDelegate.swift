@@ -9,7 +9,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var processCatalog: CoreAudioProcessCatalog?
     private var captureCoordinator: AudioCaptureCoordinator?
     private var audioRoutingCoordinator: AudioRoutingCoordinator?
+    private let audioControlQueue = DispatchQueue(label: "com.rlz.soundmixer.audio-control")
     private var meterTimer: DispatchSourceTimer?
+    private var meterReadPending = false
+    private var sourceLevels: [String: Double] = [:]
+    private var inputChannelLevels: [String: [Double?]] = [:]
+    private var renderLevels: [String: Double] = [:]
     var audioDevices: [AudioDeviceSnapshot] = []
     private var audioProcesses: [AudioProcessSnapshot] = []
     private var captureStates: [String: String] = [:]
@@ -34,6 +39,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         do {
             let identifier = Bundle.main.bundleIdentifier ?? "com.rlz.soundmixer"
             let store = try ConfigurationStore(fileURL: ConfigurationStore.defaultFileURL(bundleIdentifier: identifier))
+            try store.update { configuration in
+                for index in configuration.outputMixes.indices {
+                    configuration.outputMixes[index].mix.level = 1
+                }
+            }
             configurationStore = store
             return store.discardedInvalidConfiguration
                 ? "The invalid saved configuration was deleted. Sound Mixer started with empty settings and mixing off."
@@ -46,18 +56,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private func setupAudioServices() {
         let deviceCatalog = CoreAudioDeviceCatalog()
         deviceCatalog.onChange = { [weak self] devices in
-            self?.audioDevices = devices
-            self?.updateAudioRouting()
-            self?.publishState()
+            guard let self, audioDevices != devices else { return }
+            let routingChanged = audioDevices.count != devices.count ||
+                !zip(audioDevices, devices).allSatisfy { $0.hasSameRouting(as: $1) }
+            audioDevices = devices
+            if routingChanged {
+                updateAudioRouting()
+            }
+            publishState()
         }
         self.deviceCatalog = deviceCatalog
         deviceCatalog.start()
 
         let processCatalog = CoreAudioProcessCatalog()
         processCatalog.onChange = { [weak self] processes in
-            self?.audioProcesses = processes
-            self?.updateAudioRouting()
-            self?.publishState()
+            guard let self, audioProcesses != processes else { return }
+            audioProcesses = processes
+            updateAudioRouting()
+            publishState()
         }
         self.processCatalog = processCatalog
         processCatalog.start()
@@ -69,6 +85,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
         self.captureCoordinator = captureCoordinator
         let audioRoutingCoordinator = AudioRoutingCoordinator(capture: captureCoordinator)
+        audioRoutingCoordinator.onRoutingReset = { [weak self] in
+            DispatchQueue.main.async {
+                self?.outputRouteErrors.removeAll()
+                self?.sourceLevels.removeAll()
+                self?.inputChannelLevels.removeAll()
+                self?.renderLevels.removeAll()
+                self?.publishState()
+            }
+        }
         audioRoutingCoordinator.onRouteError = { [weak self] route, error in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -81,9 +106,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
         self.audioRoutingCoordinator = audioRoutingCoordinator
         updateAudioRouting()
+        startMeterTimer()
+    }
+
+    private func startMeterTimer() {
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now(), repeating: .milliseconds(67), leeway: .milliseconds(8))
-        timer.setEventHandler { [weak self] in self?.publishState() }
+        timer.setEventHandler { [weak self] in self?.refreshMeterReadings() }
         timer.resume()
         meterTimer = timer
     }
@@ -159,10 +188,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     func applicationWillTerminate(_: Notification) {
         meterTimer?.cancel()
         meterTimer = nil
+        let routingCoordinator = audioRoutingCoordinator
+        audioControlQueue.sync {
+            routingCoordinator?.stop()
+            if routingCoordinator == nil {
+                captureCoordinator?.stopAll()
+            }
+        }
         deviceCatalog?.stop()
         processCatalog?.stop()
-        audioRoutingCoordinator?.stop()
-        captureCoordinator?.stopAll()
     }
 
     func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation!, withError error: Error) {
@@ -193,6 +227,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 sendToWeb(method: "onCommandResult", payload: ["requestId": requestID, "accepted": true])
                 return
             }
+            if command == "setDeviceVolume" {
+                try setDeviceVolume(body: body, requestID: requestID)
+                return
+            }
             let configuration = try executeCommand(command, body: body)
             sendToWeb(method: "onCommandResult", payload: ["requestId": requestID, "accepted": true])
             updateAudioRouting()
@@ -216,7 +254,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         guard let store = configurationStore else { throw BridgeError.storageUnavailable }
         switch command {
         case "setMasterEnabled": return try updateMixingEnabled(body: body, store: store)
-        case "setOutputLevel": return try setOutputLevel(body: body, store: store)
+        case "setVirtualMixLevel": return try setVirtualMixLevel(body: body, store: store)
         case "deleteOutputMix": return try deleteOutputMix(body: body, store: store)
         case "setSourceMuted": return try setSourceMuted(body: body, store: store)
         case "createBus": return try createBus(body: body, store: store)
@@ -241,12 +279,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         return try store.update(discoveredDevices: discoveredDescriptors()) { $0.isEnabled = enabled }
     }
 
-    private func setOutputLevel(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+    private func setDeviceVolume(body: [String: Any], requestID: String) throws {
         guard Set(body.keys) == ["requestId", "command", "uid", "level"],
               let uid = body["uid"] as? String, !uid.isEmpty,
-              let level = body["level"] as? Double, (0 ... 1).contains(level)
-        else { throw BridgeError.invalidPayload }
-        return try updateOutputLevel(store: store, uid: uid, level: level)
+              let level = body["level"] as? Double, level.isFinite, (0 ... 1).contains(level),
+              let deviceCatalog else { throw BridgeError.invalidPayload }
+        deviceCatalog.setOutputVolume(uid: uid, level: level) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success:
+                sendToWeb(method: "onCommandResult", payload: ["requestId": requestID, "accepted": true])
+            case let .failure(error):
+                sendToWeb(method: "onCommandResult", payload: [
+                    "requestId": requestID, "accepted": false, "error": error.localizedDescription
+                ])
+            }
+        }
     }
 
     private func deleteOutputMix(
@@ -327,12 +375,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
     }
 
-    private func updateOutputLevel(store: ConfigurationStore, uid: String, level: Double) throws -> MixerConfiguration {
-        try store.update(discoveredDevices: discoveredDescriptors()) { candidate in
-            guard let index = candidate.outputMixes.firstIndex(where: { $0.deviceUID.rawValue == uid }) else {
-                throw BridgeError.unknownOutput
+    private func setVirtualMixLevel(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "target", "id", "level"],
+              let target = body["target"] as? String, ["bus", "route"].contains(target),
+              let idString = body["id"] as? String, let id = UUID(uuidString: idString),
+              let level = body["level"] as? Double, level.isFinite, (0 ... 1).contains(level)
+        else { throw BridgeError.invalidPayload }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { candidate in
+            if target == "bus" {
+                guard let index = candidate.buses.firstIndex(where: { $0.id == id }) else { throw BridgeError.unknownBus }
+                candidate.buses[index].mix.level = level
+            } else {
+                guard let index = candidate.blackHoleRoutes.firstIndex(where: { $0.id == id }) else { throw BridgeError.unknownRoute }
+                candidate.blackHoleRoutes[index].mix.level = level
             }
-            candidate.outputMixes[index].mix.level = level
         }
     }
 
@@ -361,8 +417,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
         let level = body["level"] as? Double
         let placement = (body["monoPlacement"] as? String).flatMap(MonoPlacement.init(rawValue:))
-        if operation == .level, level == nil || !(0 ... 1).contains(level!) {
-            throw BridgeError.invalidPayload
+        if operation == .level {
+            let maximum = kind == "application" ? MixInput.maximumApplicationGain : 1
+            guard let level, level.isFinite, (0 ... maximum).contains(level) else {
+                throw BridgeError.invalidPayload
+            }
         }
         if operation == .add || operation == .placement, placement == nil {
             throw BridgeError.invalidPayload
@@ -484,18 +543,39 @@ extension AppDelegate {
     }
 
     func updateAudioRouting() {
-        guard let graph = configurationStore?.activeGraph else { return }
-        if audioRoutingCoordinator?.update(graph: graph, devices: audioDevices, processes: audioProcesses) == true {
-            outputRouteErrors.removeAll()
+        guard let graph = configurationStore?.activeGraph,
+              let coordinator = audioRoutingCoordinator
+        else { return }
+        let devices = audioDevices
+        let processes = audioProcesses
+        audioControlQueue.async { [weak self] in
+            if coordinator.update(graph: graph, devices: devices, processes: processes) {
+                DispatchQueue.main.async { self?.publishState() }
+            }
+        }
+    }
+
+    private func refreshMeterReadings() {
+        guard !meterReadPending, let coordinator = audioRoutingCoordinator else { return }
+        meterReadPending = true
+        audioControlQueue.async { [weak self] in
+            let sourceLevels = coordinator.sourceLevelReadings()
+            let inputChannelLevels = coordinator.inputChannelLevelReadings()
+            let renderLevels = coordinator.renderLevelReadings()
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.sourceLevels = sourceLevels
+                self.inputChannelLevels = inputChannelLevels
+                self.renderLevels = renderLevels
+                self.meterReadPending = false
+                self.publishState()
+            }
         }
     }
 
     func publishState(configuration: MixerConfiguration? = nil) {
         guard let configuration = configuration ?? configurationStore?.configuration else { return }
         let discovered = Dictionary(uniqueKeysWithValues: audioDevices.map { ($0.uid, $0) })
-        let sourceLevels = audioRoutingCoordinator?.sourceLevelReadings() ?? [:]
-        let inputChannelLevels = audioRoutingCoordinator?.inputChannelLevelReadings() ?? [:]
-        let renderLevels = audioRoutingCoordinator?.renderLevelReadings() ?? [:]
         let state = BridgeState(
             schemaVersion: MixerConfiguration.currentSchemaVersion,
             isEnabled: configuration.isEnabled,
@@ -580,9 +660,13 @@ extension AppDelegate {
                 return id.rawValue
             }
         let orderedProcesses = audioProcesses.sorted {
-            $0.applicationID == $1.applicationID
-                ? $0.processID < $1.processID
-                : $0.applicationID < $1.applicationID
+            if $0.applicationID != $1.applicationID {
+                return $0.applicationID < $1.applicationID
+            }
+            if $0.isProducingOutput != $1.isProducingOutput {
+                return $0.isProducingOutput
+            }
+            return $0.processID < $1.processID
         }
         let processes = Dictionary(
             orderedProcesses.map { ($0.applicationID, $0) },
@@ -656,7 +740,8 @@ extension AppDelegate {
                     .localizedCaseInsensitiveContains("BlackHole"),
                 available: live.map { $0.isAlive && $0.outputChannels > 0 } ?? false,
                 outputChannels: live?.outputChannels ?? 0,
-                level: saved[uid]?.mix.level ?? 1,
+                volume: live?.outputVolume,
+                volumeWritable: live?.canSetOutputVolume ?? false,
                 configured: saved[uid] != nil,
                 routeError: outputRouteErrors[uid],
                 levelReading: renderLevels["output:\(uid)/destination"]

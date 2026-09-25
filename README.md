@@ -8,12 +8,12 @@ The application has a native Core Audio capture and output pipeline, configurabl
 
 ## Current behavior and limitations
 
-- The left panel lists available Core Audio outputs, internal virtual buses, and configured BlackHole routes. Each output or bus has a master volume slider.
+- The left panel lists available Core Audio outputs, internal virtual buses, and configured BlackHole routes. Physical outputs expose device volume when Core Audio provides a writable main control; buses and BlackHole routes use software Mix gain.
 - Users can create and rename internal virtual buses. These buses exist only in Sound Mixer and do not appear as macOS system devices.
 - BlackHole routes use the lowest available adjacent stereo output pair automatically. The installed driver remains a separate dependency and is never installed by Sound Mixer.
 - Mix sources include physical inputs, eligible applications, virtual buses, and configured BlackHole routes. Physical input rows store their channel routing and gain settings per mix. Current physical capture supports mono and stereo only; 3–64 channel capture and per-channel live meters are still being implemented.
 - The master switch controls Sound Mixer's capture and output. Configuration is saved locally and restored at launch. Missing devices remain visible with an unavailable state.
-- Sound Mixer does not change the macOS system output device or its hardware volume, and application capture depends on macOS System Audio Recording permission.
+- Sound Mixer does not change the macOS default output device. Device volume changes made in Sound Mixer are restored on normal exit if the device still has the app-set value. Devices without a writable main volume cannot be adjusted here. Application capture depends on macOS System Audio Recording permission.
 
 See the detailed requirements for [product scope](requirements/00-product.md), [devices](requirements/01-devices.md), [routing and mixing](requirements/02-routing-and-mixing.md), [interface](requirements/03-interface.md), [macOS integration](requirements/04-macos-integration.md), and [quality and acceptance](requirements/05-quality-and-acceptance.md).
 

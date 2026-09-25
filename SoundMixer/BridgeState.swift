@@ -64,7 +64,8 @@ struct BridgeOutput: Encodable {
     let isBlackHole: Bool
     let available: Bool
     let outputChannels: Int
-    let level: Double
+    let volume: Double?
+    let volumeWritable: Bool
     let configured: Bool
     let routeError: String?
     let levelReading: Double?

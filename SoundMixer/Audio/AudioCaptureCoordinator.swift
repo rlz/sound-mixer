@@ -15,6 +15,7 @@ enum AudioCaptureState: Equatable {
 /// block, log, access files, or call WebKit from it.
 final class AudioCaptureCoordinator {
     typealias AudioHandler = (String, UnsafePointer<AudioBufferList>, UInt32, AudioStreamBasicDescription) -> Void
+    static let tapAggregateUIDPrefix = "com.rlz.soundmixer.tap."
 
     var onStateChange: ((String, AudioCaptureState) -> Void)?
     var onAudio: AudioHandler?
@@ -30,6 +31,9 @@ final class AudioCaptureCoordinator {
         timer.schedule(deadline: .now(), repeating: .milliseconds(250))
         timer.setEventHandler { [weak self] in
             guard let self else { return }
+            for (id, session) in processSessions {
+                publish(id, session.captureState)
+            }
             for (uid, session) in inputSessions {
                 publish(uid, session.captureState)
             }
@@ -110,7 +114,7 @@ final class AudioCaptureCoordinator {
             let tapStatus = AudioHardwareCreateProcessTap(description, &tap)
             guard tapStatus == noErr else { throw CaptureError.audioStatus(tapStatus) }
             let tapUID: CFString = try Self.read(tap, kAudioTapPropertyUID)
-            let aggregateUID = "com.rlz.soundmixer.tap.\(UUID().uuidString)" as CFString
+            let aggregateUID = "\(Self.tapAggregateUIDPrefix)\(UUID().uuidString)" as CFString
             let aggregateDescription: CFDictionary = [
                 kAudioAggregateDeviceNameKey: "Sound Mixer source",
                 kAudioAggregateDeviceUIDKey: aggregateUID as String,
@@ -128,7 +132,7 @@ final class AudioCaptureCoordinator {
             do {
                 try session.start()
                 processSessions[id] = session
-                publish(id, .capturing)
+                publish(id, session.captureState)
             } catch {
                 session.stop()
                 throw error

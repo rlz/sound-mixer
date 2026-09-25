@@ -25,7 +25,7 @@ extension GraphValidationError: LocalizedError {
         case .duplicateSource: "A source can appear only once in each mix."
         case .emptyIdentifier: "A device or source identifier cannot be empty."
         case .emptyName: "Names must contain at least one non-space character."
-        case .invalidLevel: "Levels must be between 0 and 100 percent."
+        case .invalidLevel: "Levels must be between 0 and 100 percent, except application gain, which can reach +30 dB."
         case let .missingBus(id): "The referenced virtual bus \(id.uuidString) no longer exists."
         case let .missingRoute(id): "The referenced BlackHole route \(id.uuidString) no longer exists."
         case .busCycle: "This change would create a cycle between virtual buses."
@@ -137,7 +137,11 @@ public enum GraphValidator {
             try validateLevel(mix.level)
             var sources = Set<SourceKey>()
             for input in mix.inputs {
-                try validateLevel(input.level)
+                if case .application = input.source {
+                    try validateLevel(input.level, maximum: MixInput.maximumApplicationGain)
+                } else {
+                    try validateLevel(input.level)
+                }
                 guard input.channelRouting.count == input.channelLevels.count else {
                     throw GraphValidationError.invalidChannelSettings
                 }
@@ -160,8 +164,8 @@ public enum GraphValidator {
         }
     }
 
-    private static func validateLevel(_ level: Double) throws {
-        guard level.isFinite, (0 ... 1).contains(level) else { throw GraphValidationError.invalidLevel }
+    private static func validateLevel(_ level: Double, maximum: Double = 1) throws {
+        guard level.isFinite, (0 ... maximum).contains(level) else { throw GraphValidationError.invalidLevel }
     }
 
     private static func validateMixGraph(_ configuration: MixerConfiguration) throws {
@@ -181,8 +185,12 @@ public enum GraphValidator {
         var visiting = Set<MixNode.ID>()
 
         func visit(_ id: MixNode.ID) throws {
-            if visiting.contains(id) { throw GraphValidationError.busCycle }
-            if visited.contains(id) { return }
+            if visiting.contains(id) {
+                throw GraphValidationError.busCycle
+            }
+            if visited.contains(id) {
+                return
+            }
             visiting.insert(id)
             for dependency in dependencies[id, default: []] where nodeIDs.contains(dependency) {
                 try visit(dependency)
@@ -191,7 +199,9 @@ public enum GraphValidator {
             visited.insert(id)
         }
 
-        for node in nodes { try visit(node.id) }
+        for node in nodes {
+            try visit(node.id)
+        }
     }
 
     private static func validateBlackHoleReservations(_ configuration: MixerConfiguration) throws {
