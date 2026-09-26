@@ -1,8 +1,7 @@
 export type OutputState = {
     uid: string;
     name: string;
-    category: "system" | "blackhole";
-    isBlackHole: boolean;
+    category: "system";
     available: boolean;
     outputChannels: number;
     volume: number | null;
@@ -18,7 +17,7 @@ export type OutputState = {
 export type DeviceState = {
     uid: string;
     name: string;
-    category: "system" | "blackhole";
+    category: "system";
     available: boolean;
     outputChannels: number;
     inputChannels: number;
@@ -40,7 +39,7 @@ export type MixInputState = {
 };
 
 export type MixState = {
-    target: "output" | "bus" | "route";
+    target: "output" | "bus";
     id: string;
     level: number;
     inputs: MixInputState[];
@@ -56,18 +55,6 @@ export type MixerState = {
         id: string;
         name: string;
         category: "virtual";
-        muted: boolean;
-        sourceLevel: number;
-    }[];
-    blackHoleRoutes: {
-        id: string;
-        name: string;
-        category: "blackhole";
-        deviceUID: string;
-        channels: number[];
-        available: boolean;
-        captureState: string;
-        level: number | null;
         muted: boolean;
         sourceLevel: number;
     }[];
@@ -99,46 +86,38 @@ export type BridgeCommand =
     | { command: "setBusMuted"; id: string; muted: boolean }
     | {
           command: "setVirtualMixLevel";
-          target: "bus" | "route";
+          target: "bus";
           id: string;
           level: number;
       }
     | { command: "deleteOutputMix"; uid: string }
-    | { command: "resetMix"; target: "output" | "bus" | "route"; id: string }
+    | { command: "resetMix"; target: "output" | "bus"; id: string }
     | {
           command: "setSourceMuted";
-          kind:
-              "inputDevice" | "application" | "app" | "bus" | "blackHoleRoute";
+          kind: "inputDevice" | "application" | "app" | "bus";
           sourceID: string;
           muted: boolean;
       }
     | {
           command: "setSourceLevel";
-          kind:
-              "inputDevice" | "application" | "app" | "blackHoleRoute" | "bus";
+          kind: "inputDevice" | "application" | "app" | "bus";
           sourceID: string;
           level: number;
       }
     | { command: "createBus" }
     | { command: "renameBus"; id: string; name: string }
-    | { command: "renameRoute"; id: string; name: string }
-    | {
-          command: "createRoute";
-          deviceUID: string;
-      }
-    | { command: "deleteRoute"; id: string }
     | { command: "deleteBus"; id: string }
     | { command: "addApplicationInput"; applicationID: string }
     | {
           command: "addMixInput" | "removeMixInput";
-          target: "output" | "bus" | "route";
+          target: "output" | "bus";
           id: string;
           kind: string;
           sourceID: string;
       }
     | {
           command: "setMixInputLevel";
-          target: "output" | "bus" | "route";
+          target: "output" | "bus";
           id: string;
           kind: string;
           sourceID: string;
@@ -146,7 +125,7 @@ export type BridgeCommand =
       }
     | {
           command: "setMixInputMuted";
-          target: "output" | "bus" | "route";
+          target: "output" | "bus";
           id: string;
           kind: string;
           sourceID: string;
@@ -154,7 +133,7 @@ export type BridgeCommand =
       }
     | {
           command: "setMixInputRouting";
-          target: "output" | "bus" | "route";
+          target: "output" | "bus";
           id: string;
           kind: string;
           sourceID: string;
@@ -162,7 +141,7 @@ export type BridgeCommand =
       }
     | {
           command: "setPhysicalInputChannels";
-          target: "output" | "bus" | "route";
+          target: "output" | "bus";
           id: string;
           kind: "inputDevice";
           sourceID: string;

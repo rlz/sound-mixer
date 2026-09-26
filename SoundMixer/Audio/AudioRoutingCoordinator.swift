@@ -173,11 +173,6 @@ final class AudioRoutingCoordinator {
             changedMutedSources: changedMutedSources, changedMutedBuses: changedMutedBuses,
             queues: &queuesBySource, sources: &captureSources
         )
-        for route in graph.configuration.blackHoleRoutes {
-            let key = "route:\(route.id.uuidString)"
-            queuesBySource[key] = queuesBySource[key] ?? []
-            captureSources.insert(key)
-        }
         for id in graph.configuration.applications {
             let key = "application:\(id.rawValue)"
             queuesBySource[key] = queuesBySource[key] ?? []
@@ -185,9 +180,7 @@ final class AudioRoutingCoordinator {
         }
         let inputChannelCounts = Dictionary(uniqueKeysWithValues: deviceByUID.values.map {
             ("input:\($0.uid)", min(max($0.inputChannels, 1), 64))
-        }).merging(Dictionary(uniqueKeysWithValues: graph.configuration.blackHoleRoutes.map {
-            ("route:\($0.id.uuidString)", 2)
-        }), uniquingKeysWith: { first, _ in first })
+        })
         let fanoutChanged = !hasSameFanoutTopology(
             queuesBySource: queuesBySource,
             inputChannelCounts: inputChannelCounts
@@ -327,28 +320,6 @@ final class AudioRoutingCoordinator {
             }
             if device.inputChannels > 0 {
                 result.insert("input:\(device.uid)")
-            }
-            for route in graph.configuration.blackHoleRoutes where route.deviceUID.rawValue == device.uid {
-                result.insert("route:\(route.id.uuidString)")
-            }
-        }
-        let previousRoutes = Dictionary(
-            (lastGraph?.configuration.blackHoleRoutes ?? []).map { ($0.id, $0) },
-            uniquingKeysWith: { _, latest in latest }
-        )
-        for route in graph.configuration.blackHoleRoutes {
-            let routeChanged = previousRoutes[route.id].map {
-                $0.deviceUID != route.deviceUID || $0.channels != route.channels
-            } ?? true
-            let oldDevice = previousDevices[route.deviceUID.rawValue]
-            let newDevice = currentDevices[route.deviceUID.rawValue]
-            let deviceChanged: Bool = switch (oldDevice, newDevice) {
-            case (nil, nil): false
-            case let (old?, new?): !old.hasSameInputRouting(as: new)
-            default: true
-            }
-            if routeChanged || deviceChanged {
-                result.insert("route:\(route.id.uuidString)")
             }
         }
         let previousProcesses = Dictionary(lastProcesses.map { ($0.applicationID, $0) }, uniquingKeysWith: { _, latest in latest })
@@ -594,9 +565,6 @@ final class AudioRoutingCoordinator {
             for index in copy.buses.indices {
                 Self.clearRouting(&copy.buses[index].mix)
             }
-            for index in copy.blackHoleRoutes.indices {
-                Self.clearRouting(&copy.blackHoleRoutes[index].mix)
-            }
             return copy
         }
         return normalized(old) == normalized(new)
@@ -628,9 +596,6 @@ final class AudioRoutingCoordinator {
             copy.mutedBuses = []
             copy.mutedSources = []
             copy.sourceLevels = []
-            for index in copy.blackHoleRoutes.indices {
-                normalize(&copy.blackHoleRoutes[index].mix)
-            }
             return copy
         }
         return normalized(old) == normalized(new)
@@ -645,33 +610,10 @@ final class AudioRoutingCoordinator {
         for source in sources {
             if source.hasPrefix("input:") {
                 startInput(source: source, devices: devices)
-            } else if source.hasPrefix("route:") {
-                startBlackHoleRoute(source: source, routes: graph.configuration.blackHoleRoutes, devices: devices)
             } else if source.hasPrefix("application:") {
                 startApplication(source: source, processes: processes)
             }
         }
-    }
-
-    private func startBlackHoleRoute(source: String, routes: [BlackHoleRoute], devices: [String: AudioDeviceSnapshot]) {
-        let id = String(source.dropFirst("route:".count))
-        guard let uuid = UUID(uuidString: id),
-              let route = routes.first(where: { $0.id == uuid }),
-              let device = devices[route.deviceUID.rawValue], device.isAlive,
-              let channels = Self.selectedInputChannels(route.channels),
-              device.inputChannels > (channels.max() ?? Int.max)
-        else {
-            let reason = "The assigned BlackHole input channel pair is unavailable."
-            capture.reportUnavailable(id: source, reason: reason)
-            onRouteError?(source, reason)
-            return
-        }
-        capture.startBlackHoleRoute(id: id, deviceID: device.deviceID, channels: channels)
-    }
-
-    private static func selectedInputChannels(_ channels: BlackHoleChannels) -> [Int]? {
-        guard case let .stereo(left, right) = channels else { return nil }
-        return [left - 1, right - 1]
     }
 
     private func startInput(source: String, devices: [String: AudioDeviceSnapshot]) {
@@ -743,7 +685,7 @@ final class AudioRoutingCoordinator {
     }
 }
 
-/// Drives virtual-bus rendering when no physical or BlackHole route consumes it.
+/// Drives virtual-bus rendering when no physical output consumes it.
 /// The scratch buffers are allocated once; the timer callback only renders and meters.
 private final class BusMeterPump {
     let renderer: AudioGraphRenderer
@@ -801,11 +743,6 @@ extension AudioRoutingCoordinator {
             keys.append("\(target)/destination")
             keys += output.mix.inputs.map { "\(target)/\(AudioGraphRenderer.sourceMeterKey($0.source))" }
         }
-        for route in configuration.blackHoleRoutes {
-            let target = "route:\(route.id.uuidString)"
-            keys.append("\(target)/destination")
-            keys += route.mix.inputs.map { "\(target)/\(AudioGraphRenderer.sourceMeterKey($0.source))" }
-        }
         for bus in configuration.buses {
             let target = "bus:\(bus.id.uuidString)"
             keys.append("\(target)/destination")
@@ -821,7 +758,6 @@ extension AudioRoutingCoordinator {
         guard let configuration, configuration.isEnabled else { return [] }
         var sources = Set(devices.filter { $0.inputChannels > 0 }.map { "input:\($0.uid)" })
         sources.formUnion(configuration.applications.map { "application:\($0.rawValue)" })
-        sources.formUnion(configuration.blackHoleRoutes.map { "route:\($0.id.uuidString)" })
         for route in makeRoutes(configuration, devices: devices) {
             sources.formUnion(Self.sourceKeys(in: route.mix, buses: configuration.buses))
         }
@@ -843,20 +779,6 @@ extension AudioRoutingCoordinator {
                 targetKey: "output:\(output.deviceUID.rawValue)"
             )
         }
-        routes += configuration.blackHoleRoutes.map { route in
-            guard !route.mix.inputs.isEmpty else { return nil }
-            let channels: [Int] = switch route.channels {
-            case let .mono(channel): [channel - 1]
-            case let .stereo(left, right): [left - 1, right - 1]
-            }
-            return RenderRoute(
-                key: "blackhole:\(route.id.uuidString)",
-                uid: route.deviceUID.rawValue,
-                channels: channels,
-                mix: route.mix,
-                targetKey: "route:\(route.id.uuidString)"
-            )
-        }.compactMap(\.self)
         return routes
     }
 
@@ -874,8 +796,6 @@ extension AudioRoutingCoordinator {
                     if visitedBuses.insert(id).inserted, let bus = busesByID[id] {
                         pending.append(bus.mix)
                     }
-                case let .blackHoleRoute(id):
-                    keys.insert("route:\(id.uuidString)")
                 }
             }
         }

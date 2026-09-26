@@ -6,7 +6,6 @@ struct BridgeState: Encodable {
     let devices: [BridgeDevice]
     let outputs: [BridgeOutput]
     let buses: [BridgeNamedItem]
-    let blackHoleRoutes: [BridgeRoute]
     let applications: [BridgeApplication]
     let inputCaptureStates: [BridgeInputCaptureState]
     let mixes: [BridgeMix]
@@ -67,7 +66,6 @@ struct BridgeOutput: Encodable {
     let uid: String
     let name: String
     let category: String
-    let isBlackHole: Bool
     let available: Bool
     let outputChannels: Int
     let volume: Double?
@@ -88,29 +86,13 @@ struct BridgeNamedItem: Encodable {
     let sourceLevel: Double
 }
 
-struct BridgeRoute: Encodable {
-    let id: String
-    let name: String
-    let category: String
-    let deviceUID: String
-    let channels: [Int]
-    let available: Bool
-    let captureState: String
-    let level: Double?
-    let muted: Bool
-    let sourceLevel: Double
-}
-
 enum BridgeError: LocalizedError {
     case storageUnavailable
     case invalidPayload
     case unknownCommand
     case unknownOutput
     case unknownBus
-    case unknownRoute
     case invalidName
-    case unavailableBlackHole
-    case noBlackHoleChannels
 
     var errorDescription: String? {
         switch self {
@@ -119,10 +101,7 @@ enum BridgeError: LocalizedError {
         case .unknownCommand: "The command is not supported."
         case .unknownOutput: "The output is not present in the saved configuration."
         case .unknownBus: "The virtual bus is not present in the saved configuration."
-        case .unknownRoute: "The BlackHole route is not present in the saved configuration."
         case .invalidName: "Names must contain 1 to 64 characters."
-        case .unavailableBlackHole: "Select an available BlackHole output device."
-        case .noBlackHoleChannels: "No adjacent stereo pair is available on this BlackHole device. Remove another route or choose a device with more output channels."
         }
     }
 }

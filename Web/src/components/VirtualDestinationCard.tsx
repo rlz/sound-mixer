@@ -5,7 +5,6 @@ import { LevelControl } from "./LevelControl";
 
 type VirtualDestinationCardProps = {
     name: string;
-    kind: "bus" | "BlackHole route";
     available?: boolean;
     selected: boolean;
     gain: number;
@@ -15,7 +14,6 @@ type VirtualDestinationCardProps = {
     onGainChange: (gain: number) => Promise<boolean>;
     muted: boolean;
     onMuteChange: (muted: boolean) => Promise<boolean>;
-    muteAvailable?: boolean;
     channelCount?: number;
     onDelete: () => void;
     deleteDisabled?: boolean;
@@ -23,7 +21,6 @@ type VirtualDestinationCardProps = {
 
 export function VirtualDestinationCard({
     name,
-    kind,
     available,
     selected,
     gain,
@@ -33,7 +30,6 @@ export function VirtualDestinationCard({
     onGainChange,
     muted,
     onMuteChange,
-    muteAvailable = true,
     channelCount,
     onDelete,
     deleteDisabled = false,
@@ -41,9 +37,9 @@ export function VirtualDestinationCard({
     return (
         <ItemCard
             name={name}
-            type={kind === "bus" ? "Virtual" : "BlackHole"}
+            type="Virtual"
             level={level}
-            levelLabel={`${name} ${kind === "bus" ? "virtual bus output" : "BlackHole pair output"}`}
+            levelLabel={`${name} virtual bus output`}
             available={available}
             selected={selected}
             channelCount={channelCount}
@@ -78,15 +74,8 @@ export function VirtualDestinationCard({
                 muted={muted}
                 onMuteChange={(value) => void onMuteChange(value)}
                 onLevelChange={onGainChange}
-                levelLabel={`${name} ${kind} mix gain`}
-                muteDisabled={!muteAvailable}
-                muteLabel={
-                    !muteAvailable
-                        ? "This BlackHole device has no writable mute control"
-                        : kind === "BlackHole route"
-                          ? "Mutes this BlackHole route wherever it is used"
-                          : "Stops this bus from feeding downstream mixes"
-                }
+                levelLabel={`${name} virtual bus mix gain`}
+                muteLabel="Stops this bus from feeding downstream mixes"
             />
         </ItemCard>
     );

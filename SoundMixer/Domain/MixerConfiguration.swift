@@ -23,15 +23,12 @@ public struct AudioDeviceDescriptor: Equatable, Sendable {
     public let inputChannels: Int
     public let outputChannels: Int
     public let sampleRate: Double
-    public let isBlackHole: Bool
-
-    public init(uid: DeviceUID, name: String, inputChannels: Int, outputChannels: Int, sampleRate: Double, isBlackHole: Bool) {
+    public init(uid: DeviceUID, name: String, inputChannels: Int, outputChannels: Int, sampleRate: Double) {
         self.uid = uid
         self.name = name
         self.inputChannels = inputChannels
         self.outputChannels = outputChannels
         self.sampleRate = sampleRate
-        self.isBlackHole = isBlackHole
     }
 }
 
@@ -51,7 +48,6 @@ public enum SourceReference: Hashable, Sendable {
     case inputDevice(DeviceUID)
     case application(ApplicationID)
     case bus(UUID)
-    case blackHoleRoute(UUID)
 }
 
 extension SourceReference: Codable {
@@ -64,7 +60,6 @@ extension SourceReference: Codable {
         case inputDevice
         case application
         case bus
-        case blackHoleRoute
     }
 
     public init(from decoder: Decoder) throws {
@@ -76,8 +71,6 @@ extension SourceReference: Codable {
             self = try .application(ApplicationID(rawValue: container.decode(String.self, forKey: .id)))
         case .bus:
             self = try .bus(container.decode(UUID.self, forKey: .id))
-        case .blackHoleRoute:
-            self = try .blackHoleRoute(container.decode(UUID.self, forKey: .id))
         }
     }
 
@@ -92,9 +85,6 @@ extension SourceReference: Codable {
             try container.encode(id.rawValue, forKey: .id)
         case let .bus(id):
             try container.encode(Kind.bus, forKey: .kind)
-            try container.encode(id, forKey: .id)
-        case let .blackHoleRoute(id):
-            try container.encode(Kind.blackHoleRoute, forKey: .kind)
             try container.encode(id, forKey: .id)
         }
     }
@@ -182,7 +172,7 @@ public struct MixInput: Codable, Equatable, Sendable {
             case .inputDevice:
                 channelRouting = [[1, 2]]
                 channelLevels = [1]
-            case .application, .bus, .blackHoleRoute:
+            case .application, .bus:
                 channelRouting = Self.defaultRouting(channelCount: 2, outputChannels: 2)
                 channelLevels = [1, 1]
             }
@@ -232,69 +222,6 @@ public struct VirtualBus: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-public enum BlackHoleChannels: Equatable, Sendable {
-    case mono(Int)
-    case stereo(left: Int, right: Int)
-}
-
-extension BlackHoleChannels: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case mode
-        case channels
-    }
-
-    private enum Mode: String, Codable {
-        case mono
-        case stereo
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let mode = try container.decode(Mode.self, forKey: .mode)
-        let channels = try container.decode([Int].self, forKey: .channels)
-        switch mode {
-        case .mono where channels.count == 1:
-            self = .mono(channels[0])
-        case .stereo where channels.count == 2:
-            self = .stereo(left: channels[0], right: channels[1])
-        default:
-            throw DecodingError.dataCorruptedError(
-                forKey: .channels,
-                in: container,
-                debugDescription: "Channel count does not match mode"
-            )
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        switch self {
-        case let .mono(channel):
-            try container.encode(Mode.mono, forKey: .mode)
-            try container.encode([channel], forKey: .channels)
-        case let .stereo(left, right):
-            try container.encode(Mode.stereo, forKey: .mode)
-            try container.encode([left, right], forKey: .channels)
-        }
-    }
-}
-
-public struct BlackHoleRoute: Codable, Equatable, Identifiable, Sendable {
-    public let id: UUID
-    public var name: String
-    public var deviceUID: DeviceUID
-    public var channels: BlackHoleChannels
-    public var mix: Mix
-
-    public init(id: UUID = UUID(), name: String, deviceUID: DeviceUID, channels: BlackHoleChannels, mix: Mix = Mix()) {
-        self.id = id
-        self.name = name
-        self.deviceUID = deviceUID
-        self.channels = channels
-        self.mix = mix
-    }
-}
-
 public struct KnownDevice: Codable, Equatable, Sendable {
     public var uid: DeviceUID
     public var lastKnownName: String?
@@ -316,13 +243,12 @@ public struct SourceLevel: Codable, Equatable, Sendable {
 }
 
 public struct MixerConfiguration: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 10
+    public static let currentSchemaVersion = 11
 
     public let schemaVersion: Int
     public var isEnabled: Bool
     public var outputMixes: [OutputMix]
     public var buses: [VirtualBus]
-    public var blackHoleRoutes: [BlackHoleRoute]
     public var knownDevices: [KnownDevice]
     public var mutedSources: [SourceReference]
     public var mutedBuses: [UUID]
@@ -334,7 +260,6 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         case isEnabled
         case outputMixes
         case buses
-        case blackHoleRoutes
         case knownDevices
         case mutedSources
         case mutedBuses
@@ -346,7 +271,6 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         isEnabled: Bool = false,
         outputMixes: [OutputMix] = [],
         buses: [VirtualBus] = [],
-        blackHoleRoutes: [BlackHoleRoute] = [],
         knownDevices: [KnownDevice] = [],
         mutedSources: [SourceReference] = [],
         mutedBuses: [UUID] = [],
@@ -357,7 +281,6 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         self.isEnabled = isEnabled
         self.outputMixes = outputMixes
         self.buses = buses
-        self.blackHoleRoutes = blackHoleRoutes
         self.knownDevices = knownDevices
         self.mutedSources = mutedSources
         self.mutedBuses = mutedBuses
@@ -369,7 +292,7 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let version = try container.decode(Int.self, forKey: .schemaVersion)
-        guard version == Self.currentSchemaVersion || version == 9 else {
+        guard version == Self.currentSchemaVersion else {
             throw DecodingError.dataCorruptedError(
                 forKey: .schemaVersion,
                 in: container,
@@ -381,7 +304,6 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
         outputMixes = try container.decode([OutputMix].self, forKey: .outputMixes)
         buses = try container.decode([VirtualBus].self, forKey: .buses)
-        blackHoleRoutes = try container.decode([BlackHoleRoute].self, forKey: .blackHoleRoutes)
         knownDevices = try container.decode([KnownDevice].self, forKey: .knownDevices)
         mutedSources = try container.decode([SourceReference].self, forKey: .mutedSources)
         mutedBuses = try container.decode([UUID].self, forKey: .mutedBuses)
@@ -433,7 +355,6 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         try container.encode(isEnabled, forKey: .isEnabled)
         try container.encode(outputMixes, forKey: .outputMixes)
         try container.encode(buses, forKey: .buses)
-        try container.encode(blackHoleRoutes, forKey: .blackHoleRoutes)
         try container.encode(knownDevices, forKey: .knownDevices)
         try container.encode(mutedSources, forKey: .mutedSources)
         try container.encode(mutedBuses, forKey: .mutedBuses)
@@ -448,8 +369,7 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
     /// Refresh metadata only for configured devices; discovery never creates saved ghosts.
     public mutating func reconcileKnownDevices(with discoveredDevices: [AudioDeviceDescriptor]) {
         var referencedUIDs = Set(outputMixes.map(\.deviceUID))
-        referencedUIDs.formUnion(blackHoleRoutes.map(\.deviceUID))
-        for mix in outputMixes.map(\.mix) + buses.map(\.mix) + blackHoleRoutes.map(\.mix) {
+        for mix in outputMixes.map(\.mix) + buses.map(\.mix) {
             for input in mix.inputs {
                 if case let .inputDevice(uid) = input.source {
                     referencedUIDs.insert(uid)

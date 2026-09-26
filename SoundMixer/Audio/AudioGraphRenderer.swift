@@ -137,11 +137,7 @@ final class AudioGraphRenderer {
             guard let mix = busMixes[id] else { continue }
             Self.update(states: states, mix: mix, mutedSources: Set(graph.configuration.mutedSources), sourceLevels: graph.configuration.sourceLevels)
         }
-        let mix: Mix? = if targetKey.hasPrefix("output:") {
-            graph.configuration.outputMixes.first(where: { targetKey == "output:\($0.deviceUID.rawValue)" })?.mix
-        } else {
-            graph.configuration.blackHoleRoutes.first(where: { targetKey == "route:\($0.id.uuidString)" })?.mix
-        }
+        let mix = graph.configuration.outputMixes.first(where: { targetKey == "output:\($0.deviceUID.rawValue)" })?.mix
         if let mix {
             Self.update(states: outputState, mix: mix, mutedSources: Set(graph.configuration.mutedSources), sourceLevels: graph.configuration.sourceLevels)
         }
@@ -154,15 +150,8 @@ final class AudioGraphRenderer {
             guard let old = oldBuses[bus.id], let states = mixStates[bus.id] else { continue }
             Self.publishRouting(from: bus.mix, previous: old, states: states)
         }
-        let oldMix: Mix?
-        let newMix: Mix?
-        if targetKey.hasPrefix("output:") {
-            oldMix = previous.configuration.outputMixes.first(where: { targetKey == "output:\($0.deviceUID.rawValue)" })?.mix
-            newMix = graph.configuration.outputMixes.first(where: { targetKey == "output:\($0.deviceUID.rawValue)" })?.mix
-        } else {
-            oldMix = previous.configuration.blackHoleRoutes.first(where: { targetKey == "route:\($0.id.uuidString)" })?.mix
-            newMix = graph.configuration.blackHoleRoutes.first(where: { targetKey == "route:\($0.id.uuidString)" })?.mix
-        }
+        let oldMix = previous.configuration.outputMixes.first(where: { targetKey == "output:\($0.deviceUID.rawValue)" })?.mix
+        let newMix = graph.configuration.outputMixes.first(where: { targetKey == "output:\($0.deviceUID.rawValue)" })?.mix
         if let oldMix, let newMix {
             Self.publishRouting(from: newMix, previous: oldMix, states: outputState)
         }
@@ -238,7 +227,7 @@ final class AudioGraphRenderer {
             let state = states[index]
             let muted = input.isMuted || mutedSources.contains(input.source)
             let sourceLevel: Double = switch input.source {
-            case .bus, .blackHoleRoute:
+            case .bus:
                 1
             case .inputDevice, .application:
                 levels[input.source] ?? 1
@@ -282,7 +271,6 @@ final class AudioGraphRenderer {
         case let .inputDevice(uid): "input:\(uid.rawValue)"
         case let .application(id): "application:\(id.rawValue)"
         case let .bus(id): "bus:\(id.uuidString)"
-        case let .blackHoleRoute(id): "route:\(id.uuidString)"
         }
     }
 

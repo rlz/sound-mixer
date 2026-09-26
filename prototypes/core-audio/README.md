@@ -5,7 +5,7 @@ The prototype runs separately from the app and does not change the system output
 ```bash
 bash prototypes/core-audio/run.sh
 bash prototypes/core-audio/run.sh probe --input BuiltInMicrophoneDevice \
-    --outputs BuiltInSpeakerDevice BlackHole2ch_UID --seconds 5 \
+    --outputs BuiltInSpeakerDevice TestVirtualDevice_UID --seconds 5 \
     --switch-client-rate 44100
 ```
 
@@ -17,9 +17,9 @@ Formatting and lint commands: `.tools/bin/swiftformat prototypes/core-audio/main
 
 Environment: macOS 27.0, Xcode 27.0, MacBook Air; Swift CLI running with access to audio devices. Without that access, the environment returned an empty device list, so the results below were collected with access granted.
 
-- `kAudioHardwarePropertyDevices` and `AudioObjectGetPropertyData` returned devices and their UIDs. `kAudioDevicePropertyStreamConfiguration` distinguished input and output channels: built-in microphone 1 input / 0 outputs, built-in speakers 0 / 2, and BlackHole 2ch 2 / 2. The microphone's nominal rate was 44.1 kHz and both selected outputs were 48 kHz. A discovered Multi-Output Device had 0 / 0 channels and 0 Hz; its name alone cannot establish that it is an available output.
+- `kAudioHardwarePropertyDevices` and `AudioObjectGetPropertyData` returned devices and their UIDs. `kAudioDevicePropertyStreamConfiguration` distinguished input and output channels: built-in microphone 1 input / 0 outputs, built-in speakers 0 / 2, and 2-channel device 2 / 2. The microphone's nominal rate was 44.1 kHz and both selected outputs were 48 kHz. A discovered Multi-Output Device had 0 / 0 channels and 0 Hz; its name alone cannot establish that it is an available output.
 - `kAudioUnitSubType_HALOutput`, `kAudioOutputUnitProperty_EnableIO`, `kAudioOutputUnitProperty_CurrentDevice`, `kAudioOutputUnitProperty_SetInputCallback`, and `AudioUnitRender` worked for the built-in microphone: 227,328 frames arrived in 5 seconds with a 0.065 peak. The measured level depends on nearby sound.
-- Two separate HAL Output AudioUnits with `kAudioUnitProperty_SetRenderCallback` concurrently processed 238,119 frames on built-in speakers and 237,220 on BlackHole. Callbacks and frame processing were verified; audible playback and reading the signal from BlackHole output were not.
+- Two separate HAL Output AudioUnits with `kAudioUnitProperty_SetRenderCallback` concurrently processed 238,119 frames on built-in speakers and 237,220 on virtual audio device. Callbacks and frame processing were verified; audible playback and reading the signal from multichannel output were not.
 - Both outputs' client `kAudioUnitProperty_StreamFormat` changed from 48 to 44.1 kHz after stop, `AudioUnitUninitialize`, format setting, `AudioUnitInitialize`, and restart. `AudioUnitGetProperty` confirmed 44.1 kHz. Device nominal rates remained 48 kHz. This verifies *client* format changes; an external hardware-format change during operation was not tested.
 
 ## Decision for the main audio pipeline

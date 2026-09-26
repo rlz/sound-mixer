@@ -25,7 +25,6 @@
         A1000000000000000000000F /* AudioCaptureSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000027 /* AudioCaptureSessions.swift */; };
         A1000000000000000000002C /* RealtimePeakMeter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002D /* RealtimePeakMeter.swift */; };
         A10000000000000000000028 /* BridgeState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000029 /* BridgeState.swift */; };
-        A1000000000000000000002A /* BlackHoleRouteCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002B /* BlackHoleRouteCommands.swift */; };
         A1000000000000000000002E /* AudioSourceFanout.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002F /* AudioSourceFanout.swift */; };
         A10000000000000000000032 /* CoreAudioOutputMute.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000033 /* CoreAudioOutputMute.swift */; };
 /* End PBXBuildFile section */
@@ -51,7 +50,6 @@
         A1000000000000000000001F /* AudioRoutingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRoutingCoordinator.swift; sourceTree = "<group>"; };
         A10000000000000000000027 /* AudioCaptureSessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureSessions.swift; sourceTree = "<group>"; };
         A10000000000000000000029 /* BridgeState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeState.swift; sourceTree = "<group>"; };
-        A1000000000000000000002B /* BlackHoleRouteCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlackHoleRouteCommands.swift; sourceTree = "<group>"; };
         A1000000000000000000002D /* RealtimePeakMeter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimePeakMeter.swift; sourceTree = "<group>"; };
         A1000000000000000000002F /* AudioSourceFanout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSourceFanout.swift; sourceTree = "<group>"; };
         A10000000000000000000033 /* CoreAudioOutputMute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAudioOutputMute.swift; sourceTree = "<group>"; };
@@ -72,7 +70,6 @@
             children = (
                 A10000000000000000000011 /* AppDelegate.swift */,
                 A10000000000000000000029 /* BridgeState.swift */,
-                A1000000000000000000002B /* BlackHoleRouteCommands.swift */,
                 A10000000000000000000012 /* main.swift */,
                 A10000000000000000000024 /* Domain */,
                 A10000000000000000000025 /* Storage */,
@@ -199,7 +196,6 @@
                 A1000000000000000000000F /* AudioCaptureSessions.swift in Sources */,
                 A1000000000000000000002C /* RealtimePeakMeter.swift in Sources */,
                 A1000000000000000000002E /* AudioSourceFanout.swift in Sources */,
-                A1000000000000000000002A /* BlackHoleRouteCommands.swift in Sources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };

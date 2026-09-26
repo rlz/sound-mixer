@@ -3,18 +3,12 @@ import Foundation
 import XCTest
 
 final class GraphValidatorTests: XCTestCase {
-    private let blackHoleUID = DeviceUID(rawValue: "blackhole")
-
-    func testValidSharedBusAndNonoverlappingRoutes() throws {
+    func testValidSharedBusGraph() throws {
         let application = ApplicationID(rawValue: "com.example.audio")
         let bus = VirtualBus(name: "Shared", mix: Mix(inputs: [MixInput(source: .application(application))]))
         let configuration = MixerConfiguration(
             outputMixes: [OutputMix(deviceUID: DeviceUID(rawValue: "speakers"), mix: Mix(inputs: [MixInput(source: .bus(bus.id))]))],
-            buses: [bus],
-            blackHoleRoutes: [
-                route(channels: .mono(17), mix: Mix(inputs: [MixInput(source: .bus(bus.id))])),
-                route(channels: .stereo(left: 3, right: 4))
-            ]
+            buses: [bus]
         )
 
         XCTAssertNoThrow(try GraphValidator.validate(configuration))
@@ -32,48 +26,11 @@ final class GraphValidatorTests: XCTestCase {
         assertError(.busCycle, in: MixerConfiguration(buses: [selfReferencing]))
     }
 
-    func testRouteReferencesAreValidatedAndParticipateInMixedCycles() {
-        let routeID = UUID()
-        let missingRouteID = UUID()
-        let referencingRoute = BlackHoleRoute(
-            name: "Reference",
-            deviceUID: blackHoleUID,
-            channels: .stereo(left: 1, right: 2),
-            mix: Mix(inputs: [MixInput(source: .blackHoleRoute(missingRouteID))])
-        )
-        assertError(.missingRoute(missingRouteID), in: MixerConfiguration(blackHoleRoutes: [referencingRoute]))
-
-        let busID = UUID()
-        let bus = VirtualBus(id: busID, name: "Bus", mix: Mix(inputs: [MixInput(source: .blackHoleRoute(routeID))]))
-        let linkedRoute = BlackHoleRoute(
-            id: routeID,
-            name: "Route",
-            deviceUID: blackHoleUID,
-            channels: .stereo(left: 1, right: 2),
-            mix: Mix(inputs: [MixInput(source: .bus(busID))])
-        )
-        assertError(.busCycle, in: MixerConfiguration(buses: [bus], blackHoleRoutes: [linkedRoute]))
-    }
-
-    func testBlackHoleChannelSelectionsAndConflictsAreRejected() {
-        assertError(.invalidChannels, in: MixerConfiguration(blackHoleRoutes: [route(channels: .mono(0))]))
-        assertError(.invalidChannels, in: MixerConfiguration(blackHoleRoutes: [route(channels: .stereo(left: 3, right: 3))]))
-        assertError(.blackHoleChannelConflict(blackHoleUID), in: MixerConfiguration(blackHoleRoutes: [
-            route(channels: .stereo(left: 3, right: 4)), route(channels: .mono(4))
-        ]))
-        assertError(.blackHoleChannelConflict(blackHoleUID), in: MixerConfiguration(
-            outputMixes: [OutputMix(deviceUID: blackHoleUID)],
-            blackHoleRoutes: [route(channels: .mono(17))]
-        ))
-    }
-
     func testDuplicateNodesSourcesAndInvalidLevelsAreRejected() {
         let bus = VirtualBus(name: "Bus")
         assertError(.duplicateBus(bus.id), in: MixerConfiguration(buses: [bus, bus]))
         let output = OutputMix(deviceUID: DeviceUID(rawValue: "speaker"))
         assertError(.duplicateOutput(output.deviceUID), in: MixerConfiguration(outputMixes: [output, output]))
-        let duplicateRoute = route(channels: .mono(1))
-        assertError(.duplicateRoute(duplicateRoute.id), in: MixerConfiguration(blackHoleRoutes: [duplicateRoute, duplicateRoute]))
         let source = MixInput(source: .bus(bus.id))
         assertError(.duplicateSource, in: MixerConfiguration(
             outputMixes: [OutputMix(deviceUID: output.deviceUID, mix: Mix(inputs: [source, source]))],
@@ -107,25 +64,21 @@ final class GraphValidatorTests: XCTestCase {
     func testMissingDevicesAreRetainedButIncompatibleFormatsAreReported() throws {
         let inputUID = DeviceUID(rawValue: "mic")
         let outputUID = DeviceUID(rawValue: "speaker")
-        let route = route(channels: .stereo(left: 3, right: 4))
         let configuration = MixerConfiguration(
-            outputMixes: [OutputMix(deviceUID: outputUID, mix: Mix(inputs: [MixInput(source: .inputDevice(inputUID))]))],
-            blackHoleRoutes: [route]
+            outputMixes: [OutputMix(deviceUID: outputUID, mix: Mix(inputs: [MixInput(source: .inputDevice(inputUID))]))]
         )
         XCTAssertNoThrow(try GraphValidator.validate(configuration))
         XCTAssertEqual(GraphValidator.deviceIssues(for: configuration, devices: []), [
-            .missingDevice(.input(inputUID)), .missingDevice(.output(outputUID)), .missingDevice(.blackHoleRoute(route.id))
+            .missingDevice(.input(inputUID)), .missingDevice(.output(outputUID))
         ])
 
         let issues = GraphValidator.deviceIssues(for: configuration, devices: [
             device(inputUID, input: 65, output: 0, rate: 48000),
-            device(outputUID, input: 0, output: 65, rate: .nan),
-            device(blackHoleUID, input: 0, output: 3, rate: 44100, isBlackHole: false)
+            device(outputUID, input: 0, output: 65, rate: .nan)
         ])
         XCTAssertEqual(issues, [
             .unsupportedChannelCount(.input(inputUID)),
-            .invalidSampleRate(.output(outputUID)),
-            .notBlackHole(.blackHoleRoute(route.id)), .channelOutOfRange(.blackHoleRoute(route.id))
+            .invalidSampleRate(.output(outputUID))
         ])
     }
 
@@ -141,20 +94,15 @@ final class GraphValidatorTests: XCTestCase {
         ]).isEmpty)
     }
 
-    private func route(channels: BlackHoleChannels, mix: Mix = Mix()) -> BlackHoleRoute {
-        BlackHoleRoute(name: "Route", deviceUID: blackHoleUID, channels: channels, mix: mix)
-    }
-
     private func device(
         _ uid: DeviceUID,
         input: Int,
         output: Int,
-        rate: Double,
-        isBlackHole: Bool = false
+        rate: Double
     ) -> AudioDeviceDescriptor {
         AudioDeviceDescriptor(
             uid: uid, name: uid.rawValue, inputChannels: input,
-            outputChannels: output, sampleRate: rate, isBlackHole: isBlackHole
+            outputChannels: output, sampleRate: rate
         )
     }
 

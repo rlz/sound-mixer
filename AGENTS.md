@@ -5,7 +5,7 @@ These rules apply to the entire repository. User requirements and files in `requ
 ## Purpose and scope
 
 - Build a desktop app for macOS 15+ with Swift, AppKit, and WKWebView. React, TypeScript, and Tailwind provide the interface. Audio processing stays native.
-- Do not describe an internal virtual bus as a system device. Only a route through an installed BlackHole driver is associated with a Core Audio device.
+- Do not describe an internal virtual bus as a system device. Physical Core Audio devices and internal virtual buses are separate destination types.
 - Do not promise capture of all audio from an application or control of system volume where macOS or the device does not support it. Show errors and limitations clearly.
 - When behavior changes, update the relevant requirements and `todo.md`.
 
@@ -33,7 +33,7 @@ These rules apply to the entire repository. User requirements and files in `requ
 ## Verification
 
 - For the audio engine, test signal level, mono to stereo mapping, routes, cycle prevention, and device changes.
-- For integration, test device connection and disconnection, permission denial, missing BlackHole, the master switch, app exit, and restoration of saved configuration.
+- For integration, test device connection and disconnection, permission denial, the master switch, app exit, and restoration of saved configuration.
 - For the interface, test name editing, keyboard accessibility, visible error states, and synchronization of sliders with native state.
 - If a required device or permission is unavailable in the development environment, state what was checked automatically and what still needs manual verification on a Mac.
 

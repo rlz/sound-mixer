@@ -1,18 +1,16 @@
 # Sound Mixer
 
-Sound Mixer is an audio mixer for modern macOS versions. It collects audio from input devices, individual applications, and internal virtual buses, mixes them with independent volume levels, and routes the result to physical output devices or selected BlackHole channels.
+Sound Mixer is an audio mixer for modern macOS versions. It collects audio from input devices, individual applications, and internal virtual buses, mixes them with independent volume levels, and routes the result to physical output devices.
 
 ## Status
 
-The application has a native Core Audio capture and output pipeline, configurable mixes, per-mix channel matrices and input gain settings, multichannel physical outputs, BlackHole stereo-pair output routes, automatic local configuration storage, and a React interface hosted in WKWebView. Some parts of the multichannel physical-input path and BlackHole pair input capture are still in progress; see [todo.md](todo.md) for implementation and verification status.
+The application has a native Core Audio capture and output pipeline, configurable mixes, per-mix channel matrices and input gain settings, multichannel physical outputs, automatic local configuration storage, and a React interface hosted in WKWebView. Some parts of the multichannel physical-input path are still in progress; see [todo.md](todo.md) for implementation and verification status.
 
 ## Current behavior and limitations
 
-- The left panel lists available Core Audio outputs, internal virtual buses, and configured BlackHole routes. Physical outputs expose device volume when Core Audio provides a writable main control; buses and BlackHole routes use software Mix gain.
+- The left panel lists available Core Audio outputs and internal virtual buses. Physical outputs expose device volume where Core Audio provides a writable main control; buses use software Mix gain.
 - Users can create and rename internal virtual buses. These buses exist only in Sound Mixer and do not appear as macOS system devices.
-- BlackHole routes use the lowest available adjacent stereo output pair automatically. The installed driver remains a separate dependency and is never installed by Sound Mixer.
-- Sound Mixer classifies items as `system` (Core Audio devices excluding BlackHole), `virtual` (internal buses), and `blackhole` (created BlackHole stereo pairs). Installed BlackHole devices appear as physical Inputs/Outputs and in the route-creation selector; configured channel pairs appear as separate route inputs and destinations.
-- Mix sources include physical inputs, eligible applications, virtual buses, and configured BlackHole routes. Every mix source has a channel matrix per destination; a six-channel physical output exposes six destination channels, and one source channel can feed several of them. Physical input rows also store per-channel gains. Physical capture accepts 1–64 channels and exposes per-channel meters; multichannel device behavior still needs live Mac verification.
+- Mix sources include physical inputs, eligible applications, and virtual buses. Every mix source has a channel matrix per destination; a six-channel physical output exposes six destination channels, and one source channel can feed several of them. Physical input rows also store per-channel gains. Physical capture accepts 1–64 channels and exposes per-channel meters; multichannel device behavior still needs live Mac verification.
 - The master switch controls Sound Mixer's capture and output. Configuration is saved locally and restored at launch. Missing devices remain visible with an unavailable state.
 - Sound Mixer does not change the macOS default output device. Device volume changes made in Sound Mixer are restored on normal exit if the device still has the app-set value. Devices without a writable main volume cannot be adjusted here. Application capture and physical-output metering depend on macOS System Audio Recording permission.
 
@@ -27,7 +25,7 @@ See the detailed requirements for [product scope](requirements/00-product.md), [
 - Swift and WebKit communicate through typed messages. The native side confirms settings changes, which are then reflected in the interface.
 - Versioned local configuration in Application Support automatically stores routes, levels, names, selected channels, and the master switch state. It does not store source audio.
 
-The first version targets **macOS 15 and later**. The project is configured for **Xcode 27.0 / macOS SDK 27.0**, Node.js 26.8.1, and npm 12.0.2. Application audio capture uses Core Audio process taps and requires System Audio Recording permission. Users install BlackHole separately.
+The first version targets **macOS 15 and later**. The project is configured for **Xcode 27.0 / macOS SDK 27.0**, Node.js 26.8.1, and npm 12.0.2. Application audio capture uses Core Audio process taps and requires System Audio Recording permission.
 
 ## Build and launch
 
@@ -44,12 +42,6 @@ The first time you add a physical input, macOS may ask for Microphone access. Tu
 
 To run the repository's formatting, lint, test, web-build, and app-build checks, use `./scripts/check.sh`. It installs the pinned SwiftFormat and SwiftLint binaries after checksum verification and uses the locked npm dependencies. Xcode 27 and Node.js 26.8.1 are required.
 
-## Install BlackHole
-
-Sound Mixer does not bundle or install the BlackHole audio driver. Install a BlackHole build from the [official BlackHole repository](https://github.com/ExistentialAudio/BlackHole#installation-instructions), follow its installer instructions, and approve the system extension or restart if the installer requests it. Then open **Audio MIDI Setup** or Sound Mixer's device list and confirm the BlackHole device is available. In Sound Mixer, add a BlackHole route and choose the discovered BlackHole device; Sound Mixer assigns the next available stereo pair. A route can be unavailable if the driver is absent, disconnected, or does not expose its saved channels.
-
-BlackHole routes are intended for audio routing and loopback. Configure the application or macOS audio path to send audio into the corresponding BlackHole input when loopback is desired. Sound Mixer meters device-directed audio from other applications but does not route that audio into a mix automatically.
-
 ## Development
 
 Web source lives in `Web/src`; `Web/dist` is generated by the build and ignored by Git. Do not commit its contents. Use `npm run build` from `Web` while iterating on the interface. Swift and web tool versions and formatting rules are pinned in the repository. To fix formatting, run `.tools/bin/swiftformat SoundMixer Tests --config .swiftformat --cache ignore` and `cd Web && npm run format`.
@@ -65,4 +57,3 @@ In Safari, open **Develop → Inspect Apps and Devices → Sound Mixer → Sound
 - [Apple: Capturing system audio with Core Audio taps](https://developer.apple.com/documentation/CoreAudio/capturing-system-audio-with-core-audio-taps)
 - [Apple: AudioHardwareSystem and device discovery](https://developer.apple.com/documentation/coreaudio/audiohardwaresystem)
 - [Apple: Requesting authorization for media capture on macOS](https://developer.apple.com/documentation/bundleresources/requesting-authorization-for-media-capture-on-macos)
-- [BlackHole: official repository](https://github.com/ExistentialAudio/BlackHole)

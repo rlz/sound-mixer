@@ -2,8 +2,7 @@ import AudioToolbox
 import CoreAudio
 import Foundation
 
-/// Owns one HAL output unit per Core Audio device. Routes using separate channel
-/// pairs share that unit, so adding a pair only publishes a new render snapshot.
+/// Owns one HAL output unit per Core Audio device and publishes channel snapshots to it.
 final class CoreAudioOutputCoordinator {
     typealias RenderHandler = (UnsafeBufferPointer<UnsafeMutablePointer<Float>>, Int) -> Void
 

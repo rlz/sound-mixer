@@ -17,8 +17,6 @@ export const MixEditorPanel = memo(function MixEditorPanel() {
     const setSelectedItem = useMixerStore((state) => state.setSelectedItem);
     const pending = useMixerStore((state) => state.pending);
     const setBusNameDraft = useMixerStore((state) => state.setBusNameDraft);
-    const routeDeviceUID = useMixerStore((state) => state.routeDeviceUID);
-    const setRouteDeviceUID = useMixerStore((state) => state.setRouteDeviceUID);
     const [renameDialogOpen, setRenameDialogOpen] = useState(false);
     const send = useMixerCommand();
 
@@ -28,16 +26,11 @@ export const MixEditorPanel = memo(function MixEditorPanel() {
     const selectedBus = mixerState?.buses.find(
         (bus) => selectedItem === `bus:${bus.id}`,
     );
-    const selectedRoute = mixerState?.blackHoleRoutes.find(
-        (route) => selectedItem === `blackHole:${route.id}`,
-    );
     const selectedTarget = selectedOutput
         ? { target: "output" as const, id: selectedOutput.uid }
         : selectedBus
           ? { target: "bus" as const, id: selectedBus.id }
-          : selectedRoute
-            ? { target: "route" as const, id: selectedRoute.id }
-            : null;
+          : null;
     const selectedMix: MixState | null = selectedTarget
         ? (mixerState?.mixes.find(
               (mix) =>
@@ -50,26 +43,6 @@ export const MixEditorPanel = memo(function MixEditorPanel() {
               levelReading: null,
           })
         : null;
-    const deleteVirtualItem = async (
-        kind: "bus" | "route",
-        id: string,
-        name: string,
-    ) => {
-        const approved = window.confirm(
-            kind === "route"
-                ? `Delete “${name}” and its saved mix? This also removes it as a source from every mix that uses it.`
-                : `Delete “${name}”? Mixes that use this bus will prevent deletion.`,
-        );
-        if (!approved) return;
-        const accepted = await send(`${kind}-delete:${id}`, {
-            command: kind === "route" ? "deleteRoute" : "deleteBus",
-            id,
-        });
-        if (accepted) {
-            setSelectedItem(null);
-            setBusNameDraft(null);
-        }
-    };
     return (
         <>
             <div className="min-h-0 min-w-0 [scrollbar-gutter:stable] overflow-x-hidden overflow-y-auto overscroll-contain bg-slate-950 p-3.5">
@@ -78,7 +51,6 @@ export const MixEditorPanel = memo(function MixEditorPanel() {
                         <h1 className="text-xl font-semibold tracking-tight">
                             {selectedOutput?.name ??
                                 selectedBus?.name ??
-                                selectedRoute?.name ??
                                 "Settings"}
                         </h1>
                         <p className="mt-1 text-sm text-slate-400">
@@ -86,9 +58,7 @@ export const MixEditorPanel = memo(function MixEditorPanel() {
                                 ? "System"
                                 : selectedBus
                                   ? "Virtual"
-                                  : selectedRoute
-                                    ? "BlackHole"
-                                    : "Select an output or virtual item."}
+                                  : "Select an output or virtual item."}
                         </p>
                     </div>
                     {selectedTarget && selectedMix && (
@@ -118,20 +88,16 @@ export const MixEditorPanel = memo(function MixEditorPanel() {
                                     aria-hidden="true"
                                 />
                             </button>
-                            {(selectedBus || selectedRoute) && (
+                            {selectedBus && (
                                 <>
                                     <button
                                         type="button"
                                         disabled={pending !== null}
-                                        aria-label={`Rename ${selectedBus?.name ?? selectedRoute?.name}`}
+                                        aria-label={`Rename ${selectedBus.name}`}
                                         title="Edit name"
                                         className="flex h-8 w-8 items-center justify-center rounded-md text-slate-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
                                         onClick={() => {
-                                            setBusNameDraft(
-                                                selectedBus?.name ??
-                                                    selectedRoute?.name ??
-                                                    "",
-                                            );
+                                            setBusNameDraft(selectedBus.name);
                                             setRenameDialogOpen(true);
                                         }}
                                     >
@@ -143,22 +109,22 @@ export const MixEditorPanel = memo(function MixEditorPanel() {
                                     <button
                                         type="button"
                                         disabled={pending !== null}
-                                        aria-label={`Delete ${selectedBus?.name ?? selectedRoute?.name}`}
+                                        aria-label={`Delete ${selectedBus.name}`}
                                         title="Delete"
                                         className="flex h-8 w-8 items-center justify-center rounded-md text-rose-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-300 disabled:opacity-50"
                                         onClick={() => {
-                                            if (selectedRoute)
-                                                void deleteVirtualItem(
-                                                    "route",
-                                                    selectedRoute.id,
-                                                    selectedRoute.name,
-                                                );
-                                            else if (selectedBus)
-                                                void deleteVirtualItem(
-                                                    "bus",
-                                                    selectedBus.id,
-                                                    selectedBus.name,
-                                                );
+                                            void send(
+                                                `bus-delete:${selectedBus.id}`,
+                                                {
+                                                    command: "deleteBus",
+                                                    id: selectedBus.id,
+                                                },
+                                            ).then((accepted) => {
+                                                if (accepted) {
+                                                    setSelectedItem(null);
+                                                    setBusNameDraft(null);
+                                                }
+                                            });
                                         }}
                                     >
                                         <FontAwesomeIcon
@@ -171,72 +137,6 @@ export const MixEditorPanel = memo(function MixEditorPanel() {
                         </div>
                     )}
                 </div>
-
-                {selectedItem === "route:new" && (
-                    <section
-                        className="mb-5 rounded-2xl border border-slate-800 bg-slate-900 p-5"
-                        aria-label="Virtual item settings"
-                    >
-                        <form
-                            className="space-y-3"
-                            onSubmit={(event) => {
-                                event.preventDefault();
-                                void send("route-create", {
-                                    command: "createRoute",
-                                    deviceUID: routeDeviceUID,
-                                });
-                            }}
-                        >
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <label className="text-sm">
-                                    BlackHole device
-                                    <select
-                                        required
-                                        value={routeDeviceUID}
-                                        onChange={(event) =>
-                                            setRouteDeviceUID(
-                                                event.currentTarget.value,
-                                            )
-                                        }
-                                        className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
-                                    >
-                                        <option value="">
-                                            Choose an available device
-                                        </option>
-                                        {mixerState?.outputs
-                                            .filter(
-                                                (output) =>
-                                                    output.isBlackHole &&
-                                                    output.available,
-                                            )
-                                            .map((output) => (
-                                                <option
-                                                    key={output.uid}
-                                                    value={output.uid}
-                                                >
-                                                    {output.name} ·{" "}
-                                                    {output.outputChannels}{" "}
-                                                    channels
-                                                </option>
-                                            ))}
-                                    </select>
-                                </label>
-                            </div>
-                            <p className="text-xs text-slate-400">
-                                Sound Mixer assigns the lowest free adjacent
-                                stereo pair and names the route from its
-                                channels.
-                            </p>
-                            <button
-                                type="submit"
-                                disabled={pending !== null}
-                                className="rounded-lg bg-sky-300 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
-                            >
-                                Create route
-                            </button>
-                        </form>
-                    </section>
-                )}
 
                 <MixSourceList />
             </div>

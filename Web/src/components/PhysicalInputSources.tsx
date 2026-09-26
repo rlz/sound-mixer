@@ -28,16 +28,11 @@ export const PhysicalInputSources = memo(function PhysicalInputSources() {
     const selectedBus = mixerState?.buses.find(
         (bus) => selectedItem === `bus:${bus.id}`,
     );
-    const selectedRoute = mixerState?.blackHoleRoutes.find(
-        (route) => selectedItem === `blackHole:${route.id}`,
-    );
     const selectedTarget = selectedOutput
         ? { target: "output" as const, id: selectedOutput.uid }
         : selectedBus
           ? { target: "bus" as const, id: selectedBus.id }
-          : selectedRoute
-            ? { target: "route" as const, id: selectedRoute.id }
-            : null;
+          : null;
     const selectedMix: MixState | null = selectedTarget
         ? (mixerState?.mixes.find(
               (mix) =>
@@ -76,11 +71,7 @@ export const PhysicalInputSources = memo(function PhysicalInputSources() {
                     <ItemCard
                         key={device.uid}
                         name={device.name}
-                        type={
-                            device.category === "blackhole"
-                                ? "BlackHole device"
-                                : "System"
-                        }
+                        type="System"
                         level={inputState?.level}
                         levelLabel={`${device.name} input`}
                         available={device.available}

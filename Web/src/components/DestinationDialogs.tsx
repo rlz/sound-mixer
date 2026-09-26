@@ -123,17 +123,12 @@ export function RenameDestinationDialog({
 }: DialogProps & { open: boolean; onClose: () => void }) {
     const selectedItem = useMixerStore((state) => state.selectedItem);
     const buses = useMixerStore((state) => state.mixerState?.buses) ?? [];
-    const routes =
-        useMixerStore((state) => state.mixerState?.blackHoleRoutes) ?? [];
     const pending = useMixerStore((state) => state.pending);
     const draft = useMixerStore((state) => state.busNameDraft);
     const setDraft = useMixerStore((state) => state.setBusNameDraft);
     const bus = buses.find((item) => selectedItem === `bus:${item.id}`);
-    const route = routes.find(
-        (item) => selectedItem === `blackHole:${item.id}`,
-    );
 
-    if (!open || (!bus && !route)) return null;
+    if (!open || !bus) return null;
     return (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
@@ -151,17 +146,11 @@ export function RenameDestinationDialog({
                 <form
                     onSubmit={async (event) => {
                         event.preventDefault();
-                        const success = bus
-                            ? await send("bus-rename", {
-                                  command: "renameBus",
-                                  id: bus.id,
-                                  name: draft ?? "",
-                              })
-                            : await send("route-rename", {
-                                  command: "renameRoute",
-                                  id: route!.id,
-                                  name: draft ?? "",
-                              });
+                        const success = await send("bus-rename", {
+                            command: "renameBus",
+                            id: bus.id,
+                            name: draft ?? "",
+                        });
                         if (success) onClose();
                     }}
                 >
@@ -169,7 +158,7 @@ export function RenameDestinationDialog({
                         id="rename-destination-title"
                         className="text-base font-semibold"
                     >
-                        Rename {bus ? "virtual bus" : "BlackHole route"}
+                        Rename virtual bus
                     </h2>
                     <label
                         className="mt-3 block text-sm"

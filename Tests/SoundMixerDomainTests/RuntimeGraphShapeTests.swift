@@ -7,18 +7,12 @@ final class RuntimeGraphShapeTests: XCTestCase {
         let source = SourceReference.application(ApplicationID(rawValue: "com.example.player"))
         let bus = VirtualBus(name: "Bus", mix: Mix(inputs: [MixInput(source: source)]))
         let output = OutputMix(deviceUID: DeviceUID(rawValue: "speakers"), mix: Mix(inputs: [MixInput(source: .bus(bus.id))]))
-        let route = BlackHoleRoute(
-            name: "Pair", deviceUID: DeviceUID(rawValue: "blackhole"), channels: .stereo(left: 1, right: 2),
-            mix: Mix(inputs: [MixInput(source: source)])
-        )
-        let original = MixerConfiguration(outputMixes: [output], buses: [bus], blackHoleRoutes: [route])
+        let original = MixerConfiguration(outputMixes: [output], buses: [bus])
         let before = RuntimeGraphShape(configuration: original)
         let edits: [(inout MixerConfiguration) -> Void] = [
             { $0.outputMixes[0].mix.inputs[0].level = 0.3 },
             { $0.buses[0].mix.inputs[0].level = 0.3 },
-            { $0.buses[0].mix.level = 0.3 },
-            { $0.blackHoleRoutes[0].mix.inputs[0].level = 0.3 },
-            { $0.blackHoleRoutes[0].mix.level = 0.3 }
+            { $0.buses[0].mix.level = 0.3 }
         ]
         for (index, edit) in edits.enumerated() {
             var changed = original
@@ -121,35 +115,4 @@ final class RuntimeGraphShapeTests: XCTestCase {
         XCTAssertEqual(after.changedBusIDs(from: before), [])
     }
 
-    func testAddingEmptyBlackHoleRouteDoesNotCreateAnOutputRenderer() {
-        let output = OutputMix(deviceUID: DeviceUID(rawValue: "speakers"))
-        let route = BlackHoleRoute(
-            name: "BlackHole 1/2",
-            deviceUID: DeviceUID(rawValue: "blackhole"),
-            channels: .stereo(left: 1, right: 2)
-        )
-        let before = RuntimeGraphShape(configuration: MixerConfiguration(outputMixes: [output]))
-        let after = RuntimeGraphShape(configuration: MixerConfiguration(
-            outputMixes: [output], blackHoleRoutes: [route]
-        ))
-
-        XCTAssertEqual(after.changedRouteKeys(from: before), [])
-        XCTAssertEqual(after.changedBusIDs(from: before), [])
-    }
-
-    func testAddingBlackHoleRouteWithSourcesCreatesOnlyItsOutputRenderer() {
-        let output = OutputMix(deviceUID: DeviceUID(rawValue: "speakers"))
-        let route = BlackHoleRoute(
-            name: "BlackHole 1/2",
-            deviceUID: DeviceUID(rawValue: "blackhole"),
-            channels: .stereo(left: 1, right: 2),
-            mix: Mix(inputs: [MixInput(source: .application(ApplicationID(rawValue: "com.example.player")))])
-        )
-        let before = RuntimeGraphShape(configuration: MixerConfiguration(outputMixes: [output]))
-        let after = RuntimeGraphShape(configuration: MixerConfiguration(
-            outputMixes: [output], blackHoleRoutes: [route]
-        ))
-
-        XCTAssertEqual(after.changedRouteKeys(from: before), ["blackhole:\(route.id.uuidString)"])
-    }
 }

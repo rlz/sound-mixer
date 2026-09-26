@@ -25,8 +25,7 @@ export const InputsPanel = memo(function InputsPanel() {
             >
                 <ItemGroup title="System">
                     {sourceDevices.length === 0 &&
-                        (mixerState?.buses.length ?? 0) === 0 &&
-                        (mixerState?.blackHoleRoutes.length ?? 0) === 0 && (
+                        (mixerState?.buses.length ?? 0) === 0 && (
                             <p className="px-3 text-sm text-slate-500">
                                 No inputs found.
                             </p>

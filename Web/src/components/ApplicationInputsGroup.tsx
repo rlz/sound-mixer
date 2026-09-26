@@ -15,8 +15,6 @@ export const ApplicationInputsGroup = memo(function ApplicationInputsGroup() {
     const selectedItem = useMixerStore((state) => state.selectedItem);
     const outputs = useMixerStore((state) => state.mixerState?.outputs) ?? [];
     const buses = useMixerStore((state) => state.mixerState?.buses) ?? [];
-    const routes =
-        useMixerStore((state) => state.mixerState?.blackHoleRoutes) ?? [];
     const mixes = useMixerStore((state) => state.mixerState?.mixes) ?? [];
     const pending = useMixerStore((state) => state.pending);
     const send = useMixerCommand();
@@ -25,16 +23,11 @@ export const ApplicationInputsGroup = memo(function ApplicationInputsGroup() {
         (output) => selectedItem === `output:${output.uid}`,
     );
     const selectedBus = buses.find((bus) => selectedItem === `bus:${bus.id}`);
-    const selectedRoute = routes.find(
-        (route) => selectedItem === `blackHole:${route.id}`,
-    );
     const selectedTarget = selectedOutput
         ? { target: "output" as const, id: selectedOutput.uid }
         : selectedBus
           ? { target: "bus" as const, id: selectedBus.id }
-          : selectedRoute
-            ? { target: "route" as const, id: selectedRoute.id }
-            : null;
+          : null;
     const selectedMix: MixState | null = selectedTarget
         ? (mixes.find(
               (mix) =>

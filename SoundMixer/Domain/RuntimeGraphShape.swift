@@ -34,19 +34,6 @@ public struct RuntimeGraphShape: Equatable, Sendable {
                 dependentBuses: Self.dependencies(of: mix, in: buses)
             )
         }
-        for route in configuration.blackHoleRoutes {
-            guard !route.mix.inputs.isEmpty else { continue }
-            let channels: [Int] = switch route.channels {
-            case let .mono(channel): [channel - 1]
-            case let .stereo(left, right): [left - 1, right - 1]
-            }
-            routes["blackhole:\(route.id.uuidString)"] = RuntimeRouteRenderingDefinition(
-                deviceUID: route.deviceUID,
-                channels: channels,
-                mix: Self.renderingStructure(route.mix),
-                dependentBuses: Self.dependencies(of: route.mix, in: buses)
-            )
-        }
         routesByKey = routes
         busDependenciesByID = Dictionary(uniqueKeysWithValues: buses.map { bus in
             (bus.id, Self.dependencies(of: Mix(inputs: [MixInput(source: .bus(bus.id))]), in: buses))

@@ -49,16 +49,11 @@ export function App() {
     useEffect(() => {
         if (selectedItem !== null || !mixerState) return;
         const firstDestination =
-            mixerState.outputs.find(
-                (output) => output.available && !output.isBlackHole,
-            ) ??
-            mixerState.buses[0] ??
-            mixerState.blackHoleRoutes[0];
+            mixerState.outputs.find((output) => output.available) ??
+            mixerState.buses[0];
         if (!firstDestination) return;
         if ("uid" in firstDestination) {
             setSelectedItem(`output:${firstDestination.uid}`);
-        } else if ("deviceUID" in firstDestination) {
-            setSelectedItem(`blackHole:${firstDestination.id}`);
         } else {
             setSelectedItem(`bus:${firstDestination.id}`);
         }

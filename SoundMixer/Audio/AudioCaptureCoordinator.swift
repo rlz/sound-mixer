@@ -64,27 +64,6 @@ final class AudioCaptureCoordinator {
         queue.async { [weak self] in self?.startInputOnQueue(uid: uid, deviceID: deviceID) }
     }
 
-    func startBlackHoleRoute(id: String, deviceID: AudioDeviceID, channels: [Int]) {
-        queue.async { [weak self] in
-            guard let self else { return }
-            let key = "route:\(id)"
-            if let session = inputSessions[key], session.matches(deviceID: deviceID, selectedChannels: channels) {
-                return
-            }
-            inputSessions.removeValue(forKey: key)?.stop()
-            publish(key, .starting)
-            do {
-                let session = try AudioInputCaptureSession(
-                    uid: key, deviceID: deviceID, owner: self, selectedChannels: channels
-                )
-                try session.start()
-                inputSessions[key] = session
-            } catch {
-                publish(key, .unavailable(error.localizedDescription))
-            }
-        }
-    }
-
     func reportUnavailable(id: String, reason: String) {
         queue.async { [weak self] in self?.publish(id, .unavailable(reason)) }
     }
@@ -189,7 +168,7 @@ final class AudioCaptureCoordinator {
     }
 
     private func startInputOnQueue(uid: String, deviceID: AudioDeviceID) {
-        if let session = inputSessions[uid], session.matches(deviceID: deviceID, selectedChannels: nil) {
+        if let session = inputSessions[uid], session.matches(deviceID: deviceID) {
             return
         }
         inputSessions.removeValue(forKey: uid)?.stop()

@@ -84,6 +84,6 @@ final class ConfigurationStoreTests: XCTestCase {
     }
 
     private func descriptor(_ uid: DeviceUID, name: String) -> AudioDeviceDescriptor {
-        AudioDeviceDescriptor(uid: uid, name: name, inputChannels: 2, outputChannels: 2, sampleRate: 48000, isBlackHole: false)
+        AudioDeviceDescriptor(uid: uid, name: name, inputChannels: 2, outputChannels: 2, sampleRate: 48000)
     }
 }

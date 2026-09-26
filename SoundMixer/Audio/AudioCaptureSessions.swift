@@ -94,13 +94,12 @@ final class AudioInputCaptureSession {
     var sampleStorage: UnsafeMutablePointer<Float>?
     var channels = 1
     var format = AudioStreamBasicDescription()
-    private let selectedChannels: [Int]?
     private let renderStatus = Atomic<Int32>(noErr)
     private let lastRenderedAt = Atomic<UInt64>(0)
     private var startedAt: UInt64 = 0
 
-    func matches(deviceID: AudioDeviceID, selectedChannels: [Int]?) -> Bool {
-        self.deviceID == deviceID && self.selectedChannels == selectedChannels
+    func matches(deviceID: AudioDeviceID) -> Bool {
+        self.deviceID == deviceID
     }
 
     var captureState: AudioCaptureState {
@@ -119,11 +118,10 @@ final class AudioInputCaptureSession {
         return .starting
     }
 
-    init(uid: String, deviceID: AudioDeviceID, owner: AudioCaptureCoordinator, selectedChannels: [Int]? = nil) throws {
-        captureID = uid.hasPrefix("route:") ? uid : "input:\(uid)"
+    init(uid: String, deviceID: AudioDeviceID, owner: AudioCaptureCoordinator) throws {
+        captureID = "input:\(uid)"
         self.deviceID = deviceID
         self.owner = owner
-        self.selectedChannels = selectedChannels
         do {
             try createUnit()
         } catch {
@@ -207,24 +205,6 @@ final class AudioInputCaptureSession {
                 channels: Int(hardwareFormat.mChannelsPerFrame),
                 sampleRate: hardwareFormat.mSampleRate
             )
-        }
-        if let selectedChannels {
-            guard selectedChannels.count == 2,
-                  selectedChannels.allSatisfy({ $0 >= 0 && $0 < Int(hardwareFormat.mChannelsPerFrame) })
-            else {
-                throw AudioCaptureCoordinator.CaptureError.unsupportedInputFormat(
-                    channels: Int(hardwareFormat.mChannelsPerFrame), sampleRate: hardwareFormat.mSampleRate
-                )
-            }
-            var channelMap: [Int32] = selectedChannels.map { Int32($0) }
-            let mapStatus = channelMap.withUnsafeBufferPointer { map in
-                AudioUnitSetProperty(
-                    unit, kAudioOutputUnitProperty_ChannelMap, kAudioUnitScope_Output, 1,
-                    map.baseAddress, UInt32(map.count * MemoryLayout<Int32>.size)
-                )
-            }
-            guard mapStatus == noErr else { throw AudioCaptureCoordinator.CaptureError.audioStatus(mapStatus) }
-            hardwareFormat.mChannelsPerFrame = 2
         }
         // AUHAL stays at the device rate. The source fanout resamples to 48 kHz.
         let bytesPerFrame = hardwareFormat.mChannelsPerFrame * UInt32(MemoryLayout<Float>.size)

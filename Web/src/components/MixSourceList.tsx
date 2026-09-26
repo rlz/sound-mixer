@@ -22,16 +22,11 @@ export const MixSourceList = memo(function MixSourceList() {
     const selectedBus = mixerState?.buses.find(
         (bus) => selectedItem === `bus:${bus.id}`,
     );
-    const selectedRoute = mixerState?.blackHoleRoutes.find(
-        (route) => selectedItem === `blackHole:${route.id}`,
-    );
     const selectedTarget = selectedOutput
         ? { target: "output" as const, id: selectedOutput.uid }
         : selectedBus
           ? { target: "bus" as const, id: selectedBus.id }
-          : selectedRoute
-            ? { target: "route" as const, id: selectedRoute.id }
-            : null;
+          : null;
     const selectedMix: MixState | null = selectedTarget
         ? (mixerState?.mixes.find(
               (mix) =>
@@ -46,9 +41,6 @@ export const MixSourceList = memo(function MixSourceList() {
         : null;
     const deviceNames = new Map(
         mixerState?.devices.map((device) => [device.uid, device.name]) ?? [],
-    );
-    const routesByID = new Map(
-        mixerState?.blackHoleRoutes.map((route) => [route.id, route]) ?? [],
     );
     return (
         <>
@@ -66,7 +58,6 @@ export const MixSourceList = memo(function MixSourceList() {
                     ) : (
                         <ul className="space-y-3">
                             {selectedMix.inputs.map((input) => {
-                                const sourceRoute = routesByID.get(input.id);
                                 const name =
                                     input.kind === "inputDevice"
                                         ? (deviceNames.get(input.id) ??
@@ -75,11 +66,9 @@ export const MixSourceList = memo(function MixSourceList() {
                                           ? (mixerState?.applications.find(
                                                 (app) => app.id === input.id,
                                             )?.name ?? input.id)
-                                          : input.kind === "blackHoleRoute"
-                                            ? (sourceRoute?.name ?? input.id)
-                                            : (mixerState?.buses.find(
-                                                  (bus) => bus.id === input.id,
-                                              )?.name ?? input.id);
+                                          : (mixerState?.buses.find(
+                                                (bus) => bus.id === input.id,
+                                            )?.name ?? input.id);
                                 const available =
                                     input.kind === "inputDevice"
                                         ? mixerState?.devices.some(
@@ -93,9 +82,7 @@ export const MixSourceList = memo(function MixSourceList() {
                                                     app.id === input.id &&
                                                     app.available,
                                             )
-                                          : input.kind === "blackHoleRoute"
-                                            ? sourceRoute?.available
-                                            : true;
+                                          : true;
                                 const captureState =
                                     input.kind === "inputDevice"
                                         ? (mixerState?.inputCaptureStates.find(
@@ -105,10 +92,7 @@ export const MixSourceList = memo(function MixSourceList() {
                                           ? (mixerState?.applications.find(
                                                 (app) => app.id === input.id,
                                             )?.captureState ?? "stopped")
-                                          : input.kind === "blackHoleRoute"
-                                            ? (sourceRoute?.captureState ??
-                                              "unavailable")
-                                            : "capturing";
+                                          : "capturing";
                                 const channelCount =
                                     input.kind === "inputDevice"
                                         ? (mixerState?.devices.find(
@@ -162,12 +146,9 @@ export const MixSourceList = memo(function MixSourceList() {
                                             type={
                                                 input.kind === "inputDevice"
                                                     ? "System"
-                                                    : input.kind ===
-                                                        "blackHoleRoute"
-                                                      ? "BlackHole"
-                                                      : input.kind === "bus"
-                                                        ? "Virtual"
-                                                        : "Application"
+                                                    : input.kind === "bus"
+                                                      ? "Virtual"
+                                                      : "Application"
                                             }
                                             level={input.levelReading}
                                             levelLabel={`${name} mix source`}
