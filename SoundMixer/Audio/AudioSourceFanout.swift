@@ -157,7 +157,7 @@ final class AudioSourceFanout {
         self.inputChannelCounts = inputChannelCounts
         buffersBySource = Dictionary(uniqueKeysWithValues: queuesBySource.map { key, _ in
             let count = inputChannelCounts[key] ?? 2
-            if let buffer = existing?.buffersBySource[key], buffer.channelCount >= count {
+            if let buffer = existing?.buffersBySource[key], buffer.channelCount == count {
                 return (key, buffer)
             }
             return (key, SourceBuffer(capacity: 8192, channelCount: count))

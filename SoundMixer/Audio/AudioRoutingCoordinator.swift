@@ -309,9 +309,7 @@ final class AudioRoutingCoordinator {
         let previousDevices = Dictionary(lastDevices.map { ($0.uid, $0) }, uniquingKeysWith: { _, latest in latest })
         let currentDevices = Dictionary(devices.map { ($0.uid, $0) }, uniquingKeysWith: { _, latest in latest })
         for device in devices {
-            guard let previous = lastDevices.first(where: { $0.uid == device.uid }),
-                  !previous.hasSameInputRouting(as: device)
-            else { continue }
+            if previousDevices[device.uid]?.hasSameInputRouting(as: device) == true { continue }
             if device.inputChannels > 0 {
                 result.insert("input:\(device.uid)")
             }
