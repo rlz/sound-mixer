@@ -9,19 +9,11 @@ type Props = {
 export function MasterSwitch({ mixerState, pending, onToggle }: Props) {
     return (
         <section className="flex min-w-0 items-center gap-4">
-            <div className="min-w-0 text-right">
-                <h1 className="text-sm font-semibold">Mixing On/Off</h1>
-                <p className="text-xs text-slate-400" role="status">
-                    {mixerState?.isEnabled
-                        ? "Sound Mixer is outputting audio."
-                        : "Sound Mixer is not currently outputting audio."}
-                </p>
-            </div>
             <button
                 type="button"
                 role="switch"
                 aria-checked={mixerState?.isEnabled ?? false}
-                aria-label="Mixing On/Off"
+                aria-label="Enable mixing"
                 disabled={!mixerState || pending !== null}
                 onClick={onToggle}
                 className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 disabled:opacity-50 ${mixerState?.isEnabled ? "bg-emerald-300 text-slate-950" : "bg-slate-700 text-slate-100"}`}

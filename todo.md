@@ -23,6 +23,8 @@ Statuses: `[ ]` = not started, `[~]` = in progress. Tasks are ordered by depende
 
 ## 3. Bridge and interface
 
+- [x] Remove redundant master-switch and source-capture captions. **Done when:** the header uses only its compact On/Off control, source capture guidance is not repeated as a footer, and header text remains readable against the dark toolbar.
+
 - [x] Classify system, virtual, and BlackHole items consistently. **Done when:** system means every Core Audio device except BlackHole, virtual means internal buses, and blackhole means configured stereo-pair routes; standalone BlackHole devices are hidden from Inputs/Outputs and created pairs appear as inputs. The bridge publishes categories, panels label each kind consistently, BlackHole input devices are filtered from Inputs, and requirements/README describe the same behavior.
 
 - [x] Treat empty mix settings as absent and expose reset in the editor. **Done when:** destinations can be edited without a separate mix-creation step, empty/default settings are omitted from state, removing the final output source removes its saved mix, and Reset clears the destination's mix settings.

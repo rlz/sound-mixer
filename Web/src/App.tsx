@@ -1914,10 +1914,6 @@ export function App() {
                                 );
                             })}
                         </ItemGroup>
-                        <p className="text-xs text-slate-500">
-                            Source levels are shown in each destination mix.
-                            Capture requires the relevant macOS permission.
-                        </p>
                     </aside>
                 </div>
             </section>
