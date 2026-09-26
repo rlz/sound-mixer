@@ -30,6 +30,14 @@
 
 Manual checks requiring installed BlackHole or multiple physical devices cannot be marked complete based only on unit tests. Record results and test Mac details in a verification report before release.
 
+## User-reported checks — September 26, 2026
+
+- Application gain through +30 dB works.
+- The meters show the expected levels.
+- Exit and route restoration after relaunch work.
+
+These reports confirm the observed behavior but do not yet record the Mac, devices, signal source, or measurement conditions required for the complete acceptance matrix.
+
 ## Built-in microphone regression — September 24, 2026
 
 - Environment: macOS 27.0 (26A428), Xcode 27.0, built-in input reporting 44.1 kHz and one channel. A standalone diagnostic compiled the production capture coordinator, input session, and peak meter. It ran capture for three seconds, stored no audio, and started no output.
