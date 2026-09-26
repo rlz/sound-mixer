@@ -14,6 +14,7 @@ import { AppHeader } from "./components/AppHeader";
 import { MasterSwitch } from "./components/MasterSwitch";
 import { PeakMeter } from "./components/PeakMeter";
 import { StableRange } from "./components/StableRange";
+import { AvailabilityDot } from "./components/AvailabilityDot";
 import "./styles.css";
 
 const applicationGainToDecibels = (gain: number) =>
@@ -227,21 +228,13 @@ export function App() {
                                             setEditingBusId(null);
                                             setEditingRouteId(null);
                                         }}
-                                        className={`item-panel flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `output:${output.uid}` ? "border-sky-300 bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "border-slate-800 text-slate-300 hover:bg-slate-800"}`}
+                                        className={`item-panel flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `output:${output.uid}` ? "border-sky-300 bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "border-slate-800 text-slate-300 hover:bg-slate-800"}`}
                                     >
+                                        <AvailabilityDot
+                                            available={output.available}
+                                        />
                                         <span className="min-w-0 truncate">
                                             {output.name}
-                                        </span>
-                                        <span
-                                            className={
-                                                output.available
-                                                    ? "text-emerald-300"
-                                                    : "text-amber-300"
-                                            }
-                                        >
-                                            {output.available
-                                                ? "Available"
-                                                : "Disconnected"}
                                         </span>
                                     </button>
                                 ))}
@@ -1328,16 +1321,14 @@ export function App() {
                                             </span>
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                    <AvailabilityDot
+                                                        available={
+                                                            output.available
+                                                        }
+                                                    />
                                                     <h2 className="font-medium text-slate-100">
                                                         {output.name}
                                                     </h2>
-                                                    <span
-                                                        className={`text-xs ${output.available ? "text-emerald-300" : "text-amber-300"}`}
-                                                    >
-                                                        {output.available
-                                                            ? "Available"
-                                                            : "Disconnected"}
-                                                    </span>
                                                 </div>
                                                 <p
                                                     className="mt-1 truncate font-mono text-xs text-slate-500"
@@ -1497,6 +1488,9 @@ export function App() {
                                                     aria-hidden="true"
                                                     className="text-slate-400"
                                                 />
+                                                <AvailabilityDot
+                                                    available={device.available}
+                                                />
                                                 {device.name}
                                             </span>
                                             <button
@@ -1530,25 +1524,29 @@ export function App() {
                                                 />
                                             </button>
                                         </div>
-                                        <p className="mt-1 text-xs text-slate-400">
-                                            {!device.available
-                                                ? "Disconnected"
-                                                : captureState === "capturing"
-                                                  ? "Capturing"
-                                                  : captureState.startsWith(
-                                                          "unavailable:",
-                                                      )
-                                                    ? captureState
-                                                          .slice(
-                                                              "unavailable:"
-                                                                  .length,
-                                                          )
-                                                          .trim()
+                                        {(!device.available ||
+                                            captureState !== "stopped") && (
+                                            <p className="mt-1 text-xs text-slate-400">
+                                                {!device.available
+                                                    ? "Disconnected"
                                                     : captureState ===
-                                                        "permissionDenied"
-                                                      ? "Permission denied"
-                                                      : "Available"}
-                                        </p>
+                                                        "capturing"
+                                                      ? "Capturing"
+                                                      : captureState.startsWith(
+                                                              "unavailable:",
+                                                          )
+                                                        ? captureState
+                                                              .slice(
+                                                                  "unavailable:"
+                                                                      .length,
+                                                              )
+                                                              .trim()
+                                                        : captureState ===
+                                                            "permissionDenied"
+                                                          ? "Permission denied"
+                                                          : "Starting"}
+                                            </p>
+                                        )}
                                         {captureState ===
                                             "permissionDenied" && (
                                             <button
