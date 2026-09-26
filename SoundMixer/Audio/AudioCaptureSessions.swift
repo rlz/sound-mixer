@@ -8,6 +8,7 @@ final class AudioProcessCaptureSession {
     let tap: AudioObjectID
     let aggregate: AudioObjectID
     weak var owner: AudioCaptureCoordinator?
+    let meter: RealtimePeakMeter?
     var procID: AudioDeviceIOProcID?
     var format = AudioStreamBasicDescription()
     private let lastDeliveredAt = Atomic<UInt64>(0)
@@ -21,17 +22,20 @@ final class AudioProcessCaptureSession {
         }
         if startedAt > 0, now >= startedAt, now - startedAt > 1_000_000_000 {
             return .unavailable(
-                "The system audio tap is not delivering audio. Check System Audio Recording permission and app playback."
+                meter == nil
+                    ? "The system audio tap is not delivering audio. Check System Audio Recording permission and app playback."
+                    : "The output tap is not delivering audio. Check System Audio Recording permission and device playback."
             )
         }
         return .starting
     }
 
-    init(id: String, tap: AudioObjectID, aggregate: AudioObjectID, owner: AudioCaptureCoordinator) {
-        captureID = "application:\(id)"
+    init(id: String, tap: AudioObjectID, aggregate: AudioObjectID, owner: AudioCaptureCoordinator, meter: RealtimePeakMeter? = nil) {
+        captureID = id
         self.tap = tap
         self.aggregate = aggregate
         self.owner = owner
+        self.meter = meter
     }
 
     func start() throws {
@@ -53,7 +57,11 @@ final class AudioProcessCaptureSession {
             if frames > 0 {
                 session.lastDeliveredAt.store(DispatchTime.now().uptimeNanoseconds, ordering: .releasing)
             }
-            session.owner?.deliver(id: session.captureID, buffers: input, frames: frames, format: session.format)
+            if let meter = session.meter {
+                meter.record(buffers: input, frameCount: frames, format: session.format)
+            } else {
+                session.owner?.deliver(id: session.captureID, buffers: input, frames: frames, format: session.format)
+            }
             return noErr
         }, Unmanaged.passUnretained(self).toOpaque(), &procID)
         guard status == noErr, let procID else { throw AudioCaptureCoordinator.CaptureError.audioStatus(status) }

@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var sourceLevels: [String: Double] = [:]
     private var inputChannelLevels: [String: [Double?]] = [:]
     private var renderLevels: [String: Double] = [:]
+    private var deviceLevels: [String: Double] = [:]
     var audioDevices: [AudioDeviceSnapshot] = []
     private var audioProcesses: [AudioProcessSnapshot] = []
     private var captureStates: [String: String] = [:]
@@ -103,6 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 self?.sourceLevels.removeAll()
                 self?.inputChannelLevels.removeAll()
                 self?.renderLevels.removeAll()
+                self?.deviceLevels.removeAll()
                 self?.publishState()
             }
         }
@@ -596,11 +598,13 @@ extension AppDelegate {
             let sourceLevels = coordinator.sourceLevelReadings()
             let inputChannelLevels = coordinator.inputChannelLevelReadings()
             let renderLevels = coordinator.renderLevelReadings()
+            let deviceLevels = coordinator.deviceLevelReadings()
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.sourceLevels = sourceLevels
                 self.inputChannelLevels = inputChannelLevels
                 self.renderLevels = renderLevels
+                self.deviceLevels = deviceLevels
                 self.meterReadPending = false
                 self.publishState()
             }
@@ -614,7 +618,7 @@ extension AppDelegate {
             schemaVersion: MixerConfiguration.currentSchemaVersion,
             isEnabled: configuration.isEnabled,
             devices: bridgeDevices(configuration: configuration, discovered: discovered),
-            outputs: bridgeOutputs(configuration: configuration, discovered: discovered, renderLevels: renderLevels),
+            outputs: bridgeOutputs(configuration: configuration, discovered: discovered, deviceLevels: deviceLevels),
             buses: configuration.buses.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) },
             blackHoleRoutes: configuration.blackHoleRoutes.map { route in
                 let device = discovered[route.deviceUID.rawValue]
@@ -763,7 +767,11 @@ extension AppDelegate {
         }
     }
 
-    func bridgeOutputs(configuration: MixerConfiguration, discovered: [String: AudioDeviceSnapshot], renderLevels: [String: Double] = [:]) -> [BridgeOutput] {
+    func bridgeOutputs(
+        configuration: MixerConfiguration,
+        discovered: [String: AudioDeviceSnapshot],
+        deviceLevels: [String: Double] = [:]
+    ) -> [BridgeOutput] {
         let saved = Dictionary(uniqueKeysWithValues: configuration.outputMixes.map { ($0.deviceUID.rawValue, $0) })
         let discoveredOutputUIDs = audioDevices.filter { $0.outputChannels > 0 }.map(\.uid)
         return Set(discoveredOutputUIDs).union(saved.keys).sorted().map { uid -> BridgeOutput in
@@ -781,7 +789,8 @@ extension AppDelegate {
                 muteWritable: live?.canSetOutputMute ?? false,
                 configured: saved[uid] != nil,
                 routeError: outputRouteErrors[uid],
-                levelReading: renderLevels["output:\(uid)/destination"]
+                levelReading: deviceLevels[uid],
+                meterState: captureStates["device:\(uid)"]
             )
         }
     }

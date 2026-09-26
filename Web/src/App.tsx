@@ -254,6 +254,15 @@ export function App() {
                                                 muted,
                                             })
                                         }
+                                        onOpenPrivacySettings={() =>
+                                            void send(
+                                                `privacy-output:${output.uid}`,
+                                                {
+                                                    command:
+                                                        "openPrivacySettings",
+                                                },
+                                            )
+                                        }
                                     />
                                 ))}
                             {mixerState?.outputs.every(
@@ -393,7 +402,8 @@ export function App() {
                                             `blackHole:${route.id}`
                                         }
                                         gain={mix?.level ?? 1}
-                                        level={mix?.levelReading ?? null}
+                                        level={route.level}
+                                        captureState={route.captureState}
                                         onSelect={() => {
                                             setSelectedItem(
                                                 `blackHole:${route.id}`,
@@ -624,6 +634,13 @@ export function App() {
                                 className="mb-5 rounded-2xl border border-slate-800 bg-slate-900 p-5"
                                 aria-label="Mix sources"
                             >
+                                <p className="text-xs text-slate-400">
+                                    Mix output
+                                </p>
+                                <PeakMeter
+                                    level={selectedMix.levelReading}
+                                    label={`${selectedOutput?.name ?? selectedBus?.name ?? selectedRoute?.name ?? "Selected"} mix output`}
+                                />
                                 <div className="mb-4 flex flex-wrap items-end gap-3">
                                     <label className="min-w-56 flex-1 text-sm">
                                         Add a source
@@ -1381,14 +1398,6 @@ export function App() {
                                                         Route unavailable:{" "}
                                                         {output.routeError}
                                                     </p>
-                                                )}
-                                                {output.configured && (
-                                                    <PeakMeter
-                                                        level={
-                                                            output.levelReading
-                                                        }
-                                                        label={`${output.name} output`}
-                                                    />
                                                 )}
                                                 {!output.available && (
                                                     <p className="w-full text-xs text-amber-300">

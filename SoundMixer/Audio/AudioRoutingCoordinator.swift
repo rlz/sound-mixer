@@ -15,6 +15,7 @@ final class AudioRoutingCoordinator {
     private var ringsByRoute: [String: [String: RealtimeAudioRingBuffer]] = [:]
     private var sourceMeters: [String: RealtimePeakMeter] = [:]
     private var renderMeters: [String: RealtimePeakMeter] = [:]
+    private var deviceMeters: [String: RealtimePeakMeter] = [:]
     private var lastGraph: MixGraphSnapshot?
     private var lastDevices: [AudioDeviceSnapshot] = []
     private var lastProcesses: [AudioProcessSnapshot] = []
@@ -84,7 +85,18 @@ final class AudioRoutingCoordinator {
         fanout = AudioSourceFanout(queuesBySource: queuesBySource, inputChannelCounts: inputChannelCounts)
         sourceMeters = fanout?.metersBySource ?? [:]
         startCapture(sources: captureSources, graph: graph, devices: deviceByUID, processes: processByID)
+        startDeviceMeters(devices: orderedDevices)
         return true
+    }
+
+    private func startDeviceMeters(devices: [AudioDeviceSnapshot]) {
+        deviceMeters = Dictionary(uniqueKeysWithValues: devices.filter { device in
+            device.isAlive && device.outputChannels > 0 &&
+                !device.name.localizedCaseInsensitiveContains("BlackHole")
+        }.map { ($0.uid, RealtimePeakMeter()) })
+        for (uid, meter) in deviceMeters {
+            capture.startOutputMeter(uid: uid, meter: meter)
+        }
     }
 
     func stop() {
@@ -94,6 +106,7 @@ final class AudioRoutingCoordinator {
         ringsByRoute.removeAll()
         sourceMeters.removeAll()
         renderMeters.removeAll()
+        deviceMeters.removeAll()
         fanout = nil
         lastEnabled = false
     }
@@ -128,6 +141,7 @@ final class AudioRoutingCoordinator {
         ringsByRoute.removeAll()
         sourceMeters.removeAll()
         renderMeters.removeAll()
+        deviceMeters.removeAll()
         fanout = nil
     }
 
@@ -296,6 +310,10 @@ final class AudioRoutingCoordinator {
 
     func renderLevelReadings() -> [String: Double] {
         renderMeters.compactMapValues { $0.reading() }
+    }
+
+    func deviceLevelReadings() -> [String: Double] {
+        deviceMeters.compactMapValues { $0.reading() }
     }
 }
 

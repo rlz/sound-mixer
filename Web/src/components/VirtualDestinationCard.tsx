@@ -9,6 +9,7 @@ type VirtualDestinationCardProps = {
     selected: boolean;
     gain: number;
     level: number | null;
+    captureState?: string;
     onSelect: () => void;
     onGainChange: (gain: number) => Promise<boolean>;
 };
@@ -20,6 +21,7 @@ export function VirtualDestinationCard({
     selected,
     gain,
     level,
+    captureState,
     onSelect,
     onGainChange,
 }: VirtualDestinationCardProps) {
@@ -40,7 +42,23 @@ export function VirtualDestinationCard({
                     {name}
                 </span>
             </button>
-            <PeakMeter level={level} label={`${name} output`} />
+            <p className="mt-1 text-[10px] text-slate-500">
+                {kind === "bus" ? "Mix output" : "Output pair"}
+            </p>
+            <PeakMeter
+                level={level}
+                label={`${name} ${kind === "bus" ? "mix output" : "device output pair"}`}
+            />
+            {captureState?.startsWith("unavailable:") && (
+                <p className="mt-1 text-xs text-amber-300" role="status">
+                    {captureState.slice("unavailable:".length).trim()}
+                </p>
+            )}
+            {captureState === "permissionDenied" && (
+                <p className="mt-1 text-xs text-amber-300" role="status">
+                    Input capture permission denied.
+                </p>
+            )}
             <div className="mt-2 flex items-center justify-between text-xs text-slate-300">
                 <span>Mix gain</span>
                 <span className="tabular-nums">{Math.round(gain * 100)}%</span>

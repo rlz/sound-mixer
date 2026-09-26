@@ -12,6 +12,7 @@ type OutputDeviceCardProps = {
     onSelect: () => void;
     onVolumeChange: (level: number) => Promise<boolean>;
     onMuteChange: (muted: boolean) => Promise<boolean>;
+    onOpenPrivacySettings: () => void;
 };
 
 export function OutputDeviceCard({
@@ -21,6 +22,7 @@ export function OutputDeviceCard({
     onSelect,
     onVolumeChange,
     onMuteChange,
+    onOpenPrivacySettings,
 }: OutputDeviceCardProps) {
     const volumeAvailable = output.available && output.volumeWritable;
     const muteAvailable = output.available && output.muteWritable;
@@ -43,10 +45,32 @@ export function OutputDeviceCard({
                     {output.name}
                 </span>
             </button>
+            <p className="mt-1 text-[10px] text-slate-500">Device output</p>
             <PeakMeter
                 level={output.levelReading}
-                label={`${output.name} output`}
+                label={`${output.name} device output`}
             />
+            {output.meterState?.startsWith("unavailable:") && (
+                <p className="mt-1 text-xs text-amber-300" role="status">
+                    Output meter:{" "}
+                    {output.meterState.slice("unavailable:".length).trim()}
+                </p>
+            )}
+            {output.meterState === "permissionDenied" && (
+                <p className="mt-1 text-xs text-amber-300" role="status">
+                    Output meter requires System Audio Recording permission.
+                </p>
+            )}
+            {(output.meterState === "permissionDenied" ||
+                output.meterState?.startsWith("unavailable:")) && (
+                <button
+                    type="button"
+                    className="mt-1 text-xs text-amber-200 underline"
+                    onClick={onOpenPrivacySettings}
+                >
+                    Open System Settings
+                </button>
+            )}
             <div
                 className="mt-2 flex items-center gap-2"
                 title={

@@ -72,6 +72,7 @@ struct BridgeOutput: Encodable {
     let configured: Bool
     let routeError: String?
     let levelReading: Double?
+    let meterState: String?
 }
 
 struct BridgeNamedItem: Encodable {

@@ -12,7 +12,12 @@ export function PeakMeter({ level, label }: PeakMeterProps) {
         : decibels <= -60
           ? "No signal"
           : `${decibels.toFixed(1)} dBFS`;
-    const visualLevel = peak === 0 ? 0 : Math.max(0.02, (decibels + 60) / 60);
+    const visualLevel =
+        decibels <= -60
+            ? 0
+            : decibels <= -12
+              ? (decibels + 60) / 96
+              : 0.5 + (decibels + 12) / 24;
 
     return (
         <div
@@ -26,10 +31,11 @@ export function PeakMeter({ level, label }: PeakMeterProps) {
         >
             <span
                 aria-hidden="true"
+                title="−60 dBFS at left, −12 dBFS at center, 0 dBFS at right"
                 className="h-1.5 min-w-12 flex-1 overflow-hidden rounded bg-slate-700"
             >
                 <span
-                    className="block h-full rounded bg-emerald-400 transition-[width] duration-75"
+                    className="block h-full rounded bg-emerald-400 transition-[width] duration-150 ease-out"
                     style={{ width: `${visualLevel * 100}%` }}
                 />
             </span>

@@ -23,7 +23,7 @@
     <key>LSMinimumSystemVersion</key>
     <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
     <key>NSAudioCaptureUsageDescription</key>
-    <string>Sound Mixer captures audio from selected apps for mixing.</string>
+    <string>Sound Mixer captures audio from selected apps for mixing and measures output device signal levels.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Sound Mixer captures audio from selected input devices for mixing.</string>
 </dict>

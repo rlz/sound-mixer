@@ -48,6 +48,18 @@ final class AudioCaptureCoordinator {
         queue.async { [weak self] in self?.startProcess(id: id, processID: processID) }
     }
 
+    func startOutputMeter(uid: String, meter: RealtimePeakMeter) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            let description = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
+            description.name = "Sound Mixer output meter"
+            description.deviceUID = uid
+            description.isPrivate = true
+            description.muteBehavior = .unmuted
+            startTap(id: "device:\(uid)", description: description, meter: meter)
+        }
+    }
+
     func startInput(uid: String, deviceID: AudioDeviceID) {
         queue.async { [weak self] in self?.startInputOnQueue(uid: uid, deviceID: deviceID) }
     }
@@ -101,8 +113,9 @@ final class AudioCaptureCoordinator {
     }
 
     private func startProcess(id: String, processID: pid_t) {
-        processSessions.removeValue(forKey: id)?.stop()
-        publish(id, .starting)
+        let key = "application:\(id)"
+        processSessions.removeValue(forKey: key)?.stop()
+        publish(key, .starting)
         do {
             try validateCaptureProcess(processID)
             let process = try processObjectID(for: processID)
@@ -110,10 +123,26 @@ final class AudioCaptureCoordinator {
             description.name = "Sound Mixer source"
             description.isPrivate = true
             description.muteBehavior = .unmuted
+            startTap(id: key, description: description)
+        } catch {
+            publish(key, .unavailable(error.localizedDescription))
+        }
+    }
+
+    private func startTap(id: String, description: CATapDescription, meter: RealtimePeakMeter? = nil) {
+        processSessions.removeValue(forKey: id)?.stop()
+        publish(id, .starting)
+        do {
             var tap = AudioObjectID(kAudioObjectUnknown)
             let tapStatus = AudioHardwareCreateProcessTap(description, &tap)
             guard tapStatus == noErr else { throw CaptureError.audioStatus(tapStatus) }
-            let tapUID: CFString = try Self.read(tap, kAudioTapPropertyUID)
+            let tapUID: CFString
+            do {
+                tapUID = try Self.read(tap, kAudioTapPropertyUID)
+            } catch {
+                AudioHardwareDestroyProcessTap(tap)
+                throw error
+            }
             let aggregateUID = "\(Self.tapAggregateUIDPrefix)\(UUID().uuidString)" as CFString
             let aggregateDescription: CFDictionary = [
                 kAudioAggregateDeviceNameKey: "Sound Mixer source",
@@ -128,7 +157,7 @@ final class AudioCaptureCoordinator {
                 AudioHardwareDestroyProcessTap(tap)
                 throw CaptureError.audioStatus(aggregateStatus)
             }
-            let session = AudioProcessCaptureSession(id: id, tap: tap, aggregate: aggregate, owner: self)
+            let session = AudioProcessCaptureSession(id: id, tap: tap, aggregate: aggregate, owner: self, meter: meter)
             do {
                 try session.start()
                 processSessions[id] = session

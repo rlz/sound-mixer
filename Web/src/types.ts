@@ -10,6 +10,7 @@ export type OutputState = {
     muteWritable: boolean;
     configured: boolean;
     levelReading: number | null;
+    meterState?: string | null;
     routeError?: string | null;
 };
 
