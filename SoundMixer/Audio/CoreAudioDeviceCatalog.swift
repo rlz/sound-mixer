@@ -95,8 +95,7 @@ final class CoreAudioDeviceCatalog {
     private func setOutputVolume(uid: String, level: Double) throws -> Double {
         guard started, let device = latestDevices.first(where: { $0.uid == uid }),
               device.isAlive, device.outputChannels > 0 else { throw VolumeError.deviceUnavailable }
-        guard !device.name.localizedCaseInsensitiveContains("BlackHole"),
-              let control = CoreAudioOutputVolume.read(deviceID: device.deviceID), control.writable
+        guard let control = CoreAudioOutputVolume.read(deviceID: device.deviceID), control.writable
         else { throw VolumeError.unsupported }
 
         let requested = Float32(level)

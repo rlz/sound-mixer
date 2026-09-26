@@ -261,8 +261,7 @@ final class AudioRoutingCoordinator {
 
     private func updateDeviceMeters(devices: [AudioDeviceSnapshot]) {
         let currentDevices = Dictionary(uniqueKeysWithValues: devices.filter { device in
-            device.isAlive && device.outputChannels > 0 &&
-                !device.name.localizedCaseInsensitiveContains("BlackHole")
+            device.isAlive && device.outputChannels > 0
         }.map { ($0.uid, $0) })
         var nextMeters: [String: RealtimePeakMeter] = [:]
         for (uid, device) in currentDevices {
