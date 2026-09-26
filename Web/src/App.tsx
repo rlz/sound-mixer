@@ -81,6 +81,12 @@ export function App() {
     const selectedRoute = mixerState?.blackHoleRoutes.find(
         (route) => selectedItem === `blackHole:${route.id}`,
     );
+    const deviceNames = new Map(
+        mixerState?.devices.map((device) => [device.uid, device.name]) ?? [],
+    );
+    const routesByID = new Map(
+        mixerState?.blackHoleRoutes.map((route) => [route.id, route]) ?? [],
+    );
     const selectedTarget = selectedOutput
         ? { target: "output" as const, id: selectedOutput.uid }
         : selectedBus
@@ -391,7 +397,7 @@ export function App() {
                                 {selectedOutput
                                     ? `${selectedOutput.outputChannels} channels`
                                     : selectedRoute
-                                      ? `Device ${selectedRoute.deviceUID}`
+                                      ? `Device ${deviceNames.get(selectedRoute.deviceUID) ?? selectedRoute.deviceUID}`
                                       : "Sound Mixer"}
                             </span>
                         </div>
@@ -691,13 +697,14 @@ export function App() {
                                 ) : (
                                     <ul className="space-y-3">
                                         {selectedMix.inputs.map((input) => {
+                                            const sourceRoute = routesByID.get(
+                                                input.id,
+                                            );
                                             const name =
                                                 input.kind === "inputDevice"
-                                                    ? (mixerState?.devices.find(
-                                                          (device) =>
-                                                              device.uid ===
-                                                              input.id,
-                                                      )?.name ?? input.id)
+                                                    ? (deviceNames.get(
+                                                          input.id,
+                                                      ) ?? input.id)
                                                     : input.kind ===
                                                         "application"
                                                       ? (mixerState?.applications.find(
@@ -705,11 +712,15 @@ export function App() {
                                                                 app.id ===
                                                                 input.id,
                                                         )?.name ?? input.id)
-                                                      : (mixerState?.buses.find(
-                                                            (bus) =>
-                                                                bus.id ===
-                                                                input.id,
-                                                        )?.name ?? input.id);
+                                                      : input.kind ===
+                                                          "blackHoleRoute"
+                                                        ? (sourceRoute?.name ??
+                                                          input.id)
+                                                        : (mixerState?.buses.find(
+                                                              (bus) =>
+                                                                  bus.id ===
+                                                                  input.id,
+                                                          )?.name ?? input.id);
                                             const available =
                                                 input.kind === "inputDevice"
                                                     ? mixerState?.devices.some(
@@ -726,7 +737,10 @@ export function App() {
                                                                     input.id &&
                                                                 app.available,
                                                         )
-                                                      : true;
+                                                      : input.kind ===
+                                                          "blackHoleRoute"
+                                                        ? sourceRoute?.available
+                                                        : true;
                                             const captureState =
                                                 input.kind === "inputDevice"
                                                     ? (mixerState?.inputCaptureStates.find(
@@ -742,7 +756,11 @@ export function App() {
                                                                 input.id,
                                                         )?.captureState ??
                                                         "stopped")
-                                                      : "capturing";
+                                                      : input.kind ===
+                                                          "blackHoleRoute"
+                                                        ? (sourceRoute?.captureState ??
+                                                          "unavailable")
+                                                        : "capturing";
                                             const channelCount =
                                                 input.kind === "inputDevice"
                                                     ? (mixerState?.devices.find(
