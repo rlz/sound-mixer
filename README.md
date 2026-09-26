@@ -36,7 +36,7 @@ Requirements: macOS 15 or later, Xcode 27 or later, Node.js 26.8.1, and npm 12.0
 open SoundMixer.xcodeproj
 ```
 
-In Xcode, select the **SoundMixer** scheme and run it on **My Mac**. The build script builds the local React interface, then builds the macOS app; the web assets are bundled into the app, so runtime does not require a network connection. To build without opening Xcode, run `./scripts/build-core.sh` after building the web assets, or use `./scripts/build-all.sh` for both steps.
+In Xcode, select the **SoundMixer** scheme and run it on **My Mac**. The build script builds the local React interface, then builds the macOS app; the web assets are bundled into the app, so runtime does not require a network connection. To build without opening Xcode, run `./scripts/build-core.sh` after building the web assets, or use `./scripts/build-all.sh` for both steps. These scripts use the same Xcode DerivedData location as the IDE.
 
 The first time you add a physical input, macOS may ask for Microphone access. Turning Mixing on starts physical-output meters and may ask for System Audio Recording access even before you add an application source. Grant access in **System Settings → Privacy & Security** for the relevant Sound Mixer permission, then turn the mixer off and on or restart capture. If access is denied, macOS may require quitting and reopening the app after changing the setting. A denied output meter is shown as inactive; it does not stop independent routes.
 

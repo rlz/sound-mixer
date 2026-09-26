@@ -7,6 +7,7 @@
 
 ## Icons
 
+- The macOS Dock icon uses the same slider mark and sky-blue field as the in-app header, with rounded corners and optical margin matching neighboring macOS app icons.
 - Use free Font Awesome SVG icons in the React interface through the official `@fortawesome/react-fontawesome` component. Import only used icons from `@fortawesome/free-*-svg-icons` packages so they are included in the local build and work offline.
 - Prefer icon buttons for familiar actions when the icon is clear, to conserve space. Give every icon-only button an accessible English name and a visible tooltip or equivalent text on focus/hover when the action may not be obvious. Decorative icons are hidden from VoiceOver. Device unavailability and errors are not conveyed with an icon alone.
 

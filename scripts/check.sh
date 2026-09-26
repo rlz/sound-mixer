@@ -20,5 +20,5 @@ npm run check
 cd "$root"
 
 xcodebuild -project SoundMixer.xcodeproj -scheme SoundMixer -configuration Debug \
-    -destination 'platform=macOS' -derivedDataPath "$root/DerivedData" \
+    -destination 'platform=macOS' \
     CODE_SIGNING_ALLOWED=NO build

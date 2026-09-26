@@ -1,5 +1,7 @@
 # Development Plan
 
+- [x] Add the macOS app icon. **Done when:** the Xcode-run app shows the slider mark and sky-blue field from the interface header in the Dock at a comparable visual size to neighboring apps; the icon has rounded corners and an Xcode AppIcon asset catalog is configured. The asset sizes and Xcode warnings are fixed, and the user confirmed the Dock icon appears after removing a stale second Debug app.
+
 Statuses: `[ ]` = not started, `[~]` = in progress. Tasks are ordered by dependency; design decisions and acceptance details live in `requirements/`.
 
 ## 1. Domain model and configuration
@@ -72,6 +74,7 @@ Statuses: `[ ]` = not started, `[~]` = in progress. Tasks are ordered by depende
 
 ## 4. Acceptance and release
 
+- [x] Use Xcode's Debug build location in build scripts. **Done when:** `build-core.sh`, `check.sh`, and `debug-interface.sh` build or open the same Debug app as Xcode without a separate repository DerivedData path.
 - [x] Update web dependencies and build tooling. **Done when:** direct packages use current compatible releases, the lockfile supports a clean `npm ci`, and formatting, linting, and web and app builds pass. Tailwind 4 and Vite 8 are integrated; TypeScript remains on 6.0.3 because `typescript-eslint` 8.70.1 supports TypeScript below 6.1.
 - [ ] Prepare a release build and repeat acceptance scenarios. **Done when:** a signed build is verified on a supported macOS version.
 - [~] Register application inputs independently of mixes. **Done when:** adding an application creates an active `app` input with its own live meter; it can be added to and removed from any mix, and removing the final mix row leaves it in Inputs. Separate persisted registration, immediate capture, and independent mix membership are implemented; live process-tap and migration behavior still need Mac verification.

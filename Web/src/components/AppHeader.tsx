@@ -1,5 +1,4 @@
-import { faSliders } from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import soundMixerMark from "../assets/sound-mixer-mark.svg";
 
 export function AppHeader() {
     return (
@@ -8,7 +7,7 @@ export function AppHeader() {
                 aria-hidden="true"
                 className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-400 text-slate-950"
             >
-                <FontAwesomeIcon icon={faSliders} />
+                <img alt="" className="h-5 w-5" src={soundMixerMark} />
             </div>
             <span className="text-sm font-semibold tracking-[0.18em] text-sky-300 uppercase">
                 Sound Mixer

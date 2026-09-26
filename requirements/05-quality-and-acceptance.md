@@ -19,6 +19,7 @@
 
 ## Verification
 
+- Command-line app builds and the interface debugging script use Xcode's default DerivedData location, so they build and open the same Debug app as the Xcode scheme.
 - Debug builds used with Safari Web Inspector must retain optimized native audio processing. Web debugging must not increase audio callback work enough to cause audible interruptions.
 
 - Automated tests cover model and graph validation, audio-engine levels and channels, application gain, source smoothing and full-scale limiting, virtual Mix gain and physical output unity, per-channel physical-input and application routing/gain, independent channel gain defaults, meters, independent maps and gains for mixes using the same device, invalid-configuration reset, atomic saves, master-switch state, bridge command ranges, and primary interface actions. Device acceptance covers saved/discovered UIDs, missing devices, reconnection, incompatible channels, and disabled mixing. Configuration migration is not required during development.
