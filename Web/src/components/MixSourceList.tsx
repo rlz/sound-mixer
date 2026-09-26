@@ -285,6 +285,12 @@ export const MixSourceList = memo(function MixSourceList() {
                                                                   state.uid ===
                                                                   input.id,
                                                           )?.channelLevels
+                                                        : input.kind === "app"
+                                                          ? mixerState?.applications.find(
+                                                                (app) =>
+                                                                    app.id ===
+                                                                    input.id,
+                                                            )?.channelLevels
                                                         : undefined
                                                 }
                                                 disabled={pending !== null}

@@ -166,9 +166,15 @@ final class AudioSourceFanout {
             ($0, existing?.metersBySource[$0] ?? RealtimePeakMeter())
         })
         channelMetersBySource = Dictionary(uniqueKeysWithValues: queuesBySource.keys.compactMap { key in
-            guard key.hasPrefix("input:"), let count = inputChannelCounts[key], (1 ... 64).contains(count) else {
+            let count: Int
+            if let inputCount = inputChannelCounts[key] {
+                count = inputCount
+            } else if key.hasPrefix("application:") {
+                count = 2
+            } else {
                 return nil
             }
+            guard (1 ... 64).contains(count) else { return nil }
             let priorMeters = existing?.channelMetersBySource[key]
             let meters: [RealtimePeakMeter] = if let priorMeters, priorMeters.count == count {
                 priorMeters

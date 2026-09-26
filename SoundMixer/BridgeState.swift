@@ -40,6 +40,7 @@ struct BridgeApplication: Encodable {
     let level: Double?
     let registered: Bool
     let sourceLevel: Double
+    let channelLevels: [Double?]
 }
 
 struct BridgeInputCaptureState: Encodable {

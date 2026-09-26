@@ -841,7 +841,8 @@ extension AppDelegate {
                 muted: configuration.mutedSources.contains(.application(ApplicationID(rawValue: id))),
                 level: sourceLevels["application:\(id)"],
                 registered: configuration.applications.contains(ApplicationID(rawValue: id)),
-                sourceLevel: configuration.sourceLevels.first(where: { $0.source == .application(ApplicationID(rawValue: id)) })?.level ?? 1
+                sourceLevel: configuration.sourceLevels.first(where: { $0.source == .application(ApplicationID(rawValue: id)) })?.level ?? 1,
+                channelLevels: inputChannelLevels["application:\(id)"] ?? []
             )
         }
     }
