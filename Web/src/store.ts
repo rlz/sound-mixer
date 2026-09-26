@@ -14,12 +14,6 @@ type MixerStore = {
     setCommandError: (value: string | null) => void;
     busNameDraft: string | null;
     setBusNameDraft: (value: string | null) => void;
-    editingBusId: string | null;
-    setEditingBusId: (value: string | null) => void;
-    editingRouteId: string | null;
-    setEditingRouteId: (value: string | null) => void;
-    sourceChoice: string;
-    setSourceChoice: (value: string) => void;
 };
 
 export const useMixerStore = create<MixerStore>((set) => ({
@@ -37,10 +31,4 @@ export const useMixerStore = create<MixerStore>((set) => ({
     setCommandError: (commandError) => set({ commandError }),
     busNameDraft: null,
     setBusNameDraft: (busNameDraft) => set({ busNameDraft }),
-    editingBusId: null,
-    setEditingBusId: (editingBusId) => set({ editingBusId }),
-    editingRouteId: null,
-    setEditingRouteId: (editingRouteId) => set({ editingRouteId }),
-    sourceChoice: "",
-    setSourceChoice: (sourceChoice) => set({ sourceChoice }),
 }));

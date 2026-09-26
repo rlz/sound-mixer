@@ -4,6 +4,11 @@ import {
     faVolumeXmark,
     faMicrophone,
     faDesktop,
+    faPen,
+    faTrashCan,
+    faArrowRotateLeft,
+    faPlus,
+    faCheck,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useMixerStore } from "./store";
@@ -38,16 +43,13 @@ export function App() {
     const commandError = useMixerStore((state) => state.commandError);
     const busNameDraft = useMixerStore((state) => state.busNameDraft);
     const setBusNameDraft = useMixerStore((state) => state.setBusNameDraft);
-    const editingBusId = useMixerStore((state) => state.editingBusId);
-    const setEditingBusId = useMixerStore((state) => state.setEditingBusId);
-    const editingRouteId = useMixerStore((state) => state.editingRouteId);
-    const setEditingRouteId = useMixerStore((state) => state.setEditingRouteId);
     const [routeDeviceUID, setRouteDeviceUID] = useState("");
     const [applicationCatalogOpen, setApplicationCatalogOpen] = useState(false);
     const [applicationSearch, setApplicationSearch] = useState("");
     const [openChannelEditor, setOpenChannelEditor] = useState<string | null>(
         null,
     );
+    const [renameDialogOpen, setRenameDialogOpen] = useState(false);
 
     const send = async (
         key: string,
@@ -118,8 +120,6 @@ export function App() {
             monoPlacement: "both",
         });
     };
-    const sourceChoice = useMixerStore((state) => state.sourceChoice);
-    const setSourceChoice = useMixerStore((state) => state.setSourceChoice);
     const configuredInputIDs = new Set(
         (mixerState?.mixes ?? [])
             .flatMap((mix) => mix.inputs)
@@ -227,8 +227,6 @@ export function App() {
                                                 `output:${output.uid}`,
                                             );
                                             setBusNameDraft(null);
-                                            setEditingBusId(null);
-                                            setEditingRouteId(null);
                                         }}
                                         onVolumeChange={(level) =>
                                             send(
@@ -273,8 +271,6 @@ export function App() {
                                 type="button"
                                 disabled={pending !== null}
                                 onClick={() => {
-                                    setEditingBusId(null);
-                                    setEditingRouteId(null);
                                     setSelectedItem("bus:new");
                                     setBusNameDraft("New Bus");
                                 }}
@@ -301,8 +297,6 @@ export function App() {
                                         onSelect={() => {
                                             setSelectedItem(`bus:${bus.id}`);
                                             setBusNameDraft(bus.name);
-                                            setEditingBusId(bus.id);
-                                            setEditingRouteId(null);
                                         }}
                                         onGainChange={(level) =>
                                             send(
@@ -321,39 +315,6 @@ export function App() {
                                     />
                                 );
                             })}
-                            {mixerState?.buses.map(
-                                (bus) =>
-                                    selectedItem === `bus:${bus.id}` && (
-                                        <div
-                                            key={`${bus.id}:actions`}
-                                            className="flex gap-2 px-2 pb-2"
-                                        >
-                                            <button
-                                                type="button"
-                                                disabled={pending !== null}
-                                                className="text-xs text-rose-300 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
-                                                onClick={() => {
-                                                    if (
-                                                        window.confirm(
-                                                            `Delete “${bus.name}”? Mixes that use this bus will prevent deletion.`,
-                                                        )
-                                                    ) {
-                                                        void send(
-                                                            `bus-delete:${bus.id}`,
-                                                            {
-                                                                command:
-                                                                    "deleteBus",
-                                                                id: bus.id,
-                                                            },
-                                                        );
-                                                    }
-                                                }}
-                                            >
-                                                Delete
-                                            </button>
-                                        </div>
-                                    ),
-                            )}
                             {mixerState?.buses.length === 0 && (
                                 <p className="px-3 text-sm text-slate-500">
                                     No virtual buses.
@@ -365,8 +326,6 @@ export function App() {
                                 type="button"
                                 disabled={pending !== null}
                                 onClick={() => {
-                                    setEditingBusId(null);
-                                    setEditingRouteId(null);
                                     setSelectedItem("route:new");
                                     setRouteDeviceUID(
                                         mixerState?.outputs.find(
@@ -404,8 +363,6 @@ export function App() {
                                                 `blackHole:${route.id}`,
                                             );
                                             setBusNameDraft(route.name);
-                                            setEditingRouteId(route.id);
-                                            setEditingBusId(null);
                                         }}
                                         onGainChange={(level) =>
                                             send(
@@ -432,7 +389,7 @@ export function App() {
                         </ItemGroup>
                     </nav>
                     <div className="min-h-0 min-w-0 [scrollbar-gutter:stable] overflow-x-hidden overflow-y-auto overscroll-contain bg-slate-950 p-3.5">
-                        <div className="mb-6 flex items-end justify-between gap-4">
+                        <div className="mb-6 flex items-start justify-between gap-4">
                             <div>
                                 <h1 className="text-xl font-semibold tracking-tight">
                                     {selectedOutput?.name ??
@@ -440,28 +397,115 @@ export function App() {
                                         selectedRoute?.name ??
                                         "Settings"}
                                 </h1>
-                                <p className="mt-2 text-sm text-slate-400">
+                                <p className="mt-1 text-sm text-slate-400">
                                     {selectedOutput
-                                        ? "Output device settings"
+                                        ? "System"
                                         : selectedBus
-                                          ? "Virtual bus settings"
+                                          ? "Virtual"
                                           : selectedRoute
-                                            ? "BlackHole route settings"
-                                            : "Select an output or virtual item to view its settings."}
+                                            ? "BlackHole"
+                                            : "Select an output or virtual item."}
                                 </p>
                             </div>
-                            <span className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">
-                                {selectedOutput
-                                    ? `${selectedOutput.outputChannels} channels`
-                                    : selectedRoute
-                                      ? `Device ${deviceNames.get(selectedRoute.deviceUID) ?? selectedRoute.deviceUID}`
-                                      : "Sound Mixer"}
-                            </span>
+                            {selectedTarget && selectedMix && (
+                                <div className="flex shrink-0 items-center gap-1">
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            pending !== null ||
+                                            (selectedMix.inputs.length === 0 &&
+                                                selectedMix.level === 1)
+                                        }
+                                        aria-label="Reset mix settings"
+                                        title="Reset mix settings"
+                                        className="flex h-8 w-8 items-center justify-center rounded-md text-slate-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-40"
+                                        onClick={() =>
+                                            void send(
+                                                `mix-reset:${selectedTarget.id}`,
+                                                {
+                                                    command: "resetMix",
+                                                    ...selectedTarget,
+                                                },
+                                            )
+                                        }
+                                    >
+                                        <FontAwesomeIcon
+                                            icon={faArrowRotateLeft}
+                                            aria-hidden="true"
+                                        />
+                                    </button>
+                                    {(selectedBus || selectedRoute) && (
+                                        <>
+                                            <button
+                                                type="button"
+                                                disabled={pending !== null}
+                                                aria-label={`Rename ${selectedBus?.name ?? selectedRoute?.name}`}
+                                                title="Edit name"
+                                                className="flex h-8 w-8 items-center justify-center rounded-md text-slate-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
+                                                onClick={() => {
+                                                    setBusNameDraft(
+                                                        selectedBus?.name ??
+                                                            selectedRoute?.name ??
+                                                            "",
+                                                    );
+                                                    setRenameDialogOpen(true);
+                                                }}
+                                            >
+                                                <FontAwesomeIcon
+                                                    icon={faPen}
+                                                    aria-hidden="true"
+                                                />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={pending !== null}
+                                                aria-label={`Delete ${selectedBus?.name ?? selectedRoute?.name}`}
+                                                title="Delete"
+                                                className="flex h-8 w-8 items-center justify-center rounded-md text-rose-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-300 disabled:opacity-50"
+                                                onClick={() => {
+                                                    if (
+                                                        selectedRoute &&
+                                                        window.confirm(
+                                                            `Delete “${selectedRoute.name}” and its saved mix? This also removes it as a source from every mix that uses it.`,
+                                                        )
+                                                    ) {
+                                                        void send(
+                                                            `route-delete:${selectedRoute.id}`,
+                                                            {
+                                                                command:
+                                                                    "deleteRoute",
+                                                                id: selectedRoute.id,
+                                                            },
+                                                        );
+                                                    } else if (
+                                                        selectedBus &&
+                                                        window.confirm(
+                                                            `Delete “${selectedBus.name}”? Mixes that use this bus will prevent deletion.`,
+                                                        )
+                                                    ) {
+                                                        void send(
+                                                            `bus-delete:${selectedBus.id}`,
+                                                            {
+                                                                command:
+                                                                    "deleteBus",
+                                                                id: selectedBus.id,
+                                                            },
+                                                        );
+                                                    }
+                                                }}
+                                            >
+                                                <FontAwesomeIcon
+                                                    icon={faTrashCan}
+                                                    aria-hidden="true"
+                                                />
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
-                        {(selectedBus ||
-                            selectedRoute ||
-                            selectedItem === "bus:new" ||
+                        {(selectedItem === "bus:new" ||
                             selectedItem === "route:new") && (
                             <section
                                 className="mb-5 rounded-2xl border border-slate-800 bg-slate-900 p-5"
@@ -471,21 +515,7 @@ export function App() {
                                     className="space-y-3"
                                     onSubmit={(event) => {
                                         event.preventDefault();
-                                        if (editingRouteId) {
-                                            void send("route-rename", {
-                                                command: "renameRoute",
-                                                id: editingRouteId,
-                                                name: busNameDraft ?? "",
-                                            });
-                                        } else if (editingBusId) {
-                                            void send("bus-rename", {
-                                                command: "renameBus",
-                                                id: editingBusId,
-                                                name: busNameDraft ?? "",
-                                            });
-                                        } else if (
-                                            selectedItem === "route:new"
-                                        ) {
+                                        if (selectedItem === "route:new") {
                                             void send("route-create", {
                                                 command: "createRoute",
                                                 deviceUID: routeDeviceUID,
@@ -498,29 +528,12 @@ export function App() {
                                         }
                                     }}
                                 >
-                                    {selectedItem !== "route:new" && (
-                                        <label
-                                            htmlFor="selected-virtual-name"
-                                            className="block text-sm font-medium text-slate-200"
-                                        >
-                                            {selectedRoute
-                                                ? "Route name"
-                                                : "Virtual bus name"}
-                                        </label>
-                                    )}
                                     <input
                                         id="selected-virtual-name"
                                         maxLength={64}
                                         required={selectedItem !== "route:new"}
                                         hidden={selectedItem === "route:new"}
-                                        value={
-                                            selectedItem === "route:new"
-                                                ? ""
-                                                : (busNameDraft ??
-                                                  selectedBus?.name ??
-                                                  selectedRoute?.name ??
-                                                  "")
-                                        }
+                                        value={busNameDraft ?? "New Bus"}
                                         onChange={(event) =>
                                             setBusNameDraft(
                                                 event.currentTarget.value,
@@ -578,13 +591,6 @@ export function App() {
                                             route from its channels.
                                         </p>
                                     )}
-                                    {selectedRoute && (
-                                        <p className="font-mono text-xs text-slate-500">
-                                            Core Audio UID:{" "}
-                                            {selectedRoute.deviceUID} · channels{" "}
-                                            {selectedRoute.channels.join(" / ")}
-                                        </p>
-                                    )}
                                     <button
                                         type="submit"
                                         disabled={pending !== null}
@@ -592,33 +598,8 @@ export function App() {
                                     >
                                         {selectedItem === "route:new"
                                             ? "Create route"
-                                            : "Save name"}
+                                            : "Create bus"}
                                     </button>
-                                    {selectedRoute && (
-                                        <button
-                                            type="button"
-                                            disabled={pending !== null}
-                                            onClick={() => {
-                                                if (
-                                                    window.confirm(
-                                                        `Delete “${selectedRoute.name}” and its saved mix? This also removes it as a source from every mix that uses it.`,
-                                                    )
-                                                ) {
-                                                    void send(
-                                                        `route-delete:${selectedRoute.id}`,
-                                                        {
-                                                            command:
-                                                                "deleteRoute",
-                                                            id: selectedRoute.id,
-                                                        },
-                                                    );
-                                                }
-                                            }}
-                                            className="ml-3 rounded-lg border border-rose-800 px-3 py-2 text-sm text-rose-200"
-                                        >
-                                            Delete route
-                                        </button>
-                                    )}
                                 </form>
                             </section>
                         )}
@@ -626,128 +607,13 @@ export function App() {
                         {selectedMix && selectedTarget && (
                             <section
                                 key={`${selectedTarget.target}:${selectedTarget.id}`}
-                                className="mb-5 rounded-2xl border border-slate-800 bg-slate-900 p-5"
+                                className="mb-5"
                                 aria-label="Mix sources"
                             >
-                                <div className="mb-2 flex items-center justify-between gap-3">
-                                    <p className="text-xs text-slate-400">
-                                        Mix output
-                                    </p>
-                                    <button
-                                        type="button"
-                                        disabled={
-                                            pending !== null ||
-                                            (selectedMix.inputs.length === 0 &&
-                                                selectedMix.level === 1)
-                                        }
-                                        aria-label="Reset mix settings"
-                                        title="Reset mix settings"
-                                        className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-rose-400 hover:text-rose-200 disabled:opacity-40"
-                                        onClick={() =>
-                                            void send(
-                                                `mix-reset:${selectedTarget.id}`,
-                                                {
-                                                    command: "resetMix",
-                                                    ...selectedTarget,
-                                                },
-                                            )
-                                        }
-                                    >
-                                        Reset
-                                    </button>
-                                </div>
-                                <PeakMeter
-                                    level={selectedMix.levelReading}
-                                    label={`${selectedOutput?.name ?? selectedBus?.name ?? selectedRoute?.name ?? "Selected"} mix output`}
-                                />
-                                <div className="mb-4 flex flex-wrap items-end gap-3">
-                                    <label className="min-w-56 flex-1 text-sm">
-                                        Add a source
-                                        <select
-                                            value={sourceChoice}
-                                            onChange={(event) =>
-                                                setSourceChoice(
-                                                    event.currentTarget.value,
-                                                )
-                                            }
-                                            className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
-                                        >
-                                            <option value="">
-                                                Choose an available source
-                                            </option>
-                                            {mixerState?.devices
-                                                .filter(
-                                                    (device) =>
-                                                        device.inputChannels >
-                                                            0 &&
-                                                        device.available,
-                                                )
-                                                .map((device) => (
-                                                    <option
-                                                        key={`input:${device.uid}`}
-                                                        value={`inputDevice|${device.uid}`}
-                                                    >
-                                                        {device.name} · input
-                                                    </option>
-                                                ))}
-                                            {mixerState?.blackHoleRoutes.map(
-                                                (route) => (
-                                                    <option
-                                                        key={`route:${route.id}`}
-                                                        value={`blackHoleRoute|${route.id}`}
-                                                    >
-                                                        {route.name} · BlackHole
-                                                        input pair
-                                                    </option>
-                                                ),
-                                            )}
-                                            {mixerState?.buses
-                                                .filter(
-                                                    (bus) =>
-                                                        !(
-                                                            selectedTarget.target ===
-                                                                "bus" &&
-                                                            bus.id ===
-                                                                selectedTarget.id
-                                                        ),
-                                                )
-                                                .map((bus) => (
-                                                    <option
-                                                        key={`bus:${bus.id}`}
-                                                        value={`bus|${bus.id}`}
-                                                    >
-                                                        {bus.name} · bus
-                                                    </option>
-                                                ))}
-                                        </select>
-                                    </label>
-                                    <button
-                                        type="button"
-                                        disabled={
-                                            !sourceChoice || pending !== null
-                                        }
-                                        className="rounded-lg bg-sky-300 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
-                                        onClick={() => {
-                                            if (!sourceChoice) return;
-                                            const [kind, sourceID] =
-                                                sourceChoice.split("|");
-                                            void send(`mix-add:${sourceID}`, {
-                                                command: "addMixInput",
-                                                ...selectedTarget,
-                                                kind,
-                                                sourceID,
-                                                monoPlacement: "both",
-                                            });
-                                            setSourceChoice("");
-                                        }}
-                                    >
-                                        Add source
-                                    </button>
-                                </div>
                                 {selectedMix.inputs.length === 0 ? (
                                     <p className="text-sm text-slate-400">
-                                        This mix is empty. Choose an input,
-                                        input or virtual bus above.
+                                        No sources in this mix. Add one from the
+                                        Inputs panel.
                                     </p>
                                 ) : (
                                     <ul className="space-y-3">
@@ -760,8 +626,7 @@ export function App() {
                                                     ? (deviceNames.get(
                                                           input.id,
                                                       ) ?? input.id)
-                                                    : input.kind ===
-                                                        "app"
+                                                    : input.kind === "app"
                                                       ? (mixerState?.applications.find(
                                                             (app) =>
                                                                 app.id ===
@@ -784,8 +649,7 @@ export function App() {
                                                                   input.id &&
                                                               device.available,
                                                       )
-                                                    : input.kind ===
-                                                        "app"
+                                                    : input.kind === "app"
                                                       ? mixerState?.applications.some(
                                                             (app) =>
                                                                 app.id ===
@@ -803,8 +667,7 @@ export function App() {
                                                               state.uid ===
                                                               input.id,
                                                       )?.state ?? "stopped")
-                                                    : input.kind ===
-                                                        "app"
+                                                    : input.kind === "app"
                                                       ? (mixerState?.applications.find(
                                                             (app) =>
                                                                 app.id ===
@@ -865,8 +728,7 @@ export function App() {
                                             const unavailableReason = !available
                                                 ? input.kind === "inputDevice"
                                                     ? "Device disconnected."
-                                                    : input.kind ===
-                                                        "app"
+                                                    : input.kind === "app"
                                                       ? "Application is not producing audio."
                                                       : "Source unavailable."
                                                 : captureState ===
@@ -943,7 +805,9 @@ export function App() {
                                                         </div>
                                                         <button
                                                             type="button"
-                                                            className="text-xs text-rose-300 underline"
+                                                            aria-label={`Remove ${name} from mix`}
+                                                            title="Remove from mix"
+                                                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-rose-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-300"
                                                             onClick={() =>
                                                                 void send(
                                                                     `mix-remove:${input.id}`,
@@ -958,12 +822,16 @@ export function App() {
                                                                 )
                                                             }
                                                         >
-                                                            Remove
+                                                            <FontAwesomeIcon
+                                                                icon={
+                                                                    faTrashCan
+                                                                }
+                                                                aria-hidden="true"
+                                                            />
                                                         </button>
                                                     </div>
                                                     <label className="flex items-center gap-3 text-xs">
-                                                        {input.kind ===
-                                                        "app"
+                                                        {input.kind === "app"
                                                             ? "App gain"
                                                             : "Source level"}{" "}
                                                         <StableRange
@@ -1287,8 +1155,7 @@ export function App() {
                                                             )}
                                                         </div>
                                                     )}
-                                                    {input.kind ===
-                                                        "app" && (
+                                                    {input.kind === "app" && (
                                                         <label className="mt-2 flex items-center gap-2 text-xs">
                                                             Mono placement{" "}
                                                             <select
@@ -1341,100 +1208,6 @@ export function App() {
                                     </ul>
                                 )}
                             </section>
-                        )}
-
-                        {selectedBus ||
-                        selectedRoute ||
-                        selectedItem === "bus:new" ||
-                        selectedItem === "route:new" ? null : !mixerState ? (
-                            <div
-                                role="status"
-                                className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-400"
-                            >
-                                Waiting for the native device snapshot…
-                            </div>
-                        ) : !selectedOutput ? (
-                            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-300">
-                                Select an output device from the left to open
-                                its settings.
-                            </div>
-                        ) : mixerState.outputs.every(
-                              (output) => output.isBlackHole,
-                          ) ? (
-                            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-300">
-                                No output devices were reported by Core Audio.
-                            </div>
-                        ) : (
-                            <ul
-                                className="space-y-3"
-                                aria-label="Core Audio output devices"
-                            >
-                                {mixerState.outputs
-                                    .filter(
-                                        (output) =>
-                                            !output.isBlackHole &&
-                                            output.uid === selectedOutput?.uid,
-                                    )
-                                    .map((output) => (
-                                        <li
-                                            key={output.uid}
-                                            className={`flex flex-wrap items-center gap-4 rounded-2xl border bg-slate-900 px-5 py-4 ${selectedItem === `output:${output.uid}` ? "border-sky-300" : "border-slate-800"} ${output.configured && !output.available ? "opacity-60" : ""}`}
-                                        >
-                                            <span
-                                                aria-hidden="true"
-                                                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${output.available ? "bg-emerald-400/10 text-emerald-300" : "bg-amber-400/10 text-amber-300"}`}
-                                            >
-                                                <FontAwesomeIcon
-                                                    icon={
-                                                        output.available
-                                                            ? faVolumeHigh
-                                                            : faVolumeXmark
-                                                    }
-                                                />
-                                            </span>
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                                    <AvailabilityDot
-                                                        available={
-                                                            output.available
-                                                        }
-                                                    />
-                                                    <h2 className="font-medium text-slate-100">
-                                                        {output.name}
-                                                    </h2>
-                                                </div>
-                                                <p
-                                                    className="mt-1 truncate font-mono text-xs text-slate-500"
-                                                    title={output.uid}
-                                                >
-                                                    {output.uid}
-                                                </p>
-                                                {output.routeError && (
-                                                    <p
-                                                        className="mt-2 text-sm text-rose-300"
-                                                        role="status"
-                                                    >
-                                                        Route unavailable:{" "}
-                                                        {output.routeError}
-                                                    </p>
-                                                )}
-                                                {!output.available && (
-                                                    <p className="w-full text-xs text-amber-300">
-                                                        {output.configured
-                                                            ? "Saved mix is inactive while this device is disconnected. It will resume when the same device returns."
-                                                            : "This device is disconnected."}
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <span className="shrink-0 text-right text-xs text-slate-400">
-                                                {output.outputChannels}{" "}
-                                                {output.outputChannels === 1
-                                                    ? "channel"
-                                                    : "channels"}
-                                            </span>
-                                        </li>
-                                    ))}
-                            </ul>
                         )}
                     </div>
                     <aside
@@ -1574,7 +1347,12 @@ export function App() {
                                                     ? `${device.name} is already in the selected mix`
                                                     : `Add ${device.name} to the selected mix`
                                             }
-                                            className="mt-1 rounded px-2 py-1 text-xs text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                            title={
+                                                alreadyInSelectedMix
+                                                    ? "Already in mix"
+                                                    : `Add ${device.name} to mix`
+                                            }
+                                            className="mt-1 flex h-8 w-8 items-center justify-center rounded text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
                                             onClick={() =>
                                                 addSourceToSelectedMix(
                                                     "inputDevice",
@@ -1582,9 +1360,14 @@ export function App() {
                                                 )
                                             }
                                         >
-                                            {alreadyInSelectedMix
-                                                ? "Added"
-                                                : "Add to mix"}
+                                            <FontAwesomeIcon
+                                                icon={
+                                                    alreadyInSelectedMix
+                                                        ? faCheck
+                                                        : faPlus
+                                                }
+                                                aria-hidden="true"
+                                            />
                                         </button>
                                     </div>
                                 );
@@ -1637,7 +1420,12 @@ export function App() {
                                                     ? `${bus.name} is already in the selected mix`
                                                     : `Add ${bus.name} to the selected mix`
                                             }
-                                            className="mt-1 rounded px-2 py-1 text-xs text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                            title={
+                                                alreadyInSelectedMix
+                                                    ? "Already in mix"
+                                                    : `Add ${bus.name} to mix`
+                                            }
+                                            className="mt-1 flex h-8 w-8 items-center justify-center rounded text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
                                             onClick={() =>
                                                 addSourceToSelectedMix(
                                                     "bus",
@@ -1645,9 +1433,14 @@ export function App() {
                                                 )
                                             }
                                         >
-                                            {alreadyInSelectedMix
-                                                ? "Added"
-                                                : "Add to mix"}
+                                            <FontAwesomeIcon
+                                                icon={
+                                                    alreadyInSelectedMix
+                                                        ? faCheck
+                                                        : faPlus
+                                                }
+                                                aria-hidden="true"
+                                            />
                                         </button>
                                     </div>
                                 );
@@ -1743,7 +1536,12 @@ export function App() {
                                                         ? `${route.name} is already in the selected mix`
                                                         : `Add ${route.name} to the selected mix`
                                                 }
-                                                className="mt-1 rounded px-2 py-1 text-xs text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                                title={
+                                                    alreadyInSelectedMix
+                                                        ? "Already in mix"
+                                                        : `Add ${route.name} to mix`
+                                                }
+                                                className="mt-1 flex h-8 w-8 items-center justify-center rounded text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
                                                 onClick={() =>
                                                     addSourceToSelectedMix(
                                                         "blackHoleRoute",
@@ -1751,9 +1549,14 @@ export function App() {
                                                     )
                                                 }
                                             >
-                                                {alreadyInSelectedMix
-                                                    ? "Added"
-                                                    : "Add to mix"}
+                                                <FontAwesomeIcon
+                                                    icon={
+                                                        alreadyInSelectedMix
+                                                            ? faCheck
+                                                            : faPlus
+                                                    }
+                                                    aria-hidden="true"
+                                                />
                                             </button>
                                         </div>
                                     );
@@ -1898,7 +1701,12 @@ export function App() {
                                                     ? `${application.name} is already in the selected mix`
                                                     : `Add ${application.name} to the selected mix`
                                             }
-                                            className="mt-1 rounded px-2 py-1 text-xs text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                            title={
+                                                alreadyInSelectedMix
+                                                    ? "Already in mix"
+                                                    : `Add ${application.name} to mix`
+                                            }
+                                            className="mt-1 flex h-8 w-8 items-center justify-center rounded text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
                                             onClick={() =>
                                                 addSourceToSelectedMix(
                                                     "app",
@@ -1906,9 +1714,14 @@ export function App() {
                                                 )
                                             }
                                         >
-                                            {alreadyInSelectedMix
-                                                ? "Added"
-                                                : "Add to mix"}
+                                            <FontAwesomeIcon
+                                                icon={
+                                                    alreadyInSelectedMix
+                                                        ? faCheck
+                                                        : faPlus
+                                                }
+                                                aria-hidden="true"
+                                            />
                                         </button>
                                     </div>
                                 );
@@ -1917,6 +1730,92 @@ export function App() {
                     </aside>
                 </div>
             </section>
+            {renameDialogOpen && (selectedBus || selectedRoute) && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+                    onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) {
+                            setRenameDialogOpen(false);
+                        }
+                    }}
+                >
+                    <section
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="rename-destination-title"
+                        onKeyDown={(event) => {
+                            if (event.key === "Escape")
+                                setRenameDialogOpen(false);
+                        }}
+                        className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-2xl"
+                    >
+                        <form
+                            onSubmit={async (event) => {
+                                event.preventDefault();
+                                const succeeded = selectedRoute
+                                    ? await send("route-rename", {
+                                          command: "renameRoute",
+                                          id: selectedRoute.id,
+                                          name: busNameDraft ?? "",
+                                      })
+                                    : selectedBus
+                                      ? await send("bus-rename", {
+                                            command: "renameBus",
+                                            id: selectedBus.id,
+                                            name: busNameDraft ?? "",
+                                        })
+                                      : false;
+                                if (succeeded) setRenameDialogOpen(false);
+                            }}
+                        >
+                            <h2
+                                id="rename-destination-title"
+                                className="text-base font-semibold"
+                            >
+                                Rename{" "}
+                                {selectedBus
+                                    ? "virtual bus"
+                                    : "BlackHole route"}
+                            </h2>
+                            <label
+                                className="mt-3 block text-sm"
+                                htmlFor="rename-destination-input"
+                            >
+                                Name
+                                <input
+                                    autoFocus
+                                    id="rename-destination-input"
+                                    maxLength={64}
+                                    required
+                                    value={busNameDraft ?? ""}
+                                    onChange={(event) =>
+                                        setBusNameDraft(
+                                            event.currentTarget.value,
+                                        )
+                                    }
+                                    className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
+                                />
+                            </label>
+                            <div className="mt-4 flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setRenameDialogOpen(false)}
+                                    className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={pending !== null}
+                                    className="rounded-lg bg-sky-300 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
+                                >
+                                    Save name
+                                </button>
+                            </div>
+                        </form>
+                    </section>
+                </div>
+            )}
             {applicationCatalogOpen && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
@@ -1986,10 +1885,15 @@ export function App() {
                                         disabled={pending !== null}
                                         className="shrink-0 rounded bg-sky-300 px-3 py-1.5 text-sm font-semibold text-slate-950 disabled:opacity-50"
                                         onClick={() => {
-                                            void send(`app-register:${application.id}`, {
-                                                command: "addApplicationInput",
-                                                applicationID: application.id,
-                                            });
+                                            void send(
+                                                `app-register:${application.id}`,
+                                                {
+                                                    command:
+                                                        "addApplicationInput",
+                                                    applicationID:
+                                                        application.id,
+                                                },
+                                            );
                                             setApplicationCatalogOpen(false);
                                         }}
                                     >
