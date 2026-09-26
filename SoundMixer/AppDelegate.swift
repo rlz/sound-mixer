@@ -157,6 +157,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         window.minSize = NSSize(width: 760, height: 500)
 
         let webView = WKWebView(frame: window.contentView?.bounds ?? .zero)
+#if DEBUG
+        webView.isInspectable = true
+#endif
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.configuration.userContentController.add(self, name: "soundMixer")

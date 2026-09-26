@@ -28,6 +28,10 @@ Statuses: `[ ]` = not started, `[~]` = in progress. Tasks are ordered by depende
 
 ## 3. Bridge and interface
 
+- [~] Keep interface debugging usable during playback. **Done when:** Safari Web Inspector can inspect the Debug app while active routes play without audible interruptions. Removed the Debug-only Swift `-Onone` override after a running build used about 114% CPU; the rebuilt process uses about 6% CPU. Live listening confirmation remains.
+
+- [~] Split the React application into focused Zustand-backed panels and dialogs. **Done when:** `App.tsx` composes focused components, panels select only the state they need, transient interaction state stays with its owning component, and frequent meter snapshots do not rerender unrelated sections. Inputs is split into physical, virtual, and application source groups; the editor is split into destination controls, mix source list, channel dialog, and rename dialog. These components use Zustand and the stable command hook. Fixed unstable empty-array selectors that caused a React update loop and blank screen before native state arrived; Safari Web Inspector now shows the interface without console errors. The panel selectors still consume the full snapshot, so finer-grained meter update subscriptions remain.
+
 - [~] Replace Mono placement and inline routing with a per-mix channel matrix. **Done when:** every mix source opens a keyboard-accessible modal from its channel count; physical outputs expose every hardware channel (including six-channel devices), virtual destinations expose two; one input channel can feed several output channels; edits persist and update active renderers without restarting unchanged capture, outputs, or meter pumps. Model, bridge, renderer, and interface changes are implemented; web and app builds pass; six-channel live audio and playback-continuity verification remain.
 - [x] Assign virtual bus names automatically on creation. **Done when:** creating a bus does not prompt for a name, assigns the first unused `Virtual Bus N` name, and still allows later renaming. Native creation now assigns the name and the interface creates a bus directly from the add button.
 
