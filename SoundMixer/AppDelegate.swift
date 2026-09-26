@@ -136,6 +136,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case .stopped: "stopped"
         case .starting: "starting"
         case .capturing: "capturing"
+        case .idle: "idle"
         case .permissionDenied: "permissionDenied"
         case let .unavailable(reason): "unavailable: \(reason)"
         }

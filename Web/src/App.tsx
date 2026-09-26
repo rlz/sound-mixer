@@ -1537,7 +1537,10 @@ export function App() {
                                                         : captureState ===
                                                             "permissionDenied"
                                                           ? "Permission denied"
-                                                          : "Starting"}
+                                                          : captureState ===
+                                                              "idle"
+                                                            ? "No signal"
+                                                            : "Starting"}
                                             </p>
                                         )}
                                         {captureState ===

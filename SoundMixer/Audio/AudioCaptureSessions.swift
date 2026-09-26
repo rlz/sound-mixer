@@ -21,11 +21,7 @@ final class AudioProcessCaptureSession {
             return .capturing
         }
         if startedAt > 0, now >= startedAt, now - startedAt > 1_000_000_000 {
-            return .unavailable(
-                meter == nil
-                    ? "The system audio tap is not delivering audio. Check System Audio Recording permission and app playback."
-                    : "The output tap is not delivering audio. Check System Audio Recording permission and device playback."
-            )
+            return .idle
         }
         return .starting
     }

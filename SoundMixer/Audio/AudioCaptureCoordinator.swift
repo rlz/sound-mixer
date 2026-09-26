@@ -6,6 +6,7 @@ enum AudioCaptureState: Equatable {
     case stopped
     case starting
     case capturing
+    case idle
     case permissionDenied
     case unavailable(String)
 }
