@@ -51,6 +51,7 @@ struct BridgeInputCaptureState: Encodable {
 struct BridgeDevice: Encodable {
     let uid: String
     let name: String
+    let category: String
     let discovered: Bool
     let available: Bool
     let inputChannels: Int
@@ -62,6 +63,7 @@ struct BridgeDevice: Encodable {
 struct BridgeOutput: Encodable {
     let uid: String
     let name: String
+    let category: String
     let isBlackHole: Bool
     let available: Bool
     let outputChannels: Int
@@ -78,11 +80,13 @@ struct BridgeOutput: Encodable {
 struct BridgeNamedItem: Encodable {
     let id: String
     let name: String
+    let category: String
 }
 
 struct BridgeRoute: Encodable {
     let id: String
     let name: String
+    let category: String
     let deviceUID: String
     let channels: [Int]
     let available: Bool

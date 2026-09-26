@@ -55,10 +55,10 @@ export function OutputDeviceCard({
                     {output.name}
                 </span>
             </button>
-            <p className="mt-1 text-[10px] text-slate-500">Device output</p>
+            <p className="mt-1 text-[10px] text-slate-500">System</p>
             <PeakMeter
                 level={output.levelReading}
-                label={`${output.name} device output`}
+                label={`${output.name} system output`}
             />
             {output.meterState?.startsWith("unavailable:") && (
                 <p className="mt-1 text-xs text-amber-300" role="status">

@@ -43,11 +43,11 @@ export function VirtualDestinationCard({
                 </span>
             </button>
             <p className="mt-1 text-[10px] text-slate-500">
-                {kind === "bus" ? "Mix output" : "Output pair"}
+                {kind === "bus" ? "Virtual" : "BlackHole"}
             </p>
             <PeakMeter
                 level={level}
-                label={`${name} ${kind === "bus" ? "mix output" : "device output pair"}`}
+                label={`${name} ${kind === "bus" ? "virtual bus output" : "BlackHole pair output"}`}
             />
             {captureState?.startsWith("unavailable:") && (
                 <p className="mt-1 text-xs text-amber-300" role="status">

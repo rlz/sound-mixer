@@ -134,7 +134,8 @@ export function App() {
     );
     const sourceDevices = (mixerState?.devices ?? []).filter(
         (device) =>
-            device.inputChannels > 0 || configuredInputIDs.has(device.uid),
+            device.category === "system" &&
+            (device.inputChannels > 0 || configuredInputIDs.has(device.uid)),
     );
     const sourceApplications = [...configuredApplicationIDs].map(
         (id) =>
@@ -220,7 +221,7 @@ export function App() {
                         aria-label="Mixer items"
                         className="min-h-0 min-w-0 [scrollbar-gutter:stable] space-y-3.5 overflow-x-hidden overflow-y-auto overscroll-contain border-r border-slate-700 bg-slate-900 p-3.5"
                     >
-                        <ItemGroup title="Output Devices">
+                        <ItemGroup title="System">
                             {mixerState?.outputs
                                 .filter((output) => !output.isBlackHole)
                                 .map((output) => (
@@ -278,7 +279,7 @@ export function App() {
                                 </p>
                             )}
                         </ItemGroup>
-                        <ItemGroup title="Virtual Buses">
+                        <ItemGroup title="Virtual">
                             <button
                                 type="button"
                                 disabled={pending !== null}
@@ -370,7 +371,7 @@ export function App() {
                                 </p>
                             )}
                         </ItemGroup>
-                        <ItemGroup title="BlackHole Routes">
+                        <ItemGroup title="BlackHole">
                             <button
                                 type="button"
                                 disabled={pending !== null}
@@ -1451,7 +1452,7 @@ export function App() {
                         className="min-h-0 min-w-0 [scrollbar-gutter:stable] space-y-3.5 overflow-x-hidden overflow-y-auto overscroll-contain border-l border-slate-700 bg-slate-900 p-3.5"
                         aria-label="Audio sources"
                     >
-                        <ItemGroup title="Inputs">
+                        <ItemGroup title="System">
                             {sourceDevices.length === 0 &&
                                 (mixerState?.buses.length ?? 0) === 0 &&
                                 (mixerState?.blackHoleRoutes.length ?? 0) ===
@@ -1521,6 +1522,9 @@ export function App() {
                                                 />
                                             </button>
                                         </div>
+                                        <p className="mt-1 text-xs text-slate-400">
+                                            System
+                                        </p>
                                         {(!device.available ||
                                             captureState !== "stopped") && (
                                             <p className="mt-1 text-xs text-slate-400">
@@ -1622,7 +1626,7 @@ export function App() {
                                             {bus.name}
                                         </div>
                                         <p className="mt-1 text-xs text-slate-400">
-                                            Internal virtual input
+                                            Virtual
                                         </p>
                                         <PeakMeter
                                             level={busMix?.levelReading}
@@ -1714,6 +1718,9 @@ export function App() {
                                                     />
                                                 </button>
                                             </div>
+                                            <p className="mt-1 text-xs text-slate-400">
+                                                BlackHole
+                                            </p>
                                             <p className="mt-1 text-xs text-slate-400">
                                                 {route.available
                                                     ? captureState ===

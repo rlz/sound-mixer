@@ -645,7 +645,7 @@ extension AppDelegate {
             isEnabled: configuration.isEnabled,
             devices: bridgeDevices(configuration: configuration, discovered: discovered),
             outputs: bridgeOutputs(configuration: configuration, discovered: discovered, deviceLevels: deviceLevels),
-            buses: configuration.buses.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name) },
+            buses: configuration.buses.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name, category: "virtual") },
             blackHoleRoutes: configuration.blackHoleRoutes.map { route in
                 let device = discovered[route.deviceUID.rawValue]
                 let selected = Self.bridgeChannels(route.channels)
@@ -653,7 +653,7 @@ extension AppDelegate {
                     $0.isAlive && selected.count == 2 && $0.inputChannels >= (selected.max() ?? Int.max)
                 } ?? false
                 return BridgeRoute(
-                    id: route.id.uuidString, name: route.name, deviceUID: route.deviceUID.rawValue,
+                    id: route.id.uuidString, name: route.name, category: "blackhole", deviceUID: route.deviceUID.rawValue,
                     channels: selected, available: pairAvailable,
                     captureState: captureStates["route:\(route.id.uuidString)"] ?? (pairAvailable ? "stopped" : "unavailable"),
                     level: sourceLevels["route:\(route.id.uuidString)"],
@@ -710,7 +710,9 @@ extension AppDelegate {
                 levelReading: renderLevels["\(targetKey)/destination"]
             )
         }
-        func hasSettings(_ mix: Mix) -> Bool { !mix.inputs.isEmpty || mix.level != 1 }
+        func hasSettings(_ mix: Mix) -> Bool {
+            !mix.inputs.isEmpty || mix.level != 1
+        }
         return configuration.outputMixes.filter { hasSettings($0.mix) }.map { item("output", $0.deviceUID.rawValue, $0.mix) }
             + configuration.buses.filter { hasSettings($0.mix) }.map { item("bus", $0.id.uuidString, $0.mix) }
             + configuration.blackHoleRoutes.filter { hasSettings($0.mix) }.map { item("route", $0.id.uuidString, $0.mix) }
@@ -781,9 +783,11 @@ extension AppDelegate {
             if isSavedInput {
                 savedAs.append("input")
             }
+            let name = live?.name ?? configuration.deviceDisplayName(for: deviceUID)
             return BridgeDevice(
                 uid: uid,
-                name: live?.name ?? configuration.deviceDisplayName(for: deviceUID),
+                name: name,
+                category: isBlackHoleDevice(uid: uid, name: name, configuration: configuration) ? "blackhole" : "system",
                 discovered: live != nil,
                 available: live.map(\.isAlive) ?? false,
                 inputChannels: live?.inputChannels ?? 0,
@@ -803,11 +807,13 @@ extension AppDelegate {
         let discoveredOutputUIDs = audioDevices.filter { $0.outputChannels > 0 }.map(\.uid)
         return Set(discoveredOutputUIDs).union(saved.keys).sorted().map { uid -> BridgeOutput in
             let live = discovered[uid]
+            let name = live?.name ?? configuration.deviceDisplayName(for: DeviceUID(rawValue: uid))
+            let isBlackHole = isBlackHoleDevice(uid: uid, name: name, configuration: configuration)
             return BridgeOutput(
                 uid: uid,
-                name: live?.name ?? configuration.deviceDisplayName(for: DeviceUID(rawValue: uid)),
-                isBlackHole: (live?.name ?? configuration.deviceDisplayName(for: DeviceUID(rawValue: uid)))
-                    .localizedCaseInsensitiveContains("BlackHole"),
+                name: name,
+                category: isBlackHole ? "blackhole" : "system",
+                isBlackHole: isBlackHole,
                 available: live.map { $0.isAlive && $0.outputChannels > 0 } ?? false,
                 outputChannels: live?.outputChannels ?? 0,
                 volume: live?.outputVolume,
@@ -820,6 +826,11 @@ extension AppDelegate {
                 meterState: captureStates["device:\(uid)"]
             )
         }
+    }
+
+    private func isBlackHoleDevice(uid: String, name: String, configuration: MixerConfiguration) -> Bool {
+        name.localizedCaseInsensitiveContains("BlackHole") ||
+            configuration.blackHoleRoutes.contains { $0.deviceUID.rawValue == uid }
     }
 
     func sendToWeb(method: String, payload: [String: Any]) {

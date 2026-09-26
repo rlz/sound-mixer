@@ -23,6 +23,8 @@ Statuses: `[ ]` = not started, `[~]` = in progress. Tasks are ordered by depende
 
 ## 3. Bridge and interface
 
+- [x] Classify system, virtual, and BlackHole items consistently. **Done when:** system means every Core Audio device except BlackHole, virtual means internal buses, and blackhole means configured stereo-pair routes; standalone BlackHole devices are hidden from Inputs/Outputs and created pairs appear as inputs. The bridge publishes categories, panels label each kind consistently, BlackHole input devices are filtered from Inputs, and requirements/README describe the same behavior.
+
 - [x] Treat empty mix settings as absent and expose reset in the editor. **Done when:** destinations can be edited without a separate mix-creation step, empty/default settings are omitted from state, removing the final output source removes its saved mix, and Reset clears the destination's mix settings.
 
 - [x] Keep the device-volume slider synchronized with macOS volume keys. **Done when:** after a local slider edit, later native volume snapshots move both the percentage and thumb; device readback rounding does not leave the thumb stuck, while active drags remain stable. The slider now follows confirmed native state after each write or interaction; physical volume-key behavior still needs manual Mac verification.

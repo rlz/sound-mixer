@@ -9,7 +9,8 @@
 - A device is identified by its Core Audio UID. The output list combines discovered devices and output-mix UIDs from saved configuration. If a configured output disappears, including before app launch, it remains listed as “Unavailable,” with its mix and an action to remove the saved setting. Removal does not affect the Core Audio device.
 - For configured input and output devices and BlackHole routes, save the last-known name for display only; show the UID if no name is known. A saved name does not imply that the device is connected. When a device with the same UID is discovered, update its name and properties, check compatibility, and resume it without recreating its mix. A different UID is a different device.
 - Available outputs without a saved mix appear in the list but do not become saved ghosts after disconnection. Removing the setting for a missing output removes it from the list; an available output stays listed as a discovered device.
-- An installed BlackHole device remains visible among Core Audio devices. Created BlackHole routes appear separately and refer to that device; the interface distinguishes them to avoid confusion.
+- Device categories are `system` (Core Audio devices other than BlackHole), `virtual` (Sound Mixer internal buses), and `blackhole` (configured BlackHole stereo-pair routes). Physical-device identity remains its Core Audio UID; buses and routes use their own UUIDs.
+- BlackHole driver devices are hidden as standalone items in Inputs and Outputs. They are available only in the BlackHole route-creation selector. After a route is created, its assigned stereo pair appears as a `blackhole` input and destination; deleting the route removes that pair from the interface.
 
 ## Internal virtual buses
 

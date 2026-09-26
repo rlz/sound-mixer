@@ -1,6 +1,7 @@
 export type OutputState = {
     uid: string;
     name: string;
+    category: "system" | "blackhole";
     isBlackHole: boolean;
     available: boolean;
     outputChannels: number;
@@ -17,6 +18,7 @@ export type OutputState = {
 export type DeviceState = {
     uid: string;
     name: string;
+    category: "system" | "blackhole";
     available: boolean;
     outputChannels: number;
     inputChannels: number;
@@ -49,10 +51,11 @@ export type MixerState = {
     isEnabled: boolean;
     devices: DeviceState[];
     outputs: OutputState[];
-    buses: { id: string; name: string }[];
+    buses: { id: string; name: string; category: "virtual" }[];
     blackHoleRoutes: {
         id: string;
         name: string;
+        category: "blackhole";
         deviceUID: string;
         channels: number[];
         available: boolean;
