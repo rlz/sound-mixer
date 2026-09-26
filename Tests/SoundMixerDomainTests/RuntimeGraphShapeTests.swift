@@ -29,8 +29,8 @@ final class RuntimeGraphShapeTests: XCTestCase {
         }
     }
 
-    func testChannelGainEditsPreserveRenderersButChannelRoutingEditsReplaceThem() {
-        let input = MixInput(source: .inputDevice(DeviceUID(rawValue: "mic")), channelRouting: [.first, .second], channelLevels: [1, 1])
+    func testChannelGainAndRoutingEditsPreserveRenderers() {
+        let input = MixInput(source: .inputDevice(DeviceUID(rawValue: "mic")), channelRouting: [[1], [2]], channelLevels: [1, 1])
         let output = OutputMix(deviceUID: DeviceUID(rawValue: "speakers"), mix: Mix(inputs: [input]))
         let original = MixerConfiguration(outputMixes: [output])
         let before = RuntimeGraphShape(configuration: original)
@@ -38,8 +38,8 @@ final class RuntimeGraphShapeTests: XCTestCase {
         changed.outputMixes[0].mix.inputs[0].channelLevels = [0.3, 0.7]
         changed.outputMixes[0].mix.inputs[0].channelsLinked = false
         XCTAssertEqual(RuntimeGraphShape(configuration: changed).changedRouteKeys(from: before), [])
-        changed.outputMixes[0].mix.inputs[0].channelRouting = [.both, .ignore]
-        XCTAssertEqual(RuntimeGraphShape(configuration: changed).changedRouteKeys(from: before), ["output:speakers"])
+        changed.outputMixes[0].mix.inputs[0].channelRouting = [[1, 2], []]
+        XCTAssertEqual(RuntimeGraphShape(configuration: changed).changedRouteKeys(from: before), [])
     }
 
     func testIndependentVirtualBusCreationAndDeletionLeaveExistingRoutesAndMetersUntouched() {

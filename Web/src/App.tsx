@@ -16,17 +16,11 @@ import "./bridge";
 import { ItemGroup } from "./components/ItemGroup";
 import { AppHeader } from "./components/AppHeader";
 import { MasterSwitch } from "./components/MasterSwitch";
-import { PeakMeter } from "./components/PeakMeter";
-import { StableRange } from "./components/StableRange";
 import { OutputDeviceCard } from "./components/OutputDeviceCard";
 import { VirtualDestinationCard } from "./components/VirtualDestinationCard";
 import { ItemCard } from "./components/ItemCard";
+import { ChannelMatrixDialog } from "./components/ChannelMatrixDialog";
 import { LevelControl } from "./components/LevelControl";
-import {
-    decibelsToGain,
-    formatGainDecibels,
-    gainToDecibels,
-} from "./components/audioGain";
 import "./styles.css";
 
 export function App() {
@@ -128,7 +122,6 @@ export function App() {
             ...selectedTarget,
             kind,
             sourceID,
-            monoPlacement: "both",
         });
     };
     const deleteVirtualItem = async (
@@ -725,44 +718,38 @@ export function App() {
                                                               input.id,
                                                       )?.inputChannels ?? 0)
                                                     : 0;
+                                            const inputChannels =
+                                                input.kind === "inputDevice"
+                                                    ? Math.max(
+                                                          channelCount,
+                                                          input.channelRouting
+                                                              .length,
+                                                      )
+                                                    : 2;
+                                            const outputChannels =
+                                                selectedTarget.target ===
+                                                "output"
+                                                    ? (mixerState?.outputs.find(
+                                                          (output) =>
+                                                              output.uid ===
+                                                              selectedTarget.id,
+                                                      )?.outputChannels ?? 2)
+                                                    : 2;
                                             const routing = Array.from(
-                                                {
-                                                    length: Math.max(
-                                                        channelCount,
-                                                        input.channelRouting
-                                                            .length,
-                                                    ),
-                                                },
+                                                { length: inputChannels },
                                                 (_, index) =>
                                                     input.channelRouting[
                                                         index
-                                                    ] ?? "ignore",
+                                                    ] ?? [],
                                             );
                                             const levels = Array.from(
-                                                { length: routing.length },
+                                                { length: inputChannels },
                                                 (_, index) =>
                                                     input.channelLevels[
                                                         index
                                                     ] ?? 1,
                                             );
                                             const editorKey = `${selectedTarget.target}:${selectedTarget.id}:${input.id}`;
-                                            const linkedLevel = Math.max(
-                                                0,
-                                                ...levels,
-                                            );
-                                            const scaleLinkedLevels = (
-                                                value: number,
-                                            ) => {
-                                                return linkedLevel > 0
-                                                    ? levels.map((level) =>
-                                                          Math.min(
-                                                              1,
-                                                              (level * value) /
-                                                                  linkedLevel,
-                                                          ),
-                                                      )
-                                                    : levels.map(() => value);
-                                            };
                                             const unavailableReason = !available
                                                 ? input.kind === "inputDevice"
                                                     ? "Device disconnected."
@@ -819,11 +806,12 @@ export function App() {
                                                                   : "inactive"
                                                         }
                                                         channelCount={
-                                                            channelCount ||
-                                                            (input.kind ===
-                                                            "inputDevice"
-                                                                ? undefined
-                                                                : 2)
+                                                            inputChannels
+                                                        }
+                                                        onChannelClick={() =>
+                                                            setOpenChannelEditor(
+                                                                editorKey,
+                                                            )
                                                         }
                                                         trailingAction={
                                                             <button
@@ -930,320 +918,91 @@ export function App() {
                                                                 )
                                                             }
                                                         />
-                                                        {input.kind ===
-                                                            "inputDevice" && (
-                                                            <div className="mt-3">
-                                                                <button
-                                                                    type="button"
-                                                                    aria-expanded={
-                                                                        openChannelEditor ===
-                                                                        editorKey
-                                                                    }
-                                                                    aria-controls={`channels-${input.id}`}
-                                                                    className="rounded border border-slate-700 px-2 py-1 text-xs text-sky-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
-                                                                    onClick={() =>
-                                                                        setOpenChannelEditor(
-                                                                            openChannelEditor ===
-                                                                                editorKey
-                                                                                ? null
-                                                                                : editorKey,
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    Channels (
-                                                                    {channelCount ||
-                                                                        input
-                                                                            .channelRouting
-                                                                            .length}
-                                                                    )
-                                                                </button>
-                                                                {openChannelEditor ===
-                                                                    editorKey && (
-                                                                    <div
-                                                                        id={`channels-${input.id}`}
-                                                                        className="mt-2 rounded-lg border border-slate-800 bg-slate-950 p-3"
-                                                                    >
-                                                                        <label className="mb-3 flex items-center gap-2 text-xs">
-                                                                            <input
-                                                                                type="checkbox"
-                                                                                checked={
-                                                                                    input.channelsLinked
-                                                                                }
-                                                                                onChange={(
-                                                                                    event,
-                                                                                ) => {
-                                                                                    const linked =
-                                                                                        event
-                                                                                            .currentTarget
-                                                                                            .checked;
-                                                                                    void send(
-                                                                                        `channels:${input.id}`,
-                                                                                        {
-                                                                                            command:
-                                                                                                "setPhysicalInputChannels",
-                                                                                            ...selectedTarget,
-                                                                                            sourceID:
-                                                                                                input.id,
-                                                                                            channelRouting:
-                                                                                                routing,
-                                                                                            channelLevels:
-                                                                                                levels,
-                                                                                            channelsLinked:
-                                                                                                linked,
-                                                                                        },
-                                                                                    );
-                                                                                }}
-                                                                            />
-                                                                            Link
-                                                                            gains
-                                                                            while
-                                                                            preserving
-                                                                            relative
-                                                                            channel
-                                                                            levels
-                                                                        </label>
-                                                                        <div className="space-y-2">
-                                                                            {routing.map(
-                                                                                (
-                                                                                    choice,
-                                                                                    index,
-                                                                                ) => (
-                                                                                    <div
-                                                                                        key={
-                                                                                            index
-                                                                                        }
-                                                                                        className="grid grid-cols-[minmax(9rem,1.2fr)_minmax(7rem,1fr)_minmax(7rem,1fr)] items-center gap-2 text-xs"
-                                                                                    >
-                                                                                        <div className="min-w-0">
-                                                                                            <span>
-                                                                                                Channel{" "}
-                                                                                                {index +
-                                                                                                    1}
-                                                                                            </span>
-                                                                                            <PeakMeter
-                                                                                                level={
-                                                                                                    mixerState?.inputCaptureStates.find(
-                                                                                                        (
-                                                                                                            state,
-                                                                                                        ) =>
-                                                                                                            state.uid ===
-                                                                                                            input.id,
-                                                                                                    )
-                                                                                                        ?.channelLevels[
-                                                                                                        index
-                                                                                                    ]
-                                                                                                }
-                                                                                                label={`${name} channel ${index + 1}`}
-                                                                                            />
-                                                                                        </div>
-                                                                                        <select
-                                                                                            value={
-                                                                                                choice
-                                                                                            }
-                                                                                            aria-label={`Channel ${index + 1} routing`}
-                                                                                            disabled={
-                                                                                                pending !==
-                                                                                                null
-                                                                                            }
-                                                                                            className="rounded border border-slate-700 bg-slate-900 px-2 py-1"
-                                                                                            onChange={(
-                                                                                                event,
-                                                                                            ) => {
-                                                                                                const nextRouting =
-                                                                                                    [
-                                                                                                        ...routing,
-                                                                                                    ];
-                                                                                                nextRouting[
-                                                                                                    index
-                                                                                                ] =
-                                                                                                    event
-                                                                                                        .currentTarget
-                                                                                                        .value as typeof choice;
-                                                                                                void send(
-                                                                                                    `channels:${input.id}`,
-                                                                                                    {
-                                                                                                        command:
-                                                                                                            "setPhysicalInputChannels",
-                                                                                                        ...selectedTarget,
-                                                                                                        sourceID:
-                                                                                                            input.id,
-                                                                                                        channelRouting:
-                                                                                                            nextRouting,
-                                                                                                        channelLevels:
-                                                                                                            levels,
-                                                                                                        channelsLinked:
-                                                                                                            input.channelsLinked,
-                                                                                                    },
-                                                                                                );
-                                                                                            }}
-                                                                                        >
-                                                                                            <option value="ignore">
-                                                                                                Ignore
-                                                                                            </option>
-                                                                                            <option value="first">
-                                                                                                First
-                                                                                            </option>
-                                                                                            <option value="second">
-                                                                                                Second
-                                                                                            </option>
-                                                                                            <option value="both">
-                                                                                                Both
-                                                                                            </option>
-                                                                                        </select>
-                                                                                        <label className="flex items-center gap-2">
-                                                                                            <StableRange
-                                                                                                value={gainToDecibels(
-                                                                                                    input.channelsLinked
-                                                                                                        ? linkedLevel
-                                                                                                        : (levels[
-                                                                                                              index
-                                                                                                          ] ??
-                                                                                                              1),
-                                                                                                )}
-                                                                                                label={
-                                                                                                    input.channelsLinked
-                                                                                                        ? `${name} linked channel gain, channel 1 reference`
-                                                                                                        : `${name} channel ${index + 1} level`
-                                                                                                }
-                                                                                                disabled={
-                                                                                                    input.channelsLinked &&
-                                                                                                    index >
-                                                                                                        0
-                                                                                                }
-                                                                                                onCommit={(
-                                                                                                    decibels,
-                                                                                                ) => {
-                                                                                                    const value =
-                                                                                                        decibelsToGain(
-                                                                                                            decibels,
-                                                                                                        );
-                                                                                                    const nextLevels =
-                                                                                                        input.channelsLinked
-                                                                                                            ? scaleLinkedLevels(
-                                                                                                                  value,
-                                                                                                              )
-                                                                                                            : [
-                                                                                                                  ...levels,
-                                                                                                              ];
-                                                                                                    if (
-                                                                                                        !input.channelsLinked
-                                                                                                    ) {
-                                                                                                        nextLevels[
-                                                                                                            index
-                                                                                                        ] =
-                                                                                                            value;
-                                                                                                    }
-                                                                                                    return send(
-                                                                                                        `channels:${input.id}`,
-                                                                                                        {
-                                                                                                            command:
-                                                                                                                "setPhysicalInputChannels",
-                                                                                                            ...selectedTarget,
-                                                                                                            sourceID:
-                                                                                                                input.id,
-                                                                                                            channelRouting:
-                                                                                                                routing,
-                                                                                                            channelLevels:
-                                                                                                                nextLevels,
-                                                                                                            channelsLinked:
-                                                                                                                input.channelsLinked,
-                                                                                                        },
-                                                                                                    );
-                                                                                                }}
-                                                                                                min={
-                                                                                                    -60
-                                                                                                }
-                                                                                                max={
-                                                                                                    0
-                                                                                                }
-                                                                                                step={
-                                                                                                    0.5
-                                                                                                }
-                                                                                                formatValue={
-                                                                                                    formatGainDecibels
-                                                                                                }
-                                                                                            />
-                                                                                            <span>
-                                                                                                {formatGainDecibels(
-                                                                                                    gainToDecibels(
-                                                                                                        levels[
-                                                                                                            index
-                                                                                                        ] ??
-                                                                                                            1,
-                                                                                                    ),
-                                                                                                )}
-                                                                                            </span>
-                                                                                        </label>
-                                                                                    </div>
-                                                                                ),
-                                                                            )}
-                                                                            {channelCount ===
-                                                                                0 && (
-                                                                                <p className="text-amber-200">
-                                                                                    Input
-                                                                                    channels
-                                                                                    are
-                                                                                    unavailable.
-                                                                                    Saved
-                                                                                    settings
-                                                                                    are
-                                                                                    retained.
-                                                                                </p>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        {input.kind ===
-                                                            "app" && (
-                                                            <label className="mt-2 flex items-center gap-2 text-xs">
-                                                                Mono placement{" "}
-                                                                <select
-                                                                    value={
-                                                                        input.monoPlacement
-                                                                    }
-                                                                    disabled={
-                                                                        pending !==
-                                                                        null
-                                                                    }
-                                                                    onChange={(
-                                                                        event,
-                                                                    ) =>
-                                                                        void send(
-                                                                            `mono:${input.id}`,
-                                                                            {
-                                                                                command:
-                                                                                    "setMonoPlacement",
-                                                                                ...selectedTarget,
-                                                                                kind: input.kind,
-                                                                                sourceID:
-                                                                                    input.id,
-                                                                                monoPlacement:
-                                                                                    event
-                                                                                        .currentTarget
-                                                                                        .value as
-                                                                                        | "left"
-                                                                                        | "right"
-                                                                                        | "both",
-                                                                            },
-                                                                        )
-                                                                    }
-                                                                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
-                                                                >
-                                                                    <option value="both">
-                                                                        Stereo
-                                                                    </option>
-                                                                    <option value="left">
-                                                                        Left
-                                                                    </option>
-                                                                    <option value="right">
-                                                                        Right
-                                                                    </option>
-                                                                </select>
-                                                            </label>
-                                                        )}
                                                     </ItemCard>
+                                                    {openChannelEditor ===
+                                                        editorKey && (
+                                                        <ChannelMatrixDialog
+                                                            name={name}
+                                                            inputChannels={
+                                                                inputChannels
+                                                            }
+                                                            outputChannels={
+                                                                outputChannels
+                                                            }
+                                                            routing={routing}
+                                                            channelLevels={
+                                                                input.kind ===
+                                                                "inputDevice"
+                                                                    ? levels
+                                                                    : undefined
+                                                            }
+                                                            channelsLinked={
+                                                                input.channelsLinked
+                                                            }
+                                                            meters={
+                                                                input.kind ===
+                                                                "inputDevice"
+                                                                    ? mixerState?.inputCaptureStates.find(
+                                                                          (
+                                                                              state,
+                                                                          ) =>
+                                                                              state.uid ===
+                                                                              input.id,
+                                                                      )
+                                                                          ?.channelLevels
+                                                                    : undefined
+                                                            }
+                                                            disabled={
+                                                                pending !== null
+                                                            }
+                                                            onClose={() =>
+                                                                setOpenChannelEditor(
+                                                                    null,
+                                                                )
+                                                            }
+                                                            onRoutingChange={(
+                                                                next,
+                                                            ) =>
+                                                                void send(
+                                                                    `routing:${input.id}`,
+                                                                    {
+                                                                        command:
+                                                                            "setMixInputRouting",
+                                                                        ...selectedTarget,
+                                                                        kind: input.kind,
+                                                                        sourceID:
+                                                                            input.id,
+                                                                        channelRouting:
+                                                                            next,
+                                                                    },
+                                                                )
+                                                            }
+                                                            onGainChange={
+                                                                input.kind ===
+                                                                "inputDevice"
+                                                                    ? (
+                                                                          next,
+                                                                          linked,
+                                                                      ) =>
+                                                                          send(
+                                                                              `channels:${input.id}`,
+                                                                              {
+                                                                                  command:
+                                                                                      "setPhysicalInputChannels",
+                                                                                  ...selectedTarget,
+                                                                                  kind: "inputDevice",
+                                                                                  sourceID:
+                                                                                      input.id,
+                                                                                  channelLevels:
+                                                                                      next,
+                                                                                  channelsLinked:
+                                                                                      linked,
+                                                                              },
+                                                                          )
+                                                                    : undefined
+                                                            }
+                                                        />
+                                                    )}
                                                 </li>
                                             );
                                         })}
@@ -1589,8 +1348,13 @@ export function App() {
                                                 />
                                             </button>
                                             {!route.available && (
-                                                <p className="mt-1 text-xs text-amber-200" role="status">
-                                                    Input channels {route.channels.join("/")} unavailable
+                                                <p
+                                                    className="mt-1 text-xs text-amber-200"
+                                                    role="status"
+                                                >
+                                                    Input channels{" "}
+                                                    {route.channels.join("/")}{" "}
+                                                    unavailable
                                                 </p>
                                             )}
                                             <LevelControl
@@ -1737,9 +1501,24 @@ export function App() {
                                             </button>
                                         }
                                     >
-                                        {(application.captureState.startsWith("unavailable:") || application.captureState === "permissionDenied") && (
-                                            <p className="mt-1 text-xs text-amber-200" role="status">
-                                                {application.captureState === "permissionDenied" ? "System Audio Recording permission denied." : application.captureState.slice("unavailable:".length).trim()}
+                                        {(application.captureState.startsWith(
+                                            "unavailable:",
+                                        ) ||
+                                            application.captureState ===
+                                                "permissionDenied") && (
+                                            <p
+                                                className="mt-1 text-xs text-amber-200"
+                                                role="status"
+                                            >
+                                                {application.captureState ===
+                                                "permissionDenied"
+                                                    ? "System Audio Recording permission denied."
+                                                    : application.captureState
+                                                          .slice(
+                                                              "unavailable:"
+                                                                  .length,
+                                                          )
+                                                          .trim()}
                                             </p>
                                         )}
                                         {application.available &&

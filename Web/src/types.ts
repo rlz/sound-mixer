@@ -31,8 +31,7 @@ export type MixInputState = {
     kind: string;
     id: string;
     level: number;
-    monoPlacement: "left" | "right" | "both";
-    channelRouting: ("ignore" | "first" | "second" | "both")[];
+    channelRouting: number[][];
     channelLevels: number[];
     channelsLinked: boolean;
     muted: boolean;
@@ -136,7 +135,6 @@ export type BridgeCommand =
           id: string;
           kind: string;
           sourceID: string;
-          monoPlacement?: "left" | "right" | "both";
       }
     | {
           command: "setMixInputLevel";
@@ -155,19 +153,19 @@ export type BridgeCommand =
           muted: boolean;
       }
     | {
-          command: "setMonoPlacement";
+          command: "setMixInputRouting";
           target: "output" | "bus" | "route";
           id: string;
           kind: string;
           sourceID: string;
-          monoPlacement: "left" | "right" | "both";
+          channelRouting: number[][];
       }
     | {
           command: "setPhysicalInputChannels";
           target: "output" | "bus" | "route";
           id: string;
+          kind: "inputDevice";
           sourceID: string;
-          channelRouting: ("ignore" | "first" | "second" | "both")[];
           channelLevels: number[];
           channelsLinked: boolean;
       };

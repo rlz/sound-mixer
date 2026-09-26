@@ -106,54 +106,97 @@ public enum MonoPlacement: String, Codable, Sendable {
     case both
 }
 
-public enum ChannelRouting: String, Codable, Sendable {
-    case ignore
-    case first
-    case second
-    case both
-}
-
 public struct MixInput: Codable, Equatable, Sendable {
     public static let maximumApplicationGain = pow(10.0, 30.0 / 20.0)
 
     public var source: SourceReference
     public var level: Double
     public var isMuted: Bool
-    public var monoPlacement: MonoPlacement
-    public var channelRouting: [ChannelRouting]
+    /// One-based destination channel numbers for each source channel.
+    public var channelRouting: [[Int]]
     public var channelLevels: [Double]
     public var channelsLinked: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case source, level, isMuted, channelRouting, channelLevels, channelsLinked
+    }
+
+    private enum LegacyRouting: String, Codable {
+        case ignore, first, second, both
+
+        var channels: [Int] {
+            switch self {
+            case .ignore: []
+            case .first: [1]
+            case .second: [2]
+            case .both: [1, 2]
+            }
+        }
+    }
 
     public init(
         source: SourceReference,
         level: Double = 1,
         isMuted: Bool = false,
-        monoPlacement: MonoPlacement = .both,
-        channelRouting: [ChannelRouting] = [],
-        channelLevels: [Double] = [],
+        channelRouting: [[Int]] = [[1], [2]],
+        channelLevels: [Double] = [1, 1],
         channelsLinked: Bool = true
     ) {
         self.source = source
         self.level = level
         self.isMuted = isMuted
-        self.monoPlacement = monoPlacement
         self.channelRouting = channelRouting
         self.channelLevels = channelLevels
         self.channelsLinked = channelsLinked
     }
 
-    public static func physicalInputDefaults(channelCount: Int, mono: Bool) -> (routing: [ChannelRouting], levels: [Double]) {
-        let routing = (0 ..< max(0, channelCount)).map { channel -> ChannelRouting in
-            if mono {
-                return .both
+    public static func defaultRouting(channelCount: Int, outputChannels: Int) -> [[Int]] {
+        (0 ..< max(0, channelCount)).map { channel in
+            if channelCount == 1 {
+                return outputChannels > 0 ? Array(1 ... min(outputChannels, 2)) : []
             }
-            switch channel {
-            case 0: return .first
-            case 1: return .second
-            default: return .ignore
+            return channel < min(outputChannels, 2) ? [channel + 1] : []
+        }
+    }
+
+    public static func physicalInputDefaults(channelCount: Int, outputChannels: Int = 2) -> (routing: [[Int]], levels: [Double]) {
+        let routing = defaultRouting(channelCount: channelCount, outputChannels: outputChannels)
+        return (routing, Array(repeating: 1, count: routing.count))
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        source = try container.decode(SourceReference.self, forKey: .source)
+        level = try container.decode(Double.self, forKey: .level)
+        isMuted = try container.decode(Bool.self, forKey: .isMuted)
+        if let matrix = try? container.decode([[Int]].self, forKey: .channelRouting) {
+            channelRouting = matrix
+        } else {
+            let legacy = try container.decode([LegacyRouting].self, forKey: .channelRouting)
+            channelRouting = legacy.map(\.channels)
+        }
+        channelLevels = try container.decode([Double].self, forKey: .channelLevels)
+        channelsLinked = try container.decode(Bool.self, forKey: .channelsLinked)
+        if channelRouting.isEmpty {
+            switch source {
+            case .inputDevice:
+                channelRouting = [[1, 2]]
+                channelLevels = [1]
+            case .application, .bus, .blackHoleRoute:
+                channelRouting = Self.defaultRouting(channelCount: 2, outputChannels: 2)
+                channelLevels = [1, 1]
             }
         }
-        return (routing, Array(repeating: 1, count: routing.count))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(source, forKey: .source)
+        try container.encode(level, forKey: .level)
+        try container.encode(isMuted, forKey: .isMuted)
+        try container.encode(channelRouting, forKey: .channelRouting)
+        try container.encode(channelLevels, forKey: .channelLevels)
+        try container.encode(channelsLinked, forKey: .channelsLinked)
     }
 }
 
@@ -273,7 +316,7 @@ public struct SourceLevel: Codable, Equatable, Sendable {
 }
 
 public struct MixerConfiguration: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 9
+    public static let currentSchemaVersion = 10
 
     public let schemaVersion: Int
     public var isEnabled: Bool
@@ -326,7 +369,7 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let version = try container.decode(Int.self, forKey: .schemaVersion)
-        guard version == Self.currentSchemaVersion else {
+        guard version == Self.currentSchemaVersion || version == 9 else {
             throw DecodingError.dataCorruptedError(
                 forKey: .schemaVersion,
                 in: container,

@@ -118,13 +118,13 @@ final class GraphValidatorTests: XCTestCase {
         ])
 
         let issues = GraphValidator.deviceIssues(for: configuration, devices: [
-            device(inputUID, input: 4, output: 0, rate: 48000),
-            device(outputUID, input: 0, output: 1, rate: .nan),
+            device(inputUID, input: 65, output: 0, rate: 48000),
+            device(outputUID, input: 0, output: 65, rate: .nan),
             device(blackHoleUID, input: 0, output: 3, rate: 44100, isBlackHole: false)
         ])
         XCTAssertEqual(issues, [
             .unsupportedChannelCount(.input(inputUID)),
-            .invalidSampleRate(.output(outputUID)), .unsupportedChannelCount(.output(outputUID)),
+            .invalidSampleRate(.output(outputUID)),
             .notBlackHole(.blackHoleRoute(route.id)), .channelOutOfRange(.blackHoleRoute(route.id))
         ])
     }

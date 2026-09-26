@@ -30,7 +30,7 @@ extension GraphValidationError: LocalizedError {
         case let .missingRoute(id): "The referenced BlackHole route \(id.uuidString) no longer exists."
         case .busCycle: "This change would create a cycle between virtual buses."
         case .invalidChannels: "Choose distinct channel numbers starting at 1."
-        case .invalidChannelSettings: "Physical input routing and gain settings must have matching channel counts and valid linked levels."
+        case .invalidChannelSettings: "Input routing and gain settings must have matching channel counts and valid channel numbers."
         case let .blackHoleChannelConflict(uid):
             "Those channels are already reserved by another route or output mix on \(uid.rawValue)."
         }
@@ -84,7 +84,7 @@ public enum GraphValidator {
                 continue
             }
             appendSampleRateIssue(for: device, endpoint: endpoint, to: &issues)
-            if !(1 ... 2).contains(device.inputChannels) {
+            if !(1 ... 64).contains(device.inputChannels) {
                 issues.append(.unsupportedChannelCount(endpoint))
             }
         }
@@ -96,7 +96,7 @@ public enum GraphValidator {
                 continue
             }
             appendSampleRateIssue(for: device, endpoint: endpoint, to: &issues)
-            if device.outputChannels < 2 {
+            if device.outputChannels < 1 {
                 issues.append(.unsupportedChannelCount(endpoint))
             }
         }
@@ -148,7 +148,12 @@ public enum GraphValidator {
             var sources = Set<SourceKey>()
             for input in mix.inputs {
                 try validateLevel(input.level)
-                guard input.channelRouting.count == input.channelLevels.count else {
+                guard (1 ... 64).contains(input.channelRouting.count),
+                      input.channelRouting.count == input.channelLevels.count,
+                      input.channelRouting.allSatisfy({ row in
+                          Set(row).count == row.count && row.allSatisfy { $0 > 0 }
+                      })
+                else {
                     throw GraphValidationError.invalidChannelSettings
                 }
                 for channelLevel in input.channelLevels {

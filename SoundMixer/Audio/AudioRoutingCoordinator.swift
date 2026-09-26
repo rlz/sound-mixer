@@ -38,7 +38,7 @@ final class AudioRoutingCoordinator {
     @discardableResult
     func update(graph: MixGraphSnapshot, devices: [AudioDeviceSnapshot], processes: [AudioProcessSnapshot]) -> Bool {
         let orderedDevices = devices.sorted { $0.uid < $1.uid }
-        let applicationKeys = Set(makeRoutes(graph.configuration).flatMap {
+        let applicationKeys = Set(makeRoutes(graph.configuration, devices: orderedDevices).flatMap {
             Self.sourceKeys(in: $0.mix, buses: graph.configuration.buses).filter { $0.hasPrefix("application:") }
         }).union(graph.configuration.applications.map { "application:\($0.rawValue)" })
         let orderedProcesses = processes.filter { applicationKeys.contains("application:\($0.applicationID)") }.sorted {
@@ -54,6 +54,20 @@ final class AudioRoutingCoordinator {
         let deviceRoutingChanged = lastDevices.count != orderedDevices.count ||
             !zip(lastDevices, orderedDevices).allSatisfy { $0.hasSameRouting(as: $1) }
         guard needsUpdate(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled) else { return false }
+        if let lastGraph, enabled,
+           !deviceRoutingChanged,
+           Self.hasSameProcessRouting(lastProcesses, orderedProcesses),
+           Self.hasOnlyRoutingChanges(from: lastGraph.configuration, to: graph.configuration)
+        {
+            for renderer in renderers.values {
+                renderer.updateRouting(from: graph, previous: lastGraph)
+            }
+            for pump in busMeterPumps.values {
+                pump.renderer.updateRouting(from: graph, previous: lastGraph)
+            }
+            remember(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled)
+            return false
+        }
         if let lastGraph, enabled, Self.hasOnlyGainChanges(from: lastGraph.configuration, to: graph.configuration),
            !deviceRoutingChanged,
            Self.hasSameProcessRouting(lastProcesses, orderedProcesses)
@@ -84,7 +98,7 @@ final class AudioRoutingCoordinator {
         let deviceByUID = Dictionary(orderedDevices.map { ($0.uid, $0) }, uniquingKeysWith: { first, _ in first })
         let processByID = Dictionary(orderedProcesses.map { ($0.applicationID, $0) }, uniquingKeysWith: { first, _ in first })
 
-        let routes = makeRoutes(graph.configuration)
+        let routes = makeRoutes(graph.configuration, devices: orderedDevices)
         let desiredRoutes = Dictionary(routes.map { ($0.key, $0) }, uniquingKeysWith: { _, latest in latest })
         let previousConfiguration = lastGraph?.configuration
         let desiredShape = RuntimeGraphShape(configuration: graph.configuration)
@@ -309,7 +323,9 @@ final class AudioRoutingCoordinator {
         let previousDevices = Dictionary(lastDevices.map { ($0.uid, $0) }, uniquingKeysWith: { _, latest in latest })
         let currentDevices = Dictionary(devices.map { ($0.uid, $0) }, uniquingKeysWith: { _, latest in latest })
         for device in devices {
-            if previousDevices[device.uid]?.hasSameInputRouting(as: device) == true { continue }
+            if previousDevices[device.uid]?.hasSameInputRouting(as: device) == true {
+                continue
+            }
             if device.inputChannels > 0 {
                 result.insert("input:\(device.uid)")
             }
@@ -536,7 +552,7 @@ final class AudioRoutingCoordinator {
             graph: graph,
             output: OutputMix(deviceUID: DeviceUID(rawValue: route.uid), mix: route.mix),
             sourceRings: rings,
-            monoSourceKeys: [],
+            outputChannelCount: route.channels.count,
             targetKey: route.targetKey,
             meters: renderMeters.filter { $0.key.hasPrefix("\(route.targetKey)/") }
         )
@@ -559,13 +575,37 @@ final class AudioRoutingCoordinator {
                     selectedChannels: route.channels,
                     sampleRate: 48000
                 ),
-                render: { left, right, frames in renderer.render(left: left, right: right, frameCount: frames) }
+                render: { channels, frames in renderer.render(channels: channels, frameCount: frames) }
             )
             return true
         } catch {
             output.stop(key: route.key)
             onRouteError?(route.key, error.localizedDescription)
             return false
+        }
+    }
+
+    private static func hasOnlyRoutingChanges(from old: MixerConfiguration, to new: MixerConfiguration) -> Bool {
+        guard old != new else { return false }
+        func normalized(_ source: MixerConfiguration) -> MixerConfiguration {
+            var copy = source
+            for index in copy.outputMixes.indices {
+                Self.clearRouting(&copy.outputMixes[index].mix)
+            }
+            for index in copy.buses.indices {
+                Self.clearRouting(&copy.buses[index].mix)
+            }
+            for index in copy.blackHoleRoutes.indices {
+                Self.clearRouting(&copy.blackHoleRoutes[index].mix)
+            }
+            return copy
+        }
+        return normalized(old) == normalized(new)
+    }
+
+    private static func clearRouting(_ mix: inout Mix) {
+        for index in mix.inputs.indices {
+            mix.inputs[index].channelRouting = Array(repeating: [], count: mix.inputs[index].channelRouting.count)
         }
     }
 
@@ -577,6 +617,7 @@ final class AudioRoutingCoordinator {
                 for index in mix.inputs.indices {
                     mix.inputs[index].level = 1
                     mix.inputs[index].channelLevels = Array(repeating: 1, count: mix.inputs[index].channelLevels.count)
+                    mix.inputs[index].channelRouting = Array(repeating: [], count: mix.inputs[index].channelRouting.count)
                 }
             }
             for index in copy.outputMixes.indices {
@@ -711,6 +752,7 @@ private final class BusMeterPump {
     private let frameCount = 480
     private let left: UnsafeMutablePointer<Float>
     private let right: UnsafeMutablePointer<Float>
+    private let planePointers: UnsafeMutablePointer<UnsafeMutablePointer<Float>>
     private var timer: DispatchSourceTimer?
 
     init(renderer: AudioGraphRenderer) {
@@ -719,6 +761,9 @@ private final class BusMeterPump {
         right = .allocate(capacity: frameCount)
         left.initialize(repeating: 0, count: frameCount)
         right.initialize(repeating: 0, count: frameCount)
+        planePointers = .allocate(capacity: 2)
+        planePointers.initialize(to: left)
+        planePointers.advanced(by: 1).initialize(to: right)
     }
 
     deinit {
@@ -726,6 +771,8 @@ private final class BusMeterPump {
         right.deinitialize(count: frameCount)
         left.deallocate()
         right.deallocate()
+        planePointers.deinitialize(count: 2)
+        planePointers.deallocate()
     }
 
     func start() {
@@ -733,9 +780,7 @@ private final class BusMeterPump {
         timer.schedule(deadline: .now(), repeating: .milliseconds(10), leeway: .milliseconds(2))
         timer.setEventHandler { [weak self] in
             guard let self else { return }
-            let leftBuffer = UnsafeMutableBufferPointer(start: left, count: frameCount)
-            let rightBuffer = UnsafeMutableBufferPointer(start: right, count: frameCount)
-            renderer.render(left: leftBuffer, right: rightBuffer, frameCount: frameCount)
+            renderer.render(channels: UnsafeBufferPointer(start: planePointers, count: 2), frameCount: frameCount)
         }
         self.timer = timer
         timer.resume()
@@ -778,7 +823,7 @@ extension AudioRoutingCoordinator {
         var sources = Set(devices.filter { $0.inputChannels > 0 }.map { "input:\($0.uid)" })
         sources.formUnion(configuration.applications.map { "application:\($0.rawValue)" })
         sources.formUnion(configuration.blackHoleRoutes.map { "route:\($0.id.uuidString)" })
-        for route in makeRoutes(configuration) {
+        for route in makeRoutes(configuration, devices: devices) {
             sources.formUnion(Self.sourceKeys(in: route.mix, buses: configuration.buses))
         }
         for bus in configuration.buses {
@@ -787,14 +832,14 @@ extension AudioRoutingCoordinator {
         return sources
     }
 
-    private func makeRoutes(_ configuration: MixerConfiguration) -> [RenderRoute] {
+    private func makeRoutes(_ configuration: MixerConfiguration, devices: [AudioDeviceSnapshot]) -> [RenderRoute] {
         var routes = configuration.outputMixes.map { output in
             var mix = output.mix
             mix.level = 1
             return RenderRoute(
                 key: "output:\(output.deviceUID.rawValue)",
                 uid: output.deviceUID.rawValue,
-                channels: [0, 1],
+                channels: Array(0 ..< max(devices.first(where: { $0.uid == output.deviceUID.rawValue })?.outputChannels ?? 2, 1)),
                 mix: mix,
                 targetKey: "output:\(output.deviceUID.rawValue)"
             )

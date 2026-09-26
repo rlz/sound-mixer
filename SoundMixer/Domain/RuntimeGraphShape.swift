@@ -28,7 +28,8 @@ public struct RuntimeGraphShape: Equatable, Sendable {
             let mix = Self.renderingStructure(output.mix)
             routes["output:\(output.deviceUID.rawValue)"] = RuntimeRouteRenderingDefinition(
                 deviceUID: output.deviceUID,
-                channels: [0, 1],
+                // Physical channel count comes from the live device descriptor.
+                channels: [],
                 mix: mix,
                 dependentBuses: Self.dependencies(of: mix, in: buses)
             )
@@ -103,6 +104,7 @@ public struct RuntimeGraphShape: Equatable, Sendable {
             result.inputs[index].isMuted = false
             // Channel count remains structural: it determines preallocated engines.
             result.inputs[index].channelLevels = Array(repeating: 1, count: result.inputs[index].channelLevels.count)
+            result.inputs[index].channelRouting = Array(repeating: [], count: result.inputs[index].channelRouting.count)
             result.inputs[index].channelsLinked = true
         }
         return result

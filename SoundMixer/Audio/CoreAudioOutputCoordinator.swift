@@ -5,7 +5,7 @@ import Foundation
 /// Owns one HAL output unit per Core Audio device. Routes using separate channel
 /// pairs share that unit, so adding a pair only publishes a new render snapshot.
 final class CoreAudioOutputCoordinator {
-    typealias StereoRenderHandler = (UnsafeMutableBufferPointer<Float>, UnsafeMutableBufferPointer<Float>, Int) -> Void
+    typealias RenderHandler = (UnsafeBufferPointer<UnsafeMutablePointer<Float>>, Int) -> Void
 
     struct Route {
         let key: String
@@ -19,9 +19,9 @@ final class CoreAudioOutputCoordinator {
     private var sessions: [AudioDeviceID: OutputSession] = [:]
     private var deviceByRouteKey: [String: AudioDeviceID] = [:]
 
-    func start(route: Route, render: @escaping StereoRenderHandler) throws {
+    func start(route: Route, render: @escaping RenderHandler) throws {
         guard !route.key.isEmpty, route.deviceChannelCount > 0,
-              (1 ... 2).contains(route.selectedChannels.count),
+              !route.selectedChannels.isEmpty,
               Set(route.selectedChannels).count == route.selectedChannels.count,
               route.selectedChannels.allSatisfy({ (0 ..< route.deviceChannelCount).contains($0) }),
               route.sampleRate.isFinite, route.sampleRate > 0
@@ -84,21 +84,26 @@ final class CoreAudioOutputCoordinator {
         }
 
         let maximumFrames = 8192
-        let left: UnsafeMutablePointer<Float>
-        let right: UnsafeMutablePointer<Float>
+        let planes: [UnsafeMutablePointer<Float>]
+        let planePointers: UnsafeMutablePointer<UnsafeMutablePointer<Float>>
         var unit: AudioUnit?
 
-        init(route: Route, render: @escaping StereoRenderHandler) {
+        init(route: Route, render: @escaping RenderHandler) {
             deviceID = route.deviceID
             deviceChannelCount = route.deviceChannelCount
             sampleRate = route.sampleRate
             let prepared = RouteRender(key: route.key, channels: route.selectedChannels, render: render)
             routes = [route.key: prepared]
             publication = RealtimePublication(RouteSnapshot(routes: [prepared]))
-            left = .allocate(capacity: maximumFrames)
-            right = .allocate(capacity: maximumFrames)
-            left.initialize(repeating: 0, count: maximumFrames)
-            right.initialize(repeating: 0, count: maximumFrames)
+            planes = (0 ..< route.deviceChannelCount).map { _ in
+                let plane = UnsafeMutablePointer<Float>.allocate(capacity: 8192)
+                plane.initialize(repeating: 0, count: 8192)
+                return plane
+            }
+            planePointers = .allocate(capacity: planes.count)
+            for index in planes.indices {
+                planePointers.advanced(by: index).initialize(to: planes[index])
+            }
         }
 
         func canReuseHardware(for route: Route) -> Bool {
@@ -106,7 +111,7 @@ final class CoreAudioOutputCoordinator {
                 sampleRate == route.sampleRate
         }
 
-        func update(route: Route, render: @escaping StereoRenderHandler) {
+        func update(route: Route, render: @escaping RenderHandler) {
             routes[route.key] = RouteRender(key: route.key, channels: route.selectedChannels, render: render)
             publishRoutes()
         }
@@ -123,10 +128,12 @@ final class CoreAudioOutputCoordinator {
         }
 
         deinit {
-            left.deinitialize(count: maximumFrames)
-            right.deinitialize(count: maximumFrames)
-            left.deallocate()
-            right.deallocate()
+            for plane in planes {
+                plane.deinitialize(count: maximumFrames)
+                plane.deallocate()
+            }
+            planePointers.deinitialize(count: planes.count)
+            planePointers.deallocate()
         }
 
         func start() throws {
@@ -204,26 +211,18 @@ final class CoreAudioOutputCoordinator {
             let sampleCount = frames * session.deviceChannelCount
             let output = raw.assumingMemoryBound(to: Float.self)
             output.update(repeating: 0, count: sampleCount)
-            let left = UnsafeMutableBufferPointer(start: session.left, count: frames)
-            let right = UnsafeMutableBufferPointer(start: session.right, count: frames)
             let snapshot = session.publication.beginRead()
             defer { session.publication.endRead() }
             if let snapshot {
                 for route in snapshot.routes {
-                    left.update(repeating: 0)
-                    right.update(repeating: 0)
-                    route.render(left, right, frames)
-                    if route.channels.count == 1 {
-                        let channel = route.channels[0]
+                    for index in route.channels.indices {
+                        session.planes[index].update(repeating: 0, count: frames)
+                    }
+                    route.render(UnsafeBufferPointer(start: session.planePointers, count: route.channels.count), frames)
+                    for (index, channel) in route.channels.enumerated() {
+                        let plane = session.planes[index]
                         for frame in 0 ..< frames {
-                            output[frame * session.deviceChannelCount + channel] = (left[frame] + right[frame]) * 0.5
-                        }
-                    } else {
-                        let leftChannel = route.channels[0]
-                        let rightChannel = route.channels[1]
-                        for frame in 0 ..< frames {
-                            output[frame * session.deviceChannelCount + leftChannel] = left[frame]
-                            output[frame * session.deviceChannelCount + rightChannel] = right[frame]
+                            output[frame * session.deviceChannelCount + channel] = plane[frame]
                         }
                     }
                 }
@@ -268,7 +267,7 @@ final class CoreAudioOutputCoordinator {
 private struct RouteRender {
     let key: String
     let channels: [Int]
-    let render: CoreAudioOutputCoordinator.StereoRenderHandler
+    let render: CoreAudioOutputCoordinator.RenderHandler
 }
 
 private final class RouteSnapshot {

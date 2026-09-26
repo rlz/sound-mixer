@@ -12,13 +12,13 @@ final class MixerConfigurationTests: XCTestCase {
         let bus = VirtualBus(
             id: busID,
             name: "Stream",
-            mix: Mix(level: 0.75, inputs: [MixInput(source: .inputDevice(inputUID), level: 0.25, monoPlacement: .left)])
+            mix: Mix(level: 0.75, inputs: [MixInput(source: .inputDevice(inputUID), level: 0.25)])
         )
         let configuration = MixerConfiguration(
             isEnabled: true,
             outputMixes: [OutputMix(deviceUID: outputUID, mix: Mix(level: 0.9, inputs: [
                 MixInput(source: .bus(busID), level: 0.5),
-                MixInput(source: .application(ApplicationID(rawValue: "com.example.player")), level: 0.6, monoPlacement: .right)
+                MixInput(source: .application(ApplicationID(rawValue: "com.example.player")), level: 0.6)
             ]))],
             buses: [bus],
             blackHoleRoutes: [BlackHoleRoute(

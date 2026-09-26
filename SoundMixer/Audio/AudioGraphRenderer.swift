@@ -25,7 +25,7 @@ final class AudioGraphRenderer {
         graph: MixGraphSnapshot,
         output: OutputMix,
         sourceRings: [String: RealtimeAudioRingBuffer],
-        monoSourceKeys: Set<String> = [],
+        outputChannelCount: Int = 2,
         targetKey: String,
         meters: [String: RealtimePeakMeter]
     ) {
@@ -78,26 +78,23 @@ final class AudioGraphRenderer {
             (
                 bus.id,
                 Self.states(
-                    for: bus.mix, sampleRate: 48000, monoSourceKeys: monoSourceKeys,
-                    meterTarget: "bus:\(bus.id.uuidString)", meters: meters
+                    for: bus.mix, sampleRate: 48000,
+                    meterTarget: "bus:\(bus.id.uuidString)", meters: meters, outputChannelCount: 2
                 )
             )
         })
         outputState = Self.states(
-            for: output.mix, sampleRate: 48000, monoSourceKeys: monoSourceKeys,
-            meterTarget: targetKey, meters: meters
+            for: output.mix, sampleRate: 48000,
+            meterTarget: targetKey, meters: meters, outputChannelCount: outputChannelCount
         )
     }
 
-    func render(
-        left: UnsafeMutableBufferPointer<Float>,
-        right: UnsafeMutableBufferPointer<Float>,
-        frameCount: Int
-    ) {
-        let frames = min(frameCount, min(Self.maximumFrames, min(left.count, right.count)))
+    func render(channels: UnsafeBufferPointer<UnsafeMutablePointer<Float>>, frameCount: Int) {
+        let frames = min(frameCount, Self.maximumFrames)
         guard frames > 0 else { return }
-        left.update(repeating: 0)
-        right.update(repeating: 0)
+        for pointer in channels {
+            pointer.update(repeating: 0, count: frames)
+        }
 
         for key in sourceKeys {
             guard let storage = sourceBuffers[key] else { continue }
@@ -119,8 +116,14 @@ final class AudioGraphRenderer {
             )
         }
 
-        renderMix(outputMix, states: outputState, into: (left, right), frames: frames)
-        outputDestinationMeter?.record(left: UnsafeBufferPointer(left), right: UnsafeBufferPointer(right), frameCount: frames)
+        renderMix(outputMix, states: outputState, into: channels, frames: frames)
+        var peak: Float = 0
+        for pointer in channels {
+            for frame in 0 ..< frames {
+                peak = max(peak, abs(pointer[frame]))
+            }
+        }
+        outputDestinationMeter?.record(peak: peak)
     }
 
     /// Publishes gain changes to the render thread without rebuilding its audio graph.
@@ -144,90 +147,89 @@ final class AudioGraphRenderer {
         }
     }
 
+    /// A matrix edit changes only the connections of rows whose assignments changed.
+    func updateRouting(from graph: MixGraphSnapshot, previous: MixGraphSnapshot) {
+        let oldBuses = Dictionary(uniqueKeysWithValues: previous.configuration.buses.map { ($0.id, $0.mix) })
+        for bus in graph.configuration.buses {
+            guard let old = oldBuses[bus.id], let states = mixStates[bus.id] else { continue }
+            Self.publishRouting(from: bus.mix, previous: old, states: states)
+        }
+        let oldMix: Mix?
+        let newMix: Mix?
+        if targetKey.hasPrefix("output:") {
+            oldMix = previous.configuration.outputMixes.first(where: { targetKey == "output:\($0.deviceUID.rawValue)" })?.mix
+            newMix = graph.configuration.outputMixes.first(where: { targetKey == "output:\($0.deviceUID.rawValue)" })?.mix
+        } else {
+            oldMix = previous.configuration.blackHoleRoutes.first(where: { targetKey == "route:\($0.id.uuidString)" })?.mix
+            newMix = graph.configuration.blackHoleRoutes.first(where: { targetKey == "route:\($0.id.uuidString)" })?.mix
+        }
+        if let oldMix, let newMix {
+            Self.publishRouting(from: newMix, previous: oldMix, states: outputState)
+        }
+    }
+
+    private static func publishRouting(from mix: Mix, previous: Mix, states: [MixInputState]) {
+        for (index, input) in mix.inputs.enumerated() where index < min(previous.inputs.count, states.count) {
+            guard input.channelRouting != previous.inputs[index].channelRouting else { continue }
+            for channel in states[index].routing.indices {
+                let selected = channel < input.channelRouting.count ? input.channelRouting[channel] : []
+                for output in states[index].routing[channel].indices {
+                    states[index].routing[channel][output].value.store(selected.contains(output + 1), ordering: .relaxed)
+                }
+            }
+        }
+    }
+
     func depends(on changedSources: Set<SourceReference>, changedBuses: Set<UUID>) -> Bool {
         !sourceReferences.isDisjoint(with: changedSources) ||
             !Set(busMuteStates.keys).isDisjoint(with: changedBuses)
     }
 
-    private func renderMix(
-        _ mix: Mix,
-        states: [MixInputState],
-        into destination: StereoStorage,
-        frames: Int
-    ) {
-        let output = (destination.leftBuffer(frames), destination.rightBuffer(frames))
-        renderMix(mix, states: states, into: output, frames: frames)
+    private func renderMix(_ mix: Mix, states: [MixInputState], into storage: StereoStorage, frames: Int) {
+        renderMix(mix, states: states, into: storage.mutablePlanePointers, frames: frames)
     }
 
     private func renderMix(
         _ mix: Mix,
         states: [MixInputState],
-        into destination: (UnsafeMutableBufferPointer<Float>, UnsafeMutableBufferPointer<Float>),
+        into destination: UnsafeBufferPointer<UnsafeMutablePointer<Float>>,
         frames: Int
     ) {
         for (index, input) in mix.inputs.enumerated() where index < states.count {
             let state = states[index]
-            if case .inputDevice = input.source {
-                renderPhysicalInput(input, state: state, into: destination, frames: frames)
-                continue
+            var rowPeak: Float = 0
+            for channel in state.channelEngines.indices {
+                let source: UnsafeBufferPointer<Float>
+                if case let .bus(id) = input.source {
+                    guard let storage = busBuffers[id] else { continue }
+                    source = storage.readChannel(channel, frames: frames)
+                } else {
+                    guard let storage = sourceBuffers[state.sourceKey], channel < storage.channelCount else { continue }
+                    source = storage.readChannel(channel, frames: frames)
+                }
+                for output in 0 ..< min(destination.count, state.channelEngines[channel].count) {
+                    var engine = state.channelEngines[channel][output]
+                    let selected = state.routing[channel][output].value.load(ordering: .relaxed)
+                    if !selected, engine.currentSourceGain < 0.00001 {
+                        continue
+                    }
+                    let gain: Float = if case .inputDevice = input.source {
+                        state.channelGains[channel].value.load(ordering: .relaxed)
+                    } else {
+                        state.sourceGain.load(ordering: .relaxed)
+                    }
+                    engine.setSourceGain(selected ? gain : 0)
+                    engine.setMainGain(state.mainGain.load(ordering: .relaxed))
+                    rowPeak = max(rowPeak, engine.mix(
+                        mono: source,
+                        into: UnsafeMutableBufferPointer(start: destination[output], count: frames),
+                        frameCount: frames
+                    ))
+                    state.channelEngines[channel][output] = engine
+                }
             }
-            let sourceLeft: UnsafeBufferPointer<Float>
-            let sourceRight: UnsafeBufferPointer<Float>
-            switch input.source {
-            case let .bus(id):
-                guard let busStorage = busBuffers[id] else { continue }
-                sourceLeft = busStorage.readLeftBuffer(frames)
-                sourceRight = busStorage.readRightBuffer(frames)
-            case .application, .blackHoleRoute:
-                guard let multichannel = sourceBuffers[state.sourceKey] else { continue }
-                sourceLeft = multichannel.readChannel(0, frames: frames)
-                sourceRight = multichannel.readChannel(min(1, multichannel.channelCount - 1), frames: frames)
-            case .inputDevice:
-                continue
-            }
-            state.engine.setSourceGain(state.sourceGain.load(ordering: .relaxed))
-            state.engine.setMainGain(state.mainGain.load(ordering: .relaxed))
-            if state.isMono {
-                _ = state.engine.mix(
-                    mono: sourceLeft, placement: input.monoPlacement,
-                    into: destination.0, outputRight: destination.1, frameCount: frames,
-                    peakMeter: state.peakMeter
-                )
-            } else {
-                state.engine.mix(
-                    left: sourceLeft, right: sourceRight,
-                    into: destination.0, outputRight: destination.1, frameCount: frames,
-                    peakMeter: state.peakMeter
-                )
-            }
+            state.peakMeter?.record(peak: rowPeak)
         }
-    }
-
-    private func renderPhysicalInput(
-        _ input: MixInput,
-        state: MixInputState,
-        into destination: (UnsafeMutableBufferPointer<Float>, UnsafeMutableBufferPointer<Float>),
-        frames: Int
-    ) {
-        guard let source = sourceBuffers[state.sourceKey] else { return }
-        var rowPeak: Float = 0
-        for channel in 0 ..< min(source.channelCount, state.channelEngines.count) {
-            let routing = channel < input.channelRouting.count ? input.channelRouting[channel] : .ignore
-            guard let placement = Self.placement(for: routing) else { continue }
-            var engine = state.channelEngines[channel]
-            let channelGain = channel < state.channelGains.count ? state.channelGains[channel].value.load(ordering: .relaxed) : 1
-            engine.setSourceGain(channelGain)
-            engine.setMainGain(state.mainGain.load(ordering: .relaxed))
-            rowPeak = max(
-                rowPeak,
-                engine.mix(
-                    mono: source.readChannel(channel, frames: frames), placement: placement,
-                    into: destination.0, outputRight: destination.1, frameCount: frames
-                )
-            )
-            state.channelEngines[channel] = engine
-        }
-        state.peakMeter?.record(peak: rowPeak)
     }
 
     private static func update(states: [MixInputState], mix: Mix, mutedSources: Set<SourceReference>, sourceLevels: [SourceLevel]) {
@@ -246,40 +248,31 @@ final class AudioGraphRenderer {
             for channel in state.channelGains.indices {
                 let gain = channel < input.channelLevels.count ? input.channelLevels[channel] : 1
                 state.channelGains[channel].value.store(Float(muted ? 0 : input.level * sourceLevel * gain), ordering: .relaxed)
+                let selected = channel < input.channelRouting.count ? input.channelRouting[channel] : []
+                for output in state.routing[channel].indices {
+                    state.routing[channel][output].value.store(selected.contains(output + 1), ordering: .relaxed)
+                }
             }
-        }
-    }
-
-    private static func placement(for routing: ChannelRouting) -> MonoPlacement? {
-        switch routing {
-        case .ignore: nil
-        case .first: .left
-        case .second: .right
-        case .both: .both
         }
     }
 
     private static func states(
         for mix: Mix,
         sampleRate: Double,
-        monoSourceKeys: Set<String>,
         meterTarget: String,
-        meters: [String: RealtimePeakMeter]
+        meters: [String: RealtimePeakMeter],
+        outputChannelCount: Int
     ) -> [MixInputState] {
         mix.inputs.map { input in
-            let isMono: Bool = switch input.source {
-            case .bus, .blackHoleRoute: false
-            case .inputDevice, .application: monoSourceKeys.contains(sourceKey(input.source))
-            }
             let sourceKey = sourceKey(input.source)
             let peakMeter = meters["\(meterTarget)/\(sourceKey)"]
             let channels = max(max(input.channelRouting.count, input.channelLevels.count), 1)
             return MixInputState(
                 sampleRate: sampleRate,
-                isMono: isMono,
                 sourceKey: sourceKey,
                 peakMeter: peakMeter,
-                channelCount: channels
+                channelCount: channels,
+                outputChannelCount: outputChannelCount
             )
         }
     }
@@ -307,22 +300,24 @@ private final class BusMuteState {
 }
 
 private final class MixInputState {
-    var engine: StereoMixingEngine
-    var channelEngines: [StereoMixingEngine]
-    let isMono: Bool
+    var channelEngines: [[StereoMixingEngine]]
     let sourceKey: String
     let peakMeter: RealtimePeakMeter?
     let sourceGain = Atomic<Float>(1)
     let mainGain = Atomic<Float>(1)
     let channelGains: [RealtimeGain]
+    let routing: [[RealtimeRouting]]
 
-    init(sampleRate: Double, isMono: Bool, sourceKey: String, peakMeter: RealtimePeakMeter?, channelCount: Int) {
-        engine = StereoMixingEngine(sampleRate: sampleRate)
-        channelEngines = (0 ..< channelCount).map { _ in StereoMixingEngine(sampleRate: sampleRate) }
-        self.isMono = isMono
+    init(sampleRate: Double, sourceKey: String, peakMeter: RealtimePeakMeter?, channelCount: Int, outputChannelCount: Int) {
+        channelEngines = (0 ..< channelCount).map { _ in
+            (0 ..< outputChannelCount).map { _ in StereoMixingEngine(sampleRate: sampleRate, initialSourceGain: 0) }
+        }
         self.sourceKey = sourceKey
         self.peakMeter = peakMeter
         channelGains = (0 ..< channelCount).map { _ in RealtimeGain(1) }
+        routing = (0 ..< channelCount).map { _ in
+            (0 ..< outputChannelCount).map { _ in RealtimeRouting(false) }
+        }
     }
 }
 
@@ -330,6 +325,14 @@ private final class RealtimeGain {
     let value: Atomic<Float>
 
     init(_ initialValue: Float) {
+        value = Atomic(initialValue)
+    }
+}
+
+private final class RealtimeRouting {
+    let value: Atomic<Bool>
+
+    init(_ initialValue: Bool) {
         value = Atomic(initialValue)
     }
 }
@@ -381,6 +384,10 @@ private final class StereoStorage {
     let capacity: Int
     private let left: UnsafeMutablePointer<Float>
     private let right: UnsafeMutablePointer<Float>
+    private let planePointers: UnsafeMutablePointer<UnsafeMutablePointer<Float>>
+    var mutablePlanePointers: UnsafeBufferPointer<UnsafeMutablePointer<Float>> {
+        UnsafeBufferPointer(start: planePointers, count: 2)
+    }
 
     init(capacity: Int) {
         self.capacity = capacity
@@ -388,6 +395,9 @@ private final class StereoStorage {
         right = .allocate(capacity: capacity)
         left.initialize(repeating: 0, count: capacity)
         right.initialize(repeating: 0, count: capacity)
+        planePointers = .allocate(capacity: 2)
+        planePointers.initialize(to: left)
+        planePointers.advanced(by: 1).initialize(to: right)
     }
 
     deinit {
@@ -395,6 +405,8 @@ private final class StereoStorage {
         right.deinitialize(count: capacity)
         left.deallocate()
         right.deallocate()
+        planePointers.deinitialize(count: 2)
+        planePointers.deallocate()
     }
 
     func clear(frames: Int) {
@@ -416,5 +428,9 @@ private final class StereoStorage {
 
     func readRightBuffer(_ frames: Int) -> UnsafeBufferPointer<Float> {
         UnsafeBufferPointer(start: right, count: frames)
+    }
+
+    func readChannel(_ channel: Int, frames: Int) -> UnsafeBufferPointer<Float> {
+        UnsafeBufferPointer(start: channel == 0 ? left : right, count: frames)
     }
 }

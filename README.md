@@ -4,7 +4,7 @@ Sound Mixer is an audio mixer for modern macOS versions. It collects audio from 
 
 ## Status
 
-The application has a native Core Audio capture and output pipeline, configurable mixes, per-mix input channel routing and gain settings, BlackHole stereo-pair output routes, automatic local configuration storage, and a React interface hosted in WKWebView. Some parts of the multichannel physical-input path and BlackHole pair input capture are still in progress; see [todo.md](todo.md) for implementation and verification status.
+The application has a native Core Audio capture and output pipeline, configurable mixes, per-mix channel matrices and input gain settings, multichannel physical outputs, BlackHole stereo-pair output routes, automatic local configuration storage, and a React interface hosted in WKWebView. Some parts of the multichannel physical-input path and BlackHole pair input capture are still in progress; see [todo.md](todo.md) for implementation and verification status.
 
 ## Current behavior and limitations
 
@@ -12,7 +12,7 @@ The application has a native Core Audio capture and output pipeline, configurabl
 - Users can create and rename internal virtual buses. These buses exist only in Sound Mixer and do not appear as macOS system devices.
 - BlackHole routes use the lowest available adjacent stereo output pair automatically. The installed driver remains a separate dependency and is never installed by Sound Mixer.
 - Sound Mixer classifies items as `system` (Core Audio devices excluding BlackHole), `virtual` (internal buses), and `blackhole` (created BlackHole stereo pairs). BlackHole devices are hidden as standalone Inputs/Outputs; the driver appears in the route-creation selector, and created pairs appear in Inputs.
-- Mix sources include physical inputs, eligible applications, virtual buses, and configured BlackHole routes. Physical input rows store their channel routing and gain settings per mix. Current physical capture supports mono and stereo only; 3–64 channel capture and per-channel live meters are still being implemented.
+- Mix sources include physical inputs, eligible applications, virtual buses, and configured BlackHole routes. Every mix source has a channel matrix per destination; a six-channel physical output exposes six destination channels, and one source channel can feed several of them. Physical input rows also store per-channel gains. Physical capture accepts 1–64 channels and exposes per-channel meters; multichannel device behavior still needs live Mac verification.
 - The master switch controls Sound Mixer's capture and output. Configuration is saved locally and restored at launch. Missing devices remain visible with an unavailable state.
 - Sound Mixer does not change the macOS default output device. Device volume changes made in Sound Mixer are restored on normal exit if the device still has the app-set value. Devices without a writable main volume cannot be adjusted here. Application capture and physical-output metering depend on macOS System Audio Recording permission.
 

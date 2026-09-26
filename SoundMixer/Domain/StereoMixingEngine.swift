@@ -9,13 +9,13 @@ public struct StereoMixingEngine: Sendable {
     private var targetMainGain: Float
     private let smoothingCoefficient: Float
 
-    public init(sampleRate: Double, smoothingTime: Double = 0.01) {
+    public init(sampleRate: Double, smoothingTime: Double = 0.01, initialSourceGain: Float = 1) {
         let rate = max(sampleRate, 1)
         let time = max(smoothingTime, 0.0001)
         smoothingCoefficient = 1 - exp(-1 / Float(rate * time))
-        currentSourceGain = 1
+        currentSourceGain = initialSourceGain
         currentMainGain = 1
-        targetSourceGain = 1
+        targetSourceGain = initialSourceGain
         targetMainGain = 1
     }
 
@@ -82,6 +82,24 @@ public struct StereoMixingEngine: Sendable {
         }
         peakMeter?.record(peak: contributionPeak)
         return contributionPeak
+    }
+
+    /// Adds one source channel to one destination channel with the usual gain ramp.
+    public mutating func mix(
+        mono: UnsafeBufferPointer<Float>,
+        into output: UnsafeMutableBufferPointer<Float>,
+        frameCount: Int
+    ) -> Float {
+        let count = min(frameCount, min(mono.count, output.count))
+        var peak: Float = 0
+        for frame in 0 ..< count {
+            currentSourceGain += (targetSourceGain - currentSourceGain) * smoothingCoefficient
+            currentMainGain += (targetMainGain - currentMainGain) * smoothingCoefficient
+            let sample = mono[frame] * currentSourceGain * currentMainGain
+            peak = max(peak, abs(sample))
+            output[frame] = Self.limit(output[frame] + sample)
+        }
+        return peak
     }
 
     @inline(__always)
