@@ -417,10 +417,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     private func createBus(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
-        guard Set(body.keys) == ["requestId", "command", "name"], let name = body["name"] as? String
-        else { throw BridgeError.invalidPayload }
+        guard Set(body.keys) == ["requestId", "command"] else { throw BridgeError.invalidPayload }
         return try store.update(discoveredDevices: discoveredDescriptors()) { candidate in
-            try candidate.buses.append(VirtualBus(name: validatedName(name)))
+            let existingNames = Set(candidate.buses.map(\.name))
+            var index = 1
+            while existingNames.contains("Virtual Bus \(index)") { index += 1 }
+            candidate.buses.append(VirtualBus(name: "Virtual Bus \(index)"))
         }
     }
 

@@ -102,7 +102,7 @@ export type BridgeCommand =
           sourceID: string;
           muted: boolean;
       }
-    | { command: "createBus"; name: string }
+    | { command: "createBus" }
     | { command: "renameBus"; id: string; name: string }
     | { command: "renameRoute"; id: string; name: string }
     | {

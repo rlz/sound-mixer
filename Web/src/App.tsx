@@ -271,8 +271,9 @@ export function App() {
                                 type="button"
                                 disabled={pending !== null}
                                 onClick={() => {
-                                    setSelectedItem("bus:new");
-                                    setBusNameDraft("New Bus");
+                                    void send("bus-create", {
+                                        command: "createBus",
+                                    });
                                 }}
                                 className="w-full rounded-lg px-3 py-2 text-left text-sm text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
                             >
@@ -510,8 +511,7 @@ export function App() {
                             )}
                         </div>
 
-                        {(selectedItem === "bus:new" ||
-                            selectedItem === "route:new") && (
+                        {selectedItem === "route:new" && (
                             <section
                                 className="mb-5 rounded-2xl border border-slate-800 bg-slate-900 p-5"
                                 aria-label="Virtual item settings"
@@ -520,34 +520,13 @@ export function App() {
                                     className="space-y-3"
                                     onSubmit={(event) => {
                                         event.preventDefault();
-                                        if (selectedItem === "route:new") {
-                                            void send("route-create", {
-                                                command: "createRoute",
-                                                deviceUID: routeDeviceUID,
-                                            });
-                                        } else {
-                                            void send("bus-create", {
-                                                command: "createBus",
-                                                name: busNameDraft ?? "",
-                                            });
-                                        }
+                                        void send("route-create", {
+                                            command: "createRoute",
+                                            deviceUID: routeDeviceUID,
+                                        });
                                     }}
                                 >
-                                    <input
-                                        id="selected-virtual-name"
-                                        maxLength={64}
-                                        required={selectedItem !== "route:new"}
-                                        hidden={selectedItem === "route:new"}
-                                        value={busNameDraft ?? "New Bus"}
-                                        onChange={(event) =>
-                                            setBusNameDraft(
-                                                event.currentTarget.value,
-                                            )
-                                        }
-                                        className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
-                                    />
-                                    {selectedItem === "route:new" && (
-                                        <div className="grid gap-3 sm:grid-cols-2">
+                                    <div className="grid gap-3 sm:grid-cols-2">
                                             <label className="text-sm">
                                                 BlackHole device
                                                 <select
@@ -587,23 +566,18 @@ export function App() {
                                                         ))}
                                                 </select>
                                             </label>
-                                        </div>
-                                    )}
-                                    {selectedItem === "route:new" && (
-                                        <p className="text-xs text-slate-400">
-                                            Sound Mixer assigns the lowest free
-                                            adjacent stereo pair and names the
-                                            route from its channels.
-                                        </p>
-                                    )}
+                                    </div>
+                                    <p className="text-xs text-slate-400">
+                                        Sound Mixer assigns the lowest free
+                                        adjacent stereo pair and names the
+                                        route from its channels.
+                                    </p>
                                     <button
                                         type="submit"
                                         disabled={pending !== null}
                                         className="rounded-lg bg-sky-300 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
                                     >
-                                        {selectedItem === "route:new"
-                                            ? "Create route"
-                                            : "Create bus"}
+                                        Create route
                                     </button>
                                 </form>
                             </section>

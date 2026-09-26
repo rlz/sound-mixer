@@ -14,7 +14,7 @@
 
 ## Internal virtual buses
 
-- The user can create, rename, and delete a bus. Its name must not be empty after trimming whitespace; duplicate names are allowed because its UUID is the identifier.
+- The user can create, rename, and delete a bus. Creation assigns the first unused sequential name in the form `Virtual Bus 1`, `Virtual Bus 2`, and so on; the user can rename it later. Custom names must not be empty after trimming whitespace and are limited to 64 characters. Duplicate custom names are allowed because the UUID is the identifier.
 - A bus has its own mix and saved software Mix gain and can be a source in another mix.
 - A bus does not appear in macOS Sound settings and cannot be selected as an output device by another app. The creation interface states this clearly.
 - When deleting a bus, the interface shows affected routes; after confirmation, references to the bus are removed from mixes.

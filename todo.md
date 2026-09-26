@@ -23,6 +23,8 @@ Statuses: `[ ]` = not started, `[~]` = in progress. Tasks are ordered by depende
 
 ## 3. Bridge and interface
 
+- [x] Assign virtual bus names automatically on creation. **Done when:** creating a bus does not prompt for a name, assigns the first unused `Virtual Bus N` name, and still allows later renaming. Native creation now assigns the name and the interface creates a bus directly from the add button.
+
 - [x] Add destination mute controls. **Done when:** virtual-bus mute silences that bus for downstream routes and mixes; BlackHole mute controls the actual device mute so system listeners are affected; state is visible, accessible, and persisted where applicable. Implemented; BlackHole hardware support and restore behavior need live Mac verification.
 - [x] Apply virtual-bus mute without restarting capture. **Done when:** changing only a bus mute updates renderer state in place and leaves capture/output routes running. Bus mute now uses an atomic render state and is recognized as a live-only graph update.
 
