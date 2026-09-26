@@ -39,6 +39,7 @@ struct BridgeApplication: Encodable {
     let captureState: String
     let muted: Bool
     let level: Double?
+    let registered: Bool
 }
 
 struct BridgeInputCaptureState: Encodable {

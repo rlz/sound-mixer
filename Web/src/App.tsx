@@ -127,28 +127,17 @@ export function App() {
             .map((input) => input.id),
     );
     const configuredApplicationIDs = new Set(
-        (mixerState?.mixes ?? [])
-            .flatMap((mix) => mix.inputs)
-            .filter((input) => input.kind === "application")
-            .map((input) => input.id),
+        (mixerState?.applications ?? [])
+            .filter((application) => application.registered)
+            .map((application) => application.id),
     );
     const sourceDevices = (mixerState?.devices ?? []).filter(
         (device) =>
             device.category === "system" &&
             (device.inputChannels > 0 || configuredInputIDs.has(device.uid)),
     );
-    const sourceApplications = [...configuredApplicationIDs].map(
-        (id) =>
-            mixerState?.applications.find(
-                (application) => application.id === id,
-            ) ?? {
-                id,
-                name: id,
-                available: false,
-                muted: false,
-                captureState: "stopped",
-                level: null,
-            },
+    const sourceApplications = (mixerState?.applications ?? []).filter(
+        (application) => application.registered,
     );
     const availableApplications = (mixerState?.applications ?? [])
         .filter((application) => application.available)
@@ -772,7 +761,7 @@ export function App() {
                                                           input.id,
                                                       ) ?? input.id)
                                                     : input.kind ===
-                                                        "application"
+                                                        "app"
                                                       ? (mixerState?.applications.find(
                                                             (app) =>
                                                                 app.id ===
@@ -796,7 +785,7 @@ export function App() {
                                                               device.available,
                                                       )
                                                     : input.kind ===
-                                                        "application"
+                                                        "app"
                                                       ? mixerState?.applications.some(
                                                             (app) =>
                                                                 app.id ===
@@ -815,7 +804,7 @@ export function App() {
                                                               input.id,
                                                       )?.state ?? "stopped")
                                                     : input.kind ===
-                                                        "application"
+                                                        "app"
                                                       ? (mixerState?.applications.find(
                                                             (app) =>
                                                                 app.id ===
@@ -877,7 +866,7 @@ export function App() {
                                                 ? input.kind === "inputDevice"
                                                     ? "Device disconnected."
                                                     : input.kind ===
-                                                        "application"
+                                                        "app"
                                                       ? "Application is not producing audio."
                                                       : "Source unavailable."
                                                 : captureState ===
@@ -974,40 +963,40 @@ export function App() {
                                                     </div>
                                                     <label className="flex items-center gap-3 text-xs">
                                                         {input.kind ===
-                                                        "application"
+                                                        "app"
                                                             ? "App gain"
                                                             : "Source level"}{" "}
                                                         <StableRange
                                                             value={
                                                                 input.kind ===
-                                                                "application"
+                                                                "app"
                                                                     ? applicationGainToDecibels(
                                                                           input.level,
                                                                       )
                                                                     : input.level
                                                             }
-                                                            label={`${name} ${input.kind === "application" ? "app gain" : "source level"}`}
+                                                            label={`${name} ${input.kind === "app" ? "app gain" : "source level"}`}
                                                             min={
                                                                 input.kind ===
-                                                                "application"
+                                                                "app"
                                                                     ? -60
                                                                     : 0
                                                             }
                                                             max={
                                                                 input.kind ===
-                                                                "application"
+                                                                "app"
                                                                     ? 30
                                                                     : 1
                                                             }
                                                             step={
                                                                 input.kind ===
-                                                                "application"
+                                                                "app"
                                                                     ? 0.5
                                                                     : 0.01
                                                             }
                                                             formatValue={
                                                                 input.kind ===
-                                                                "application"
+                                                                "app"
                                                                     ? formatApplicationGain
                                                                     : undefined
                                                             }
@@ -1023,7 +1012,7 @@ export function App() {
                                                                             input.id,
                                                                         level:
                                                                             input.kind ===
-                                                                            "application"
+                                                                            "app"
                                                                                 ? value <=
                                                                                   -60
                                                                                     ? 0
@@ -1039,7 +1028,7 @@ export function App() {
                                                         />
                                                         <span>
                                                             {input.kind ===
-                                                            "application"
+                                                            "app"
                                                                 ? formatApplicationGain(
                                                                       applicationGainToDecibels(
                                                                           input.level,
@@ -1299,7 +1288,7 @@ export function App() {
                                                         </div>
                                                     )}
                                                     {input.kind ===
-                                                        "application" && (
+                                                        "app" && (
                                                         <label className="mt-2 flex items-center gap-2 text-xs">
                                                             Mono placement{" "}
                                                             <select
@@ -1792,7 +1781,7 @@ export function App() {
                                 const alreadyInSelectedMix =
                                     selectedMix?.inputs.some(
                                         (input) =>
-                                            input.kind === "application" &&
+                                            input.kind === "app" &&
                                             input.id === application.id,
                                     ) ?? false;
                                 return (
@@ -1822,7 +1811,7 @@ export function App() {
                                                         {
                                                             command:
                                                                 "setSourceMuted",
-                                                            kind: "application",
+                                                            kind: "app",
                                                             sourceID:
                                                                 application.id,
                                                             muted: !application.muted,
@@ -1912,7 +1901,7 @@ export function App() {
                                             className="mt-1 rounded px-2 py-1 text-xs text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
                                             onClick={() =>
                                                 addSourceToSelectedMix(
-                                                    "application",
+                                                    "app",
                                                     application.id,
                                                 )
                                             }
@@ -1998,19 +1987,17 @@ export function App() {
                                     </span>
                                     <button
                                         type="button"
-                                        disabled={
-                                            !selectedTarget || pending !== null
-                                        }
+                                        disabled={pending !== null}
                                         className="shrink-0 rounded bg-sky-300 px-3 py-1.5 text-sm font-semibold text-slate-950 disabled:opacity-50"
                                         onClick={() => {
-                                            addSourceToSelectedMix(
-                                                "application",
-                                                application.id,
-                                            );
+                                            void send(`app-register:${application.id}`, {
+                                                command: "addApplicationInput",
+                                                applicationID: application.id,
+                                            });
                                             setApplicationCatalogOpen(false);
                                         }}
                                     >
-                                        Add to mix
+                                        Add input
                                     </button>
                                 </li>
                             ))}

@@ -33,7 +33,7 @@ final class AudioRoutingCoordinator {
         let orderedDevices = devices.sorted { $0.uid < $1.uid }
         let applicationKeys = Set(makeRoutes(graph.configuration).flatMap {
             Self.sourceKeys(in: $0.mix, buses: graph.configuration.buses).filter { $0.hasPrefix("application:") }
-        })
+        }).union(graph.configuration.applications.map { "application:\($0.rawValue)" })
         let orderedProcesses = processes.filter { applicationKeys.contains("application:\($0.applicationID)") }.sorted {
             if $0.applicationID != $1.applicationID {
                 return $0.applicationID < $1.applicationID
@@ -74,6 +74,11 @@ final class AudioRoutingCoordinator {
         startOutputRoutes(graph: graph, devices: deviceByUID, queues: &queuesBySource, sources: &captureSources)
         for route in graph.configuration.blackHoleRoutes {
             let key = "route:\(route.id.uuidString)"
+            queuesBySource[key] = queuesBySource[key] ?? []
+            captureSources.insert(key)
+        }
+        for id in graph.configuration.applications {
+            let key = "application:\(id.rawValue)"
             queuesBySource[key] = queuesBySource[key] ?? []
             captureSources.insert(key)
         }

@@ -67,6 +67,7 @@ export type MixerState = {
         id: string;
         name: string;
         available: boolean;
+        registered: boolean;
         muted: boolean;
         captureState: string;
         level: number | null;
@@ -96,7 +97,7 @@ export type BridgeCommand =
     | { command: "resetMix"; target: "output" | "bus" | "route"; id: string }
     | {
           command: "setSourceMuted";
-          kind: "inputDevice" | "application" | "blackHoleRoute";
+          kind: "inputDevice" | "application" | "app" | "blackHoleRoute";
           sourceID: string;
           muted: boolean;
       }
@@ -109,6 +110,7 @@ export type BridgeCommand =
       }
     | { command: "deleteRoute"; id: string }
     | { command: "deleteBus"; id: string }
+    | { command: "addApplicationInput"; applicationID: string }
     | {
           command: "addMixInput" | "removeMixInput";
           target: "output" | "bus" | "route";

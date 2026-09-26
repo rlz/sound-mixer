@@ -285,12 +285,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case "deleteBus": return try deleteBus(body: body, store: store)
         case "deleteRoute": return try deleteRoute(body: body, store: store)
         case "addMixInput": return try editMixInput(body: body, store: store, operation: .add)
+        case "addApplicationInput": return try addApplicationInput(body: body, store: store)
         case "removeMixInput": return try editMixInput(body: body, store: store, operation: .remove)
         case "setMixInputLevel": return try editMixInput(body: body, store: store, operation: .level)
         case "setMonoPlacement": return try editMixInput(body: body, store: store, operation: .placement)
         case "setPhysicalInputChannels": return try setPhysicalInputChannels(body: body, store: store)
         default:
             throw BridgeError.unknownCommand
+        }
+    }
+
+    private func addApplicationInput(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "applicationID"],
+              let id = body["applicationID"] as? String, !id.isEmpty,
+              audioProcesses.contains(where: { $0.applicationID == id && $0.isProducingOutput })
+        else { throw BridgeError.invalidPayload }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { config in
+            let applicationID = ApplicationID(rawValue: id)
+            if !config.applications.contains(applicationID) { config.applications.append(applicationID) }
         }
     }
 
@@ -378,7 +390,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let source: SourceReference
         switch kind {
         case "inputDevice": source = .inputDevice(DeviceUID(rawValue: sourceID))
-        case "application": source = .application(ApplicationID(rawValue: sourceID))
+        case "application", "app": source = .application(ApplicationID(rawValue: sourceID))
         case "blackHoleRoute":
             guard let routeID = UUID(uuidString: sourceID) else { throw BridgeError.invalidPayload }
             source = .blackHoleRoute(routeID)
@@ -465,7 +477,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let reference: SourceReference
         switch kind {
         case "inputDevice": reference = .inputDevice(DeviceUID(rawValue: sourceID))
-        case "application": reference = .application(ApplicationID(rawValue: sourceID))
+        case "application", "app": reference = .application(ApplicationID(rawValue: sourceID))
         case "bus":
             guard let busID = UUID(uuidString: sourceID) else { throw BridgeError.invalidPayload }
             reference = .bus(busID)
@@ -477,7 +489,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let level = body["level"] as? Double
         let placement = (body["monoPlacement"] as? String).flatMap(MonoPlacement.init(rawValue:))
         if operation == .level {
-            let maximum = kind == "application" ? MixInput.maximumApplicationGain : 1
+            let maximum = kind == "application" || kind == "app" ? MixInput.maximumApplicationGain : 1
             guard let level, level.isFinite, (0 ... maximum).contains(level) else {
                 throw BridgeError.invalidPayload
             }
@@ -686,7 +698,7 @@ extension AppDelegate {
                 let sourceID: String
                 switch input.source {
                 case let .inputDevice(uid): kind = "inputDevice"; sourceID = uid.rawValue
-                case let .application(app): kind = "application"; sourceID = app.rawValue
+                case let .application(app): kind = "app"; sourceID = app.rawValue
                 case let .bus(bus): kind = "bus"; sourceID = bus.uuidString
                 case let .blackHoleRoute(route): kind = "blackHoleRoute"; sourceID = route.uuidString
                 }
@@ -719,7 +731,7 @@ extension AppDelegate {
     }
 
     func bridgeApplications(configuration: MixerConfiguration, sourceLevels: [String: Double]) -> [BridgeApplication] {
-        let configuredIDs = (configuration.outputMixes.map(\.mix)
+        let configuredIDs = configuration.applications.map(\.rawValue) + (configuration.outputMixes.map(\.mix)
             + configuration.buses.map(\.mix)
             + configuration.blackHoleRoutes.map(\.mix))
             .flatMap(\.inputs)
@@ -748,7 +760,8 @@ extension AppDelegate {
                 available: process?.isProducingOutput ?? false,
                 captureState: captureStates[id] ?? "stopped",
                 muted: configuration.mutedSources.contains(.application(ApplicationID(rawValue: id))),
-                level: sourceLevels["application:\(id)"]
+                level: sourceLevels["application:\(id)"],
+                registered: configuration.applications.contains(ApplicationID(rawValue: id))
             )
         }
     }
