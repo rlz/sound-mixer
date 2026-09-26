@@ -2,6 +2,7 @@ import Foundation
 
 struct BridgeState: Encodable {
     let schemaVersion: Int
+    let appVersion: String
     let isEnabled: Bool
     let devices: [BridgeDevice]
     let outputs: [BridgeOutput]

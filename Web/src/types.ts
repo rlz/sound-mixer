@@ -50,6 +50,7 @@ export type MixState = {
 
 export type MixerState = {
     schemaVersion: number;
+    appVersion: string;
     isEnabled: boolean;
     devices: DeviceState[];
     outputs: OutputState[];

@@ -870,6 +870,7 @@ extension AppDelegate {
         let discovered = Dictionary(uniqueKeysWithValues: audioDevices.map { ($0.uid, $0) })
         let state = BridgeState(
             schemaVersion: MixerConfiguration.currentSchemaVersion,
+            appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown",
             isEnabled: configuration.isEnabled,
             devices: bridgeDevices(configuration: configuration, discovered: discovered),
             outputs: bridgeOutputs(configuration: configuration, discovered: discovered, deviceLevels: deviceLevels),

@@ -130,6 +130,9 @@ export function App() {
                     <InputsPanel />
                 </div>
             </section>
+            <footer className="flex shrink-0 items-center justify-end border-t border-slate-700 bg-slate-900 px-4 py-1 text-xs text-slate-400">
+                {mixerState && <span>Version {mixerState.appVersion}</span>}
+            </footer>
         </main>
     );
 }
