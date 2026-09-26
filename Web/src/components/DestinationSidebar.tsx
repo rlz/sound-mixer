@@ -15,6 +15,34 @@ export const DestinationSidebar = memo(function DestinationSidebar() {
     const pending = useMixerStore((state) => state.pending);
     const send = useMixerCommand();
 
+    const createBus = async () => {
+        const existingIDs = new Set(buses.map((bus) => bus.id));
+        let resolveCreatedBus: ((id: string) => void) | undefined;
+        const createdBus = new Promise<string>((resolve) => {
+            resolveCreatedBus = resolve;
+        });
+        const findCreatedBus = () => {
+            const state = useMixerStore.getState().mixerState;
+            const bus = state?.buses.find((item) => !existingIDs.has(item.id));
+            if (bus) resolveCreatedBus?.(bus.id);
+        };
+        const unsubscribe = useMixerStore.subscribe(findCreatedBus);
+        findCreatedBus();
+        const accepted = await send("bus-create", { command: "createBus" });
+        if (!accepted) {
+            unsubscribe();
+            return;
+        }
+        const id = await createdBus;
+        unsubscribe();
+        const created = useMixerStore
+            .getState()
+            .mixerState?.buses.find((bus) => bus.id === id);
+        if (!created) return;
+        setSelectedItem(`bus:${created.id}`);
+        setBusNameDraft(created.name);
+    };
+
     const deleteVirtualItem = async (kind: "bus", id: string, name: string) => {
         const approved = window.confirm(
             `Delete “${name}”? Mixes that use this bus will prevent deletion.`,
@@ -82,9 +110,7 @@ export const DestinationSidebar = memo(function DestinationSidebar() {
                 <button
                     type="button"
                     disabled={pending !== null}
-                    onClick={() =>
-                        void send("bus-create", { command: "createBus" })
-                    }
+                    onClick={() => void createBus()}
                     className="w-full rounded-lg px-3 py-2 text-left text-sm text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
                 >
                     + Add virtual bus

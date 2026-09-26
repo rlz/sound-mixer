@@ -79,3 +79,4 @@ Statuses: `[ ]` = not started, `[~]` = in progress. Tasks are ordered by depende
 - [x] Make the full physical output card surface selectable. **Done when:** clicks on free card space, including the border, select the output, while clicks on controls operate only those controls.
 - [x] Keep output-card pointer styling consistent and allow text selection. **Done when:** the card uses the normal pointer, its text can be selected, and selecting text does not select the card.
 - [x] Make virtual destination cards selectable across their free surface. **Done when:** free-space clicks select virtual buses, while delete, mute, and level controls remain independent.
+- [x] Open a virtual bus mix immediately after creation. **Done when:** after native creation succeeds, the new bus is selected and its mix settings open when its updated state arrives.
