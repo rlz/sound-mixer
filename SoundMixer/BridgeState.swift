@@ -25,7 +25,6 @@ struct BridgeMixInput: Encodable {
     let level: Double
     let channelRouting: [[Int]]
     let channelLevels: [Double]
-    let channelsLinked: Bool
     let muted: Bool
     let sourceMuted: Bool
     let levelReading: Double?

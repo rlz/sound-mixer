@@ -157,9 +157,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         window.minSize = NSSize(width: 760, height: 500)
 
         let webView = WKWebView(frame: window.contentView?.bounds ?? .zero)
-#if DEBUG
-        webView.isInspectable = true
-#endif
+        #if DEBUG
+            webView.isInspectable = true
+        #endif
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.configuration.userContentController.add(self, name: "soundMixer")
@@ -298,7 +298,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case "setMixInputLevel": return try editMixInput(body: body, store: store, operation: .level)
         case "setMixInputMuted": return try editMixInput(body: body, store: store, operation: .muted)
         case "setMixInputRouting": return try setMixInputRouting(body: body, store: store)
-        case "setPhysicalInputChannels": return try setPhysicalInputChannels(body: body, store: store)
+        case "setMixInputChannels": return try setMixInputChannels(body: body, store: store)
         default:
             throw BridgeError.unknownCommand
         }
@@ -633,23 +633,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
     }
 
-    private func setPhysicalInputChannels(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
-        let expected: Set = ["requestId", "command", "target", "id", "kind", "sourceID", "channelLevels", "channelsLinked"]
+    private func setMixInputChannels(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        let expected: Set = ["requestId", "command", "target", "id", "kind", "sourceID", "channelLevels"]
         guard Set(body.keys) == expected,
-              body["kind"] as? String == "inputDevice",
+              let kind = body["kind"] as? String,
+              ["inputDevice", "app"].contains(kind),
               let levels = body["channelLevels"] as? [Double],
-              let linked = body["channelsLinked"] as? Bool,
               levels.allSatisfy({ $0.isFinite && (0 ... 1).contains($0) })
         else { throw BridgeError.invalidPayload }
         return try updateMixChannels(body: body, store: store) { input in
-            guard case let .inputDevice(uid) = input.source else { throw BridgeError.invalidPayload }
-            let liveChannels = audioDevices.first(where: { $0.uid == uid.rawValue })?.inputChannels ?? 0
-            guard levels.count == max(input.channelLevels.count, liveChannels) else { throw BridgeError.invalidPayload }
+            let expectedChannels: Int
+            switch input.source {
+            case let .inputDevice(uid):
+                guard kind == "inputDevice" else { throw BridgeError.invalidPayload }
+                expectedChannels = max(input.channelLevels.count, audioDevices.first(where: { $0.uid == uid.rawValue })?.inputChannels ?? 0)
+            case .application:
+                guard kind == "app" else { throw BridgeError.invalidPayload }
+                expectedChannels = 2
+            case .bus:
+                throw BridgeError.invalidPayload
+            }
+            guard levels.count == expectedChannels else { throw BridgeError.invalidPayload }
             if input.channelRouting.count < levels.count {
                 input.channelRouting += Array(repeating: [], count: levels.count - input.channelRouting.count)
             }
             input.channelLevels = levels
-            input.channelsLinked = linked
         }
     }
 
@@ -787,7 +795,6 @@ extension AppDelegate {
                     level: input.level,
                     channelRouting: input.channelRouting,
                     channelLevels: input.channelLevels,
-                    channelsLinked: input.channelsLinked,
                     muted: input.isMuted,
                     sourceMuted: configuration.mutedSources.contains(input.source),
                     levelReading: renderLevels["\(targetKey)/\(AudioGraphRenderer.sourceMeterKey(input.source))"]
@@ -806,13 +813,11 @@ extension AppDelegate {
         }
         return configuration.outputMixes.filter { hasSettings($0.mix) }.map { item("output", $0.deviceUID.rawValue, $0.mix) }
             + configuration.buses.filter { hasSettings($0.mix) }.map { item("bus", $0.id.uuidString, $0.mix) }
-
     }
 
     func bridgeApplications(configuration: MixerConfiguration, sourceLevels: [String: Double]) -> [BridgeApplication] {
         let configuredIDs = configuration.applications.map(\.rawValue) + (configuration.outputMixes.map(\.mix)
-            + configuration.buses.map(\.mix)
-)
+            + configuration.buses.map(\.mix))
             .flatMap(\.inputs)
             .compactMap { input -> String? in
                 guard case let .application(id) = input.source else { return nil }

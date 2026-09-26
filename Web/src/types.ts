@@ -32,7 +32,6 @@ export type MixInputState = {
     level: number;
     channelRouting: number[][];
     channelLevels: number[];
-    channelsLinked: boolean;
     muted: boolean;
     sourceMuted: boolean;
     levelReading: number | null;
@@ -141,13 +140,12 @@ export type BridgeCommand =
           channelRouting: number[][];
       }
     | {
-          command: "setPhysicalInputChannels";
+          command: "setMixInputChannels";
           target: "output" | "bus";
           id: string;
-          kind: "inputDevice";
+          kind: "inputDevice" | "app";
           sourceID: string;
           channelLevels: number[];
-          channelsLinked: boolean;
       };
 
 declare global {

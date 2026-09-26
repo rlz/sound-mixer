@@ -92,7 +92,6 @@ public struct RuntimeGraphShape: Equatable, Sendable {
             // Channel count remains structural: it determines preallocated engines.
             result.inputs[index].channelLevels = Array(repeating: 1, count: result.inputs[index].channelLevels.count)
             result.inputs[index].channelRouting = Array(repeating: [], count: result.inputs[index].channelRouting.count)
-            result.inputs[index].channelsLinked = true
         }
         return result
     }

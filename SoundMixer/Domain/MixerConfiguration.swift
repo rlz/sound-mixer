@@ -105,10 +105,9 @@ public struct MixInput: Codable, Equatable, Sendable {
     /// One-based destination channel numbers for each source channel.
     public var channelRouting: [[Int]]
     public var channelLevels: [Double]
-    public var channelsLinked: Bool
 
     private enum CodingKeys: String, CodingKey {
-        case source, level, isMuted, channelRouting, channelLevels, channelsLinked
+        case source, level, isMuted, channelRouting, channelLevels
     }
 
     private enum LegacyRouting: String, Codable {
@@ -129,15 +128,13 @@ public struct MixInput: Codable, Equatable, Sendable {
         level: Double = 1,
         isMuted: Bool = false,
         channelRouting: [[Int]] = [[1], [2]],
-        channelLevels: [Double] = [1, 1],
-        channelsLinked: Bool = true
+        channelLevels: [Double] = [1, 1]
     ) {
         self.source = source
         self.level = level
         self.isMuted = isMuted
         self.channelRouting = channelRouting
         self.channelLevels = channelLevels
-        self.channelsLinked = channelsLinked
     }
 
     public static func defaultRouting(channelCount: Int, outputChannels: Int) -> [[Int]] {
@@ -166,7 +163,6 @@ public struct MixInput: Codable, Equatable, Sendable {
             channelRouting = legacy.map(\.channels)
         }
         channelLevels = try container.decode([Double].self, forKey: .channelLevels)
-        channelsLinked = try container.decode(Bool.self, forKey: .channelsLinked)
         if channelRouting.isEmpty {
             switch source {
             case .inputDevice:
@@ -186,7 +182,6 @@ public struct MixInput: Codable, Equatable, Sendable {
         try container.encode(isMuted, forKey: .isMuted)
         try container.encode(channelRouting, forKey: .channelRouting)
         try container.encode(channelLevels, forKey: .channelLevels)
-        try container.encode(channelsLinked, forKey: .channelsLinked)
     }
 }
 

@@ -30,7 +30,6 @@ final class RuntimeGraphShapeTests: XCTestCase {
         let before = RuntimeGraphShape(configuration: original)
         var changed = original
         changed.outputMixes[0].mix.inputs[0].channelLevels = [0.3, 0.7]
-        changed.outputMixes[0].mix.inputs[0].channelsLinked = false
         XCTAssertEqual(RuntimeGraphShape(configuration: changed).changedRouteKeys(from: before), [])
         changed.outputMixes[0].mix.inputs[0].channelRouting = [[1, 2], []]
         XCTAssertEqual(RuntimeGraphShape(configuration: changed).changedRouteKeys(from: before), [])

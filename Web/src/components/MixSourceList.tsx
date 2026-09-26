@@ -183,7 +183,11 @@ export const MixSourceList = memo(function MixSourceList() {
                                                                 command:
                                                                     "removeMixInput",
                                                                 ...selectedTarget,
-                                                                kind: input.kind,
+                                                                kind:
+                                                                    input.kind ===
+                                                                    "app"
+                                                                        ? "app"
+                                                                        : "inputDevice",
                                                                 sourceID:
                                                                     input.id,
                                                             },
@@ -271,12 +275,11 @@ export const MixSourceList = memo(function MixSourceList() {
                                                 outputChannels={outputChannels}
                                                 routing={routing}
                                                 channelLevels={
-                                                    input.kind === "inputDevice"
+                                                    input.kind ===
+                                                        "inputDevice" ||
+                                                    input.kind === "app"
                                                         ? levels
                                                         : undefined
-                                                }
-                                                channelsLinked={
-                                                    input.channelsLinked
                                                 }
                                                 meters={
                                                     input.kind === "inputDevice"
@@ -291,9 +294,10 @@ export const MixSourceList = memo(function MixSourceList() {
                                                                     app.id ===
                                                                     input.id,
                                                             )?.channelLevels
-                                                        : undefined
+                                                          : undefined
                                                 }
                                                 disabled={pending !== null}
+                                                gainDisabled={false}
                                                 onClose={() =>
                                                     setOpenChannelEditor(null)
                                                 }
@@ -312,22 +316,28 @@ export const MixSourceList = memo(function MixSourceList() {
                                                     )
                                                 }
                                                 onGainChange={
-                                                    input.kind === "inputDevice"
-                                                        ? (next, linked) =>
+                                                    input.kind ===
+                                                        "inputDevice" ||
+                                                    input.kind === "app"
+                                                        ? (next) =>
                                                               send(
                                                                   `channels:${input.id}`,
                                                                   {
                                                                       command:
-                                                                          "setPhysicalInputChannels",
+                                                                          "setMixInputChannels",
                                                                       ...selectedTarget,
-                                                                      kind: "inputDevice",
+                                                                      kind:
+                                                                          input.kind ===
+                                                                          "app"
+                                                                              ? "app"
+                                                                              : "inputDevice",
                                                                       sourceID:
                                                                           input.id,
                                                                       channelLevels:
                                                                           next,
-                                                                      channelsLinked:
-                                                                          linked,
                                                                   },
+                                                                  undefined,
+                                                                  true,
                                                               )
                                                         : undefined
                                                 }

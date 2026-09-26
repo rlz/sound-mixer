@@ -202,11 +202,7 @@ final class AudioGraphRenderer {
                     if !selected, engine.currentSourceGain < 0.00001 {
                         continue
                     }
-                    let gain: Float = if case .inputDevice = input.source {
-                        state.channelGains[channel].value.load(ordering: .relaxed)
-                    } else {
-                        state.sourceGain.load(ordering: .relaxed)
-                    }
+                    let gain = state.channelGains[channel].value.load(ordering: .relaxed)
                     engine.setSourceGain(selected ? gain : 0)
                     engine.setMainGain(state.mainGain.load(ordering: .relaxed))
                     rowPeak = max(rowPeak, engine.mix(
@@ -232,7 +228,6 @@ final class AudioGraphRenderer {
             case .inputDevice, .application:
                 levels[input.source] ?? 1
             }
-            state.sourceGain.store(Float(muted ? 0 : input.level * sourceLevel), ordering: .relaxed)
             state.mainGain.store(Float(mix.level), ordering: .relaxed)
             for channel in state.channelGains.indices {
                 let gain = channel < input.channelLevels.count ? input.channelLevels[channel] : 1
@@ -291,7 +286,6 @@ private final class MixInputState {
     var channelEngines: [[StereoMixingEngine]]
     let sourceKey: String
     let peakMeter: RealtimePeakMeter?
-    let sourceGain = Atomic<Float>(1)
     let mainGain = Atomic<Float>(1)
     let channelGains: [RealtimeGain]
     let routing: [[RealtimeRouting]]
