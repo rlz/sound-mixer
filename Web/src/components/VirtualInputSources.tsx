@@ -63,7 +63,7 @@ export const VirtualInputSources = memo(function VirtualInputSources() {
                         type="Virtual"
                         level={busMix?.levelReading}
                         levelLabel={`${bus.name} output`}
-                        channelCount={2}
+                        channelCount={bus.channelCount}
                         leadingAction={
                             <button
                                 type="button"

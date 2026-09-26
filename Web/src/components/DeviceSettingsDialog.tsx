@@ -4,6 +4,7 @@ import {
     faEyeSlash,
     faPlus,
     faTrashCan,
+    faMinus,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useMixerStore } from "../store";
@@ -160,6 +161,83 @@ export function DeviceSettingsDialog({ onClose }: { onClose: () => void }) {
                             className="flex items-center justify-between gap-3 rounded bg-slate-800/60 px-3 py-2"
                         >
                             <span className="min-w-0 truncate">{bus.name}</span>
+                            <div className="flex shrink-0 items-center gap-1">
+                                <button
+                                    type="button"
+                                    disabled={
+                                        pending !== null ||
+                                        bus.channelCount <= 1
+                                    }
+                                    aria-label={`Remove a channel from ${bus.name}`}
+                                    title="Remove channel"
+                                    className="flex size-7 items-center justify-center rounded hover:bg-slate-700 disabled:opacity-40"
+                                    onClick={() =>
+                                        void send(`bus-channels:${bus.id}`, {
+                                            command: "setBusChannelCount",
+                                            id: bus.id,
+                                            channelCount: bus.channelCount - 1,
+                                        })
+                                    }
+                                >
+                                    <FontAwesomeIcon
+                                        icon={faMinus}
+                                        aria-hidden="true"
+                                    />
+                                </button>
+                                <label
+                                    className="sr-only"
+                                    htmlFor={`bus-channel-count-${bus.id}`}
+                                >
+                                    Channels for {bus.name}
+                                </label>
+                                <select
+                                    id={`bus-channel-count-${bus.id}`}
+                                    value={bus.channelCount}
+                                    disabled={pending !== null}
+                                    aria-label={`Channel count for ${bus.name}`}
+                                    className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-xs"
+                                    onChange={(event) =>
+                                        void send(`bus-channels:${bus.id}`, {
+                                            command: "setBusChannelCount",
+                                            id: bus.id,
+                                            channelCount: Number(
+                                                event.currentTarget.value,
+                                            ),
+                                        })
+                                    }
+                                >
+                                    {Array.from(
+                                        { length: 16 },
+                                        (_, index) => index + 1,
+                                    ).map((count) => (
+                                        <option key={count} value={count}>
+                                            {count}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button
+                                    type="button"
+                                    disabled={
+                                        pending !== null ||
+                                        bus.channelCount >= 16
+                                    }
+                                    aria-label={`Add a channel to ${bus.name}`}
+                                    title="Add channel"
+                                    className="flex size-7 items-center justify-center rounded hover:bg-slate-700 disabled:opacity-40"
+                                    onClick={() =>
+                                        void send(`bus-channels:${bus.id}`, {
+                                            command: "setBusChannelCount",
+                                            id: bus.id,
+                                            channelCount: bus.channelCount + 1,
+                                        })
+                                    }
+                                >
+                                    <FontAwesomeIcon
+                                        icon={faPlus}
+                                        aria-hidden="true"
+                                    />
+                                </button>
+                            </div>
                             <button
                                 type="button"
                                 disabled={pending !== null}

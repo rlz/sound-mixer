@@ -3,6 +3,7 @@ import Foundation
 /// The rendering properties of a bus. Its display name does not affect audio.
 public struct RuntimeBusRenderingDefinition: Equatable, Sendable {
     public let id: UUID
+    public let channelCount: Int
     public let mix: Mix
 }
 
@@ -79,7 +80,7 @@ public struct RuntimeGraphShape: Equatable, Sendable {
             }
         }
         return visited.compactMap { id in
-            busesByID[id].map { RuntimeBusRenderingDefinition(id: id, mix: renderingStructure($0.mix)) }
+            busesByID[id].map { RuntimeBusRenderingDefinition(id: id, channelCount: $0.channelCount, mix: renderingStructure($0.mix)) }
         }.sorted { $0.id.uuidString < $1.id.uuidString }
     }
 

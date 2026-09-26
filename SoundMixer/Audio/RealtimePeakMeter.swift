@@ -58,6 +58,14 @@ public final class RealtimePeakMeter {
         publish(peak.isFinite ? min(max(peak, 0), 1) : 0)
     }
 
+    func record(samples: UnsafeBufferPointer<Float>) {
+        var peak: Float = 0
+        for sample in samples where sample.isFinite {
+            peak = max(peak, abs(sample))
+        }
+        publish(peak)
+    }
+
     static func recordChannelPeaks(
         _ meters: [RealtimePeakMeter],
         buffers: UnsafePointer<AudioBufferList>,

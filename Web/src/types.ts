@@ -34,6 +34,7 @@ export type MixInputState = {
     level: number;
     channelRouting: number[][];
     channelLevels: number[];
+    channelMeters: (number | null)[];
     muted: boolean;
     sourceMuted: boolean;
     levelReading: number | null;
@@ -58,6 +59,7 @@ export type MixerState = {
         category: "virtual";
         muted: boolean;
         sourceLevel: number;
+        channelCount: number;
     }[];
     applications: {
         id: string;
@@ -87,6 +89,7 @@ export type BridgeCommand =
     | { command: "setDeviceVolume"; uid: string; level: number }
     | { command: "setDeviceMuted"; uid: string; muted: boolean }
     | { command: "setBusMuted"; id: string; muted: boolean }
+    | { command: "setBusChannelCount"; id: string; channelCount: number }
     | {
           command: "setVirtualMixLevel";
           target: "bus";
@@ -147,7 +150,7 @@ export type BridgeCommand =
           command: "setMixInputChannels";
           target: "output" | "bus";
           id: string;
-          kind: "inputDevice" | "app";
+          kind: "inputDevice" | "app" | "bus";
           sourceID: string;
           channelLevels: number[];
       };

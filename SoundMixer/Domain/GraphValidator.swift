@@ -109,6 +109,9 @@ public enum GraphValidator {
     }
 
     private static func validateMixes(_ configuration: MixerConfiguration) throws {
+        guard configuration.buses.allSatisfy({ (1 ... VirtualBus.maximumChannelCount).contains($0.channelCount) }) else {
+            throw GraphValidationError.invalidChannelSettings
+        }
         let busIDs = Set(configuration.buses.map(\.id))
         let mixes = configuration.outputMixes.map(\.mix) + configuration.buses.map(\.mix)
         for mix in mixes {

@@ -50,7 +50,8 @@
 - The center add-source picker and right-side Inputs panel expose the same internal buses as mix sources. Applications are added explicitly from the searchable application catalog opened from Inputs; the catalog lists eligible currently running applications not already registered, searches names and bundle identifiers, and does not add them merely by browsing. Existing registered applications remain in Inputs when their process is unavailable.
 - When adding a source, unavailable items include a reason. The catalog does not offer a new row for a missing input device.
 - An existing input stays in its mix row when its device is missing, including at launch. It is shown unavailable and can be explicitly removed from the mix. The interface does not offer to create a new row for a missing device, and device absence never removes a source row automatically.
-- The matrix is available for every mix source. Application taps and virtual buses expose two source rows; physical devices expose their reported channel count or saved rows while disconnected. The columns follow the selected destination: all physical output channels or the two channels of a bus.
+- The matrix is available for every mix source. Application taps expose two source rows; virtual buses expose their configured 1–16 source rows; physical devices expose their reported channel count or saved rows while disconnected. The columns follow the selected destination: all physical output channels or the selected bus's configured 1–16 channels.
+- Device settings show each virtual bus channel count with a 1–16 selector and accessible increment/decrement buttons. Changes save immediately and update routing editors and dependent audio renderers.
 
 ## States and feedback
 

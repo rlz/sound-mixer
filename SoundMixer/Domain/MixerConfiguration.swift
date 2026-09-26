@@ -206,14 +206,27 @@ public struct OutputMix: Codable, Equatable, Sendable {
 }
 
 public struct VirtualBus: Codable, Equatable, Identifiable, Sendable {
+    public static let maximumChannelCount = 16
     public let id: UUID
     public var name: String
+    public var channelCount: Int
     public var mix: Mix
 
-    public init(id: UUID = UUID(), name: String, mix: Mix = Mix()) {
+    private enum CodingKeys: String, CodingKey { case id, name, channelCount, mix }
+
+    public init(id: UUID = UUID(), name: String, channelCount: Int = 2, mix: Mix = Mix()) {
         self.id = id
         self.name = name
+        self.channelCount = channelCount
         self.mix = mix
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        channelCount = try container.decodeIfPresent(Int.self, forKey: .channelCount) ?? 2
+        mix = try container.decode(Mix.self, forKey: .mix)
     }
 }
 
@@ -238,7 +251,7 @@ public struct SourceLevel: Codable, Equatable, Sendable {
 }
 
 public struct MixerConfiguration: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 11
+    public static let currentSchemaVersion = 12
 
     public let schemaVersion: Int
     public var isEnabled: Bool

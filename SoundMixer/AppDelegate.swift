@@ -290,6 +290,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case "setSourceMuted": return try setSourceMuted(body: body, store: store)
         case "setSourceLevel": return try setSourceLevel(body: body, store: store)
         case "setBusMuted": return try setBusMuted(body: body, store: store)
+        case "setBusChannelCount": return try setBusChannelCount(body: body, store: store)
         case "createBus": return try createBus(body: body, store: store)
         case "renameBus": return try renameBus(body: body, store: store)
         case "deleteBus": return try deleteBus(body: body, store: store)
@@ -513,6 +514,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
     }
 
+    private func setBusChannelCount(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "id", "channelCount"],
+              let idText = body["id"] as? String, let id = UUID(uuidString: idText),
+              let count = body["channelCount"] as? Int,
+              (1 ... VirtualBus.maximumChannelCount).contains(count)
+        else { throw BridgeError.invalidPayload }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { candidate in
+            guard let busIndex = candidate.buses.firstIndex(where: { $0.id == id }) else { throw BridgeError.unknownBus }
+            let oldCount = candidate.buses[busIndex].channelCount
+            guard oldCount != count else { return }
+            var buses = candidate.buses
+            var outputMixes = candidate.outputMixes
+            buses[busIndex].channelCount = count
+            func resizeSource(_ source: SourceReference, in mix: inout Mix) {
+                guard let index = mix.inputs.firstIndex(where: { $0.source == source }) else { return }
+                var row = mix.inputs[index]
+                if count > oldCount {
+                    let extra = MixInput.defaultRouting(channelCount: count - oldCount, outputChannels: 2)
+                    row.channelRouting += extra
+                    row.channelLevels += Array(repeating: 1, count: count - oldCount)
+                } else {
+                    row.channelRouting = Array(row.channelRouting.prefix(count))
+                    row.channelLevels = Array(row.channelLevels.prefix(count))
+                }
+                mix.inputs[index] = row
+            }
+            for index in buses.indices where index != busIndex {
+                resizeSource(.bus(id), in: &buses[index].mix)
+            }
+            for index in outputMixes.indices {
+                resizeSource(.bus(id), in: &outputMixes[index].mix)
+            }
+            candidate.buses = buses
+            candidate.outputMixes = outputMixes
+        }
+    }
+
     private func renameBus(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
         guard Set(body.keys) == ["requestId", "command", "id", "name"],
               let idString = body["id"] as? String, let id = UUID(uuidString: idString),
@@ -576,9 +614,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 throw BridgeError.invalidPayload
             }
         }
-        let outputChannels = target == "output"
-            ? (audioDevices.first(where: { $0.uid == id })?.outputChannels ?? 2)
-            : 2
+        let outputChannels: Int
+        switch target {
+        case "output":
+            outputChannels = audioDevices.first(where: { $0.uid == id })?.outputChannels ?? 2
+        case "bus":
+            outputChannels = UUID(uuidString: id).flatMap { busID in
+                configurationStore?.configuration.buses.first(where: { $0.id == busID })?.channelCount
+            } ?? 2
+        default:
+            throw BridgeError.invalidPayload
+        }
         let muted = body["muted"] as? Bool
         return try store.update(discoveredDevices: discoveredDescriptors()) { config in
             switch target {
@@ -627,8 +673,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 let defaults = MixInput.physicalInputDefaults(channelCount: channels, outputChannels: outputChannels)
                 mix.inputs.append(MixInput(source: reference, channelRouting: defaults.routing, channelLevels: defaults.levels))
             } else {
-                let routing = MixInput.defaultRouting(channelCount: 2, outputChannels: outputChannels)
-                mix.inputs.append(MixInput(source: reference, channelRouting: routing, channelLevels: [1, 1]))
+                let sourceChannels: Int
+                if case let .bus(id) = reference {
+                    sourceChannels = configurationStore?.configuration.buses.first(where: { $0.id == id })?.channelCount ?? 2
+                } else {
+                    sourceChannels = 2
+                }
+                let routing = MixInput.defaultRouting(channelCount: sourceChannels, outputChannels: outputChannels)
+                mix.inputs.append(MixInput(
+                    source: reference,
+                    channelRouting: routing,
+                    channelLevels: Array(repeating: 1, count: sourceChannels)
+                ))
             }
         case .remove:
             guard let index = mix.inputs.firstIndex(where: { $0.source == reference }) else { throw BridgeError.invalidPayload }
@@ -655,15 +711,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                   Set(row).count == row.count && row.allSatisfy { $0 > 0 }
               })
         else { throw BridgeError.invalidPayload }
-        let destinationChannels = target == "output"
-            ? (audioDevices.first(where: { $0.uid == destinationID })?.outputChannels ?? Int.max)
-            : 2
+        let currentConfiguration = store.configuration
+        let destinationChannels: Int
+        switch target {
+        case "output":
+            destinationChannels = audioDevices.first(where: { $0.uid == destinationID })?.outputChannels ?? Int.max
+        case "bus":
+            destinationChannels = UUID(uuidString: destinationID).flatMap { busID in
+                currentConfiguration.buses.first(where: { $0.id == busID })?.channelCount
+            } ?? 0
+        default:
+            throw BridgeError.invalidPayload
+        }
         guard raw.allSatisfy({ $0.allSatisfy { $0 <= destinationChannels } }) else { throw BridgeError.invalidPayload }
         return try updateMixChannels(body: body, store: store) { input in
-            let expectedChannels = kind == "inputDevice"
-                ? max(input.channelRouting.count, audioDevices.first(where: { $0.uid == sourceID })?.inputChannels ?? 0)
-                : 2
-            guard raw.count == expectedChannels else { throw BridgeError.invalidPayload }
+            let expectedChannels: Int
+            switch input.source {
+            case let .inputDevice(uid):
+                guard kind == "inputDevice", uid.rawValue == sourceID else { throw BridgeError.invalidPayload }
+                expectedChannels = max(input.channelRouting.count, audioDevices.first(where: { $0.uid == uid.rawValue })?.inputChannels ?? 0)
+            case let .application(id):
+                guard kind == "app" || kind == "application" else { throw BridgeError.invalidPayload }
+                expectedChannels = 2
+                guard id.rawValue == sourceID else { throw BridgeError.invalidPayload }
+            case let .bus(busID):
+                guard kind == "bus", busID.uuidString == sourceID else { throw BridgeError.invalidPayload }
+                expectedChannels = currentConfiguration.buses.first(where: { $0.id == busID })?.channelCount ?? 0
+            }
+            guard expectedChannels > 0, raw.count == expectedChannels else { throw BridgeError.invalidPayload }
             input.channelRouting = raw
             if input.channelLevels.count < raw.count {
                 input.channelLevels += Array(repeating: 1, count: raw.count - input.channelLevels.count)
@@ -675,7 +750,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let expected: Set = ["requestId", "command", "target", "id", "kind", "sourceID", "channelLevels"]
         guard Set(body.keys) == expected,
               let kind = body["kind"] as? String,
-              ["inputDevice", "app"].contains(kind),
+              ["inputDevice", "app", "bus"].contains(kind),
               let levels = body["channelLevels"] as? [Double],
               levels.allSatisfy({ $0.isFinite && (0 ... 1).contains($0) })
         else { throw BridgeError.invalidPayload }
@@ -689,9 +764,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 guard kind == "app" else { throw BridgeError.invalidPayload }
                 expectedChannels = 2
             case .bus:
-                throw BridgeError.invalidPayload
+                guard kind == "bus",
+                      let sourceID = body["sourceID"] as? String,
+                      let busID = UUID(uuidString: sourceID),
+                      case let .bus(inputBusID) = input.source,
+                      busID == inputBusID
+                else { throw BridgeError.invalidPayload }
+                expectedChannels = store.configuration.buses.first(where: { $0.id == busID })?.channelCount ?? 0
             }
-            guard levels.count == expectedChannels else { throw BridgeError.invalidPayload }
+            guard expectedChannels > 0, levels.count == expectedChannels else { throw BridgeError.invalidPayload }
             if input.channelRouting.count < levels.count {
                 input.channelRouting += Array(repeating: [], count: levels.count - input.channelRouting.count)
             }
@@ -795,7 +876,8 @@ extension AppDelegate {
             buses: configuration.buses.map { bus in
                 BridgeNamedItem(
                     id: bus.id.uuidString, name: bus.name, category: "virtual",
-                    muted: configuration.mutedBuses.contains(bus.id), sourceLevel: bus.mix.level
+                    muted: configuration.mutedBuses.contains(bus.id), sourceLevel: bus.mix.level,
+                    channelCount: bus.channelCount
                 )
             },
             applications: bridgeApplications(configuration: configuration, sourceLevels: sourceLevels),
@@ -827,12 +909,20 @@ extension AppDelegate {
                 case let .application(app): kind = "app"; sourceID = app.rawValue
                 case let .bus(bus): kind = "bus"; sourceID = bus.uuidString
                 }
+                let channelMeters: [Double?]
+                if case let .bus(busID) = input.source,
+                   let bus = configuration.buses.first(where: { $0.id == busID }) {
+                    channelMeters = (1 ... bus.channelCount).map { renderLevels["bus:\(busID.uuidString)/channel/\($0)"] }
+                } else {
+                    channelMeters = []
+                }
                 return BridgeMixInput(
                     kind: kind,
                     id: sourceID,
                     level: input.level,
                     channelRouting: input.channelRouting,
                     channelLevels: input.channelLevels,
+                    channelMeters: channelMeters,
                     muted: input.isMuted,
                     sourceMuted: configuration.mutedSources.contains(input.source),
                     levelReading: renderLevels["\(targetKey)/\(AudioGraphRenderer.sourceMeterKey(input.source))"]

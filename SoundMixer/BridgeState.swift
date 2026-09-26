@@ -25,6 +25,7 @@ struct BridgeMixInput: Encodable {
     let level: Double
     let channelRouting: [[Int]]
     let channelLevels: [Double]
+    let channelMeters: [Double?]
     let muted: Bool
     let sourceMuted: Bool
     let levelReading: Double?
@@ -85,6 +86,7 @@ struct BridgeNamedItem: Encodable {
     let category: String
     let muted: Bool
     let sourceLevel: Double
+    let channelCount: Int
 }
 
 enum BridgeError: LocalizedError {

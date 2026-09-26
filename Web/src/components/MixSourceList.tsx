@@ -106,7 +106,11 @@ export const MixSourceList = memo(function MixSourceList() {
                                               channelCount,
                                               input.channelRouting.length,
                                           )
-                                        : 2;
+                                        : input.kind === "bus"
+                                          ? (mixerState?.buses.find(
+                                                (bus) => bus.id === input.id,
+                                            )?.channelCount ?? 2)
+                                          : 2;
                                 const outputChannels =
                                     selectedTarget.target === "output"
                                         ? (mixerState?.outputs.find(
@@ -115,6 +119,13 @@ export const MixSourceList = memo(function MixSourceList() {
                                                   selectedTarget.id,
                                           )?.outputChannels ?? 2)
                                         : 2;
+                                const targetChannelCount =
+                                    selectedTarget.target === "bus"
+                                        ? (mixerState?.buses.find(
+                                              (bus) =>
+                                                  bus.id === selectedTarget.id,
+                                          )?.channelCount ?? 2)
+                                        : outputChannels;
                                 const routing = Array.from(
                                     { length: inputChannels },
                                     (_, index) =>
@@ -272,15 +283,11 @@ export const MixSourceList = memo(function MixSourceList() {
                                             <ChannelMatrixDialog
                                                 name={name}
                                                 inputChannels={inputChannels}
-                                                outputChannels={outputChannels}
-                                                routing={routing}
-                                                channelLevels={
-                                                    input.kind ===
-                                                        "inputDevice" ||
-                                                    input.kind === "app"
-                                                        ? levels
-                                                        : undefined
+                                                outputChannels={
+                                                    targetChannelCount
                                                 }
+                                                routing={routing}
+                                                channelLevels={levels}
                                                 meters={
                                                     input.kind === "inputDevice"
                                                         ? mixerState?.inputCaptureStates.find(
@@ -294,7 +301,7 @@ export const MixSourceList = memo(function MixSourceList() {
                                                                     app.id ===
                                                                     input.id,
                                                             )?.channelLevels
-                                                          : undefined
+                                                          : input.channelMeters
                                                 }
                                                 disabled={pending !== null}
                                                 gainDisabled={false}
@@ -315,31 +322,27 @@ export const MixSourceList = memo(function MixSourceList() {
                                                         },
                                                     )
                                                 }
-                                                onGainChange={
-                                                    input.kind ===
-                                                        "inputDevice" ||
-                                                    input.kind === "app"
-                                                        ? (next) =>
-                                                              send(
-                                                                  `channels:${input.id}`,
-                                                                  {
-                                                                      command:
-                                                                          "setMixInputChannels",
-                                                                      ...selectedTarget,
-                                                                      kind:
-                                                                          input.kind ===
-                                                                          "app"
-                                                                              ? "app"
-                                                                              : "inputDevice",
-                                                                      sourceID:
-                                                                          input.id,
-                                                                      channelLevels:
-                                                                          next,
-                                                                  },
-                                                                  undefined,
-                                                                  true,
-                                                              )
-                                                        : undefined
+                                                onGainChange={(next) =>
+                                                    send(
+                                                        `channels:${input.id}`,
+                                                        {
+                                                            command:
+                                                                "setMixInputChannels",
+                                                            ...selectedTarget,
+                                                            kind:
+                                                                input.kind ===
+                                                                "app"
+                                                                    ? "app"
+                                                                    : input.kind ===
+                                                                        "bus"
+                                                                      ? "bus"
+                                                                      : "inputDevice",
+                                                            sourceID: input.id,
+                                                            channelLevels: next,
+                                                        },
+                                                        undefined,
+                                                        true,
+                                                    )
                                                 }
                                             />
                                         )}

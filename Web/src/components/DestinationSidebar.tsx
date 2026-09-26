@@ -98,7 +98,7 @@ export const DestinationSidebar = memo(function DestinationSidebar() {
                             onDelete={() =>
                                 void deleteVirtualItem("bus", bus.id, bus.name)
                             }
-                            channelCount={2}
+                            channelCount={bus.channelCount}
                             muted={bus.muted}
                             selected={selectedItem === `bus:${bus.id}`}
                             gain={mix?.level ?? 1}

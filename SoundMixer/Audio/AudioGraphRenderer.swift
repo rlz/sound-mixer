@@ -11,13 +11,14 @@ final class AudioGraphRenderer {
     private let sourceRings: [String: RealtimeAudioRingBuffer]
     private let sourceBuffers: [String: AudioSourceStorage]
     private let sourceReferences: Set<SourceReference>
-    private let busBuffers: [UUID: StereoStorage]
+    private let busBuffers: [UUID: MultiChannelStorage]
     private let sourceKeys: [String]
     private let mixStates: [UUID: [MixInputState]]
     private let outputState: [MixInputState]
     private let mutedSources: Set<SourceReference>
     private let busMuteStates: [UUID: BusMuteState]
     private let busDestinationMeters: [UUID: RealtimePeakMeter]
+    private let busChannelMeters: [UUID: [RealtimePeakMeter]]
     private let outputDestinationMeter: RealtimePeakMeter?
     private static let maximumFrames = 8192
 
@@ -53,6 +54,9 @@ final class AudioGraphRenderer {
         busDestinationMeters = Dictionary(uniqueKeysWithValues: relevantBuses.map {
             ($0.id, meters["bus:\($0.id.uuidString)/destination"])
         }.compactMap { key, meter in meter.map { (key, $0) } })
+        busChannelMeters = Dictionary(uniqueKeysWithValues: relevantBuses.map { bus in
+            (bus.id, (0 ..< bus.channelCount).compactMap { meters["bus:\(bus.id.uuidString)/channel/\($0 + 1)"] })
+        })
         outputDestinationMeter = meters["\(targetKey)/destination"]
         busesByID = Dictionary(uniqueKeysWithValues: relevantBuses.map { ($0.id, $0) })
         busOrder = relevantBusOrder
@@ -73,13 +77,15 @@ final class AudioGraphRenderer {
         sourceBuffers = Dictionary(uniqueKeysWithValues: sourceKeys.map { key in
             (key, AudioSourceStorage(capacity: Self.maximumFrames, channelCount: sourceRings[key]?.channelCount ?? 2))
         })
-        busBuffers = Dictionary(uniqueKeysWithValues: busOrder.map { ($0, StereoStorage(capacity: Self.maximumFrames)) })
+        busBuffers = Dictionary(uniqueKeysWithValues: busOrder.compactMap { id in
+            allBusesByID[id].map { (id, MultiChannelStorage(capacity: Self.maximumFrames, channelCount: $0.channelCount)) }
+        })
         mixStates = Dictionary(uniqueKeysWithValues: relevantBuses.map { bus in
             (
                 bus.id,
                 Self.states(
                     for: bus.mix, sampleRate: 48000,
-                    meterTarget: "bus:\(bus.id.uuidString)", meters: meters, outputChannelCount: 2
+                    meterTarget: "bus:\(bus.id.uuidString)", meters: meters, outputChannelCount: bus.channelCount
                 )
             )
         })
@@ -112,8 +118,12 @@ final class AudioGraphRenderer {
                 storage.clear(frames: frames)
             }
             busDestinationMeters[busID]?.record(
-                left: storage.readLeftBuffer(frames), right: storage.readRightBuffer(frames), frameCount: frames
+                left: storage.readChannel(0, frames: frames),
+                right: storage.readChannel(min(1, bus.channelCount - 1), frames: frames), frameCount: frames
             )
+            for channel in 0 ..< min(bus.channelCount, busChannelMeters[busID]?.count ?? 0) {
+                busChannelMeters[busID]?[channel].record(samples: storage.readChannel(channel, frames: frames))
+            }
         }
 
         renderMix(outputMix, states: outputState, into: channels, frames: frames)
@@ -174,7 +184,7 @@ final class AudioGraphRenderer {
             !Set(busMuteStates.keys).isDisjoint(with: changedBuses)
     }
 
-    private func renderMix(_ mix: Mix, states: [MixInputState], into storage: StereoStorage, frames: Int) {
+    private func renderMix(_ mix: Mix, states: [MixInputState], into storage: MultiChannelStorage, frames: Int) {
         renderMix(mix, states: states, into: storage.mutablePlanePointers, frames: frames)
     }
 
@@ -190,7 +200,7 @@ final class AudioGraphRenderer {
             for channel in state.channelEngines.indices {
                 let source: UnsafeBufferPointer<Float>
                 if case let .bus(id) = input.source {
-                    guard let storage = busBuffers[id] else { continue }
+                    guard let storage = busBuffers[id], channel < storage.channelCount else { continue }
                     source = storage.readChannel(channel, frames: frames)
                 } else {
                     guard let storage = sourceBuffers[state.sourceKey], channel < storage.channelCount else { continue }
@@ -319,7 +329,7 @@ private final class RealtimeRouting {
     }
 }
 
-private final class AudioSourceStorage {
+private final class MultiChannelStorage {
     let channelCount: Int
     private let capacity: Int
     private let planes: [UnsafeMutablePointer<Float>]
@@ -362,57 +372,43 @@ private final class AudioSourceStorage {
     }
 }
 
-private final class StereoStorage {
+private final class AudioSourceStorage {
     let capacity: Int
-    private let left: UnsafeMutablePointer<Float>
-    private let right: UnsafeMutablePointer<Float>
+    let channelCount: Int
+    private let planes: [UnsafeMutablePointer<Float>]
     private let planePointers: UnsafeMutablePointer<UnsafeMutablePointer<Float>>
     var mutablePlanePointers: UnsafeBufferPointer<UnsafeMutablePointer<Float>> {
-        UnsafeBufferPointer(start: planePointers, count: 2)
+        UnsafeBufferPointer(start: planePointers, count: channelCount)
     }
 
-    init(capacity: Int) {
+    init(capacity: Int, channelCount: Int) {
         self.capacity = capacity
-        left = .allocate(capacity: capacity)
-        right = .allocate(capacity: capacity)
-        left.initialize(repeating: 0, count: capacity)
-        right.initialize(repeating: 0, count: capacity)
-        planePointers = .allocate(capacity: 2)
-        planePointers.initialize(to: left)
-        planePointers.advanced(by: 1).initialize(to: right)
+        self.channelCount = channelCount
+        planes = (0 ..< channelCount).map { _ in
+            let plane = UnsafeMutablePointer<Float>.allocate(capacity: capacity)
+            plane.initialize(repeating: 0, count: capacity)
+            return plane
+        }
+        planePointers = .allocate(capacity: channelCount)
+        for channel in 0 ..< channelCount {
+            planePointers.advanced(by: channel).initialize(to: planes[channel])
+        }
     }
 
     deinit {
-        left.deinitialize(count: capacity)
-        right.deinitialize(count: capacity)
-        left.deallocate()
-        right.deallocate()
-        planePointers.deinitialize(count: 2)
+        for plane in planes {
+            plane.deinitialize(count: capacity)
+            plane.deallocate()
+        }
+        planePointers.deinitialize(count: channelCount)
         planePointers.deallocate()
     }
 
     func clear(frames: Int) {
-        left.update(repeating: 0, count: frames)
-        right.update(repeating: 0, count: frames)
-    }
-
-    func leftBuffer(_ frames: Int) -> UnsafeMutableBufferPointer<Float> {
-        UnsafeMutableBufferPointer(start: left, count: frames)
-    }
-
-    func rightBuffer(_ frames: Int) -> UnsafeMutableBufferPointer<Float> {
-        UnsafeMutableBufferPointer(start: right, count: frames)
-    }
-
-    func readLeftBuffer(_ frames: Int) -> UnsafeBufferPointer<Float> {
-        UnsafeBufferPointer(start: left, count: frames)
-    }
-
-    func readRightBuffer(_ frames: Int) -> UnsafeBufferPointer<Float> {
-        UnsafeBufferPointer(start: right, count: frames)
+        for plane in planes { plane.update(repeating: 0, count: frames) }
     }
 
     func readChannel(_ channel: Int, frames: Int) -> UnsafeBufferPointer<Float> {
-        UnsafeBufferPointer(start: channel == 0 ? left : right, count: frames)
+        UnsafeBufferPointer(start: planes[min(max(channel, 0), channelCount - 1)], count: frames)
     }
 }

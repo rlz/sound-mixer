@@ -296,14 +296,20 @@ final class AudioRoutingCoordinator {
         let keys = Self.sourceKeys(in: route.mix, buses: buses)
         guard Set(rings.keys) == Set(keys) else { return false }
         return keys.allSatisfy { key in
-            rings[key]?.channelCount == sourceChannelCount(for: key, devices: devices)
+            rings[key]?.channelCount == sourceChannelCount(for: key, devices: devices, buses: buses)
         }
     }
 
-    private func sourceChannelCount(for key: String, devices: [String: AudioDeviceSnapshot]) -> Int {
-        guard key.hasPrefix("input:") else { return 2 }
-        let uid = String(key.dropFirst("input:".count))
-        return min(max(devices[uid]?.inputChannels ?? 2, 1), 64)
+    private func sourceChannelCount(for key: String, devices: [String: AudioDeviceSnapshot], buses: [VirtualBus] = []) -> Int {
+        if key.hasPrefix("input:") {
+            let uid = String(key.dropFirst("input:".count))
+            return min(max(devices[uid]?.inputChannels ?? 2, 1), 64)
+        }
+        if key.hasPrefix("bus:") {
+            let idText = String(key.dropFirst("bus:".count))
+            return UUID(uuidString: idText).flatMap { id in buses.first(where: { $0.id == id })?.channelCount } ?? 2
+        }
+        return 2
     }
 
     private func captureSourcesNeedingRestart(
@@ -478,6 +484,11 @@ final class AudioRoutingCoordinator {
             if key.hasPrefix("input:") {
                 let uid = String(key.dropFirst("input:".count))
                 channels = min(max(devices[uid]?.inputChannels ?? 2, 1), 64)
+            } else if key.hasPrefix("bus:") {
+                let idText = String(key.dropFirst("bus:".count))
+                channels = UUID(uuidString: idText).flatMap { id in
+                    graph.configuration.buses.first(where: { $0.id == id })?.channelCount
+                } ?? 2
             } else {
                 channels = 2
             }
@@ -511,7 +522,7 @@ final class AudioRoutingCoordinator {
 
         let sourceKeys = Self.sourceKeys(in: route.mix, buses: graph.configuration.buses)
         let rings = Dictionary(uniqueKeysWithValues: sourceKeys.map { key in
-            let channelCount = sourceChannelCount(for: key, devices: devices)
+            let channelCount = sourceChannelCount(for: key, devices: devices, buses: graph.configuration.buses)
             if let existing = existingRings[key], existing.channelCount == channelCount {
                 // The route keeps the same HAL callback; publishing the new renderer transfers its existing queues.
                 return (key, existing)
@@ -524,7 +535,7 @@ final class AudioRoutingCoordinator {
             sourceRings: rings,
             outputChannelCount: route.channels.count,
             targetKey: route.targetKey,
-            meters: renderMeters.filter { $0.key.hasPrefix("\(route.targetKey)/") }
+            meters: renderMeters.filter { $0.key.hasPrefix("\(route.targetKey)/") || $0.key.hasPrefix("bus:") }
         )
         renderer.updateGains(from: graph)
         renderers[route.key] = renderer
@@ -746,6 +757,7 @@ extension AudioRoutingCoordinator {
         for bus in configuration.buses {
             let target = "bus:\(bus.id.uuidString)"
             keys.append("\(target)/destination")
+            keys += (1 ... bus.channelCount).map { "\(target)/channel/\($0)" }
             keys += bus.mix.inputs.map { "\(target)/\(AudioGraphRenderer.sourceMeterKey($0.source))" }
         }
         return keys
