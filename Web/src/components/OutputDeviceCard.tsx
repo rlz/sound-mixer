@@ -29,7 +29,7 @@ export function OutputDeviceCard({
 
     return (
         <div
-            className={`item-panel rounded-lg border px-3 py-2 text-sm ${selected ? "border-sky-300 bg-sky-400/15 ring-1 ring-sky-300" : "border-slate-800"}`}
+            className={`rounded-lg border px-3 py-2 text-sm ${selected ? "border-sky-300 bg-sky-400/15 ring-1 ring-sky-300" : "border-slate-800 bg-slate-900/70"}`}
         >
             <button
                 type="button"
@@ -83,7 +83,7 @@ export function OutputDeviceCard({
             >
                 <button
                     type="button"
-                    className="icon-button shrink-0 text-slate-300 hover:bg-slate-700 disabled:opacity-40"
+                    className="inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-md text-slate-300 hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 disabled:opacity-40"
                     aria-label={`${output.muted ? "Unmute" : "Mute"} ${output.name} output device`}
                     aria-pressed={output.muted === true}
                     title={

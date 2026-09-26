@@ -183,9 +183,9 @@ export function App() {
     }, [mixerState, selectedItem, setSelectedItem]);
 
     return (
-        <main className="app-shell text-slate-100">
-            <section className="app-content">
-                <div className="app-toolbar">
+        <main className="flex h-dvh min-h-0 w-full flex-col overflow-hidden bg-slate-950 text-slate-100">
+            <section className="flex min-h-0 flex-1 flex-col">
+                <div className="flex min-h-14 items-center justify-between gap-4 border-b border-slate-700 bg-slate-900 px-4 py-2">
                     <AppHeader />
 
                     <MasterSwitch
@@ -210,10 +210,10 @@ export function App() {
                     </p>
                 )}
 
-                <div className="mixer-workspace">
+                <div className="grid min-h-0 flex-1 grid-cols-[clamp(250px,26vw,340px)_minmax(260px,1fr)_clamp(185px,21vw,275px)] overflow-hidden">
                     <nav
                         aria-label="Mixer items"
-                        className="mixer-pane mixer-pane-left space-y-5"
+                        className="min-h-0 min-w-0 [scrollbar-gutter:stable] space-y-3.5 overflow-x-hidden overflow-y-auto overscroll-contain border-r border-slate-700 bg-slate-900 p-3.5"
                     >
                         <ItemGroup title="Output Devices">
                             {mixerState?.outputs
@@ -436,10 +436,10 @@ export function App() {
                             )}
                         </ItemGroup>
                     </nav>
-                    <div className="mixer-pane mixer-pane-center">
+                    <div className="min-h-0 min-w-0 [scrollbar-gutter:stable] overflow-x-hidden overflow-y-auto overscroll-contain bg-slate-950 p-3.5">
                         <div className="mb-6 flex items-end justify-between gap-4">
                             <div>
-                                <h1 className="text-3xl font-semibold tracking-tight">
+                                <h1 className="text-xl font-semibold tracking-tight">
                                     {selectedOutput?.name ??
                                         selectedBus?.name ??
                                         selectedRoute?.name ??
@@ -866,7 +866,7 @@ export function App() {
                                             return (
                                                 <li
                                                     key={`${input.kind}:${input.id}`}
-                                                    className="item-panel rounded-xl border border-slate-800 p-3"
+                                                    className="rounded-xl border border-slate-800 bg-slate-900/70 p-3"
                                                 >
                                                     <PeakMeter
                                                         level={
@@ -1444,7 +1444,7 @@ export function App() {
                         )}
                     </div>
                     <aside
-                        className="mixer-pane mixer-pane-right space-y-5"
+                        className="min-h-0 min-w-0 [scrollbar-gutter:stable] space-y-3.5 overflow-x-hidden overflow-y-auto overscroll-contain border-l border-slate-700 bg-slate-900 p-3.5"
                         aria-label="Audio sources"
                     >
                         <ItemGroup title="Inputs">
@@ -1472,7 +1472,7 @@ export function App() {
                                 return (
                                     <div
                                         key={device.uid}
-                                        className="item-panel rounded-lg border border-slate-800 px-3 py-2"
+                                        className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2"
                                     >
                                         <div className="flex items-start justify-between gap-2">
                                             <span className="flex min-w-0 items-center gap-2 truncate text-sm">
@@ -1492,7 +1492,7 @@ export function App() {
                                                 aria-pressed={device.muted}
                                                 aria-label={`${device.muted ? "Unmute" : "Mute"} ${device.name} globally`}
                                                 title={`${device.muted ? "Unmute" : "Mute"} ${device.name} globally`}
-                                                className="icon-button text-sky-300 disabled:opacity-50"
+                                                className="inline-flex min-h-7 min-w-7 items-center justify-center rounded-md text-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 disabled:opacity-50"
                                                 onClick={() =>
                                                     void send(
                                                         `mute-input:${device.uid}`,
@@ -1604,7 +1604,7 @@ export function App() {
                                 return (
                                     <div
                                         key={`bus-input:${bus.id}`}
-                                        className="item-panel rounded-lg border border-slate-800 px-3 py-2"
+                                        className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2"
                                     >
                                         <div className="flex min-w-0 items-center gap-2 truncate text-sm">
                                             <FontAwesomeIcon
@@ -1665,7 +1665,7 @@ export function App() {
                                     return (
                                         <div
                                             key={route.id}
-                                            className="item-panel rounded-lg border border-slate-800 px-3 py-2"
+                                            className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2"
                                         >
                                             <div className="flex items-start justify-between gap-2">
                                                 <span className="flex min-w-0 items-center gap-2 truncate text-sm">
@@ -1682,7 +1682,7 @@ export function App() {
                                                     aria-pressed={route.muted}
                                                     aria-label={`${route.muted ? "Unmute" : "Mute"} ${route.name} globally`}
                                                     title={`${route.muted ? "Unmute" : "Mute"} ${route.name} globally`}
-                                                    className="icon-button text-sky-300 disabled:opacity-50"
+                                                    className="inline-flex min-h-7 min-w-7 items-center justify-center rounded-md text-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 disabled:opacity-50"
                                                     onClick={() =>
                                                         void send(
                                                             `mute-route:${route.id}`,
@@ -1784,7 +1784,7 @@ export function App() {
                                 return (
                                     <div
                                         key={application.id}
-                                        className="item-panel rounded-lg border border-slate-800 px-3 py-2"
+                                        className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2"
                                     >
                                         <div className="flex items-start justify-between gap-2">
                                             <span className="flex min-w-0 items-center gap-2 truncate text-sm">
@@ -1801,7 +1801,7 @@ export function App() {
                                                 aria-pressed={application.muted}
                                                 aria-label={`${application.muted ? "Unmute" : "Mute"} ${application.name} globally`}
                                                 title={`${application.muted ? "Unmute" : "Mute"} ${application.name} globally`}
-                                                className="icon-button text-sky-300 disabled:opacity-50"
+                                                className="inline-flex min-h-7 min-w-7 items-center justify-center rounded-md text-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 disabled:opacity-50"
                                                 onClick={() =>
                                                     void send(
                                                         `mute-app:${application.id}`,
