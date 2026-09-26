@@ -51,7 +51,7 @@ export type MixerState = {
     isEnabled: boolean;
     devices: DeviceState[];
     outputs: OutputState[];
-    buses: { id: string; name: string; category: "virtual" }[];
+    buses: { id: string; name: string; category: "virtual"; muted: boolean }[];
     blackHoleRoutes: {
         id: string;
         name: string;
@@ -87,6 +87,7 @@ export type BridgeCommand =
     | { command: "setMasterEnabled"; enabled: boolean }
     | { command: "setDeviceVolume"; uid: string; level: number }
     | { command: "setDeviceMuted"; uid: string; muted: boolean }
+    | { command: "setBusMuted"; id: string; muted: boolean }
     | {
           command: "setVirtualMixLevel";
           target: "bus" | "route";

@@ -289,6 +289,7 @@ export function App() {
                                         key={bus.id}
                                         name={bus.name}
                                         kind="bus"
+                                        muted={bus.muted}
                                         selected={
                                             selectedItem === `bus:${bus.id}`
                                         }
@@ -312,6 +313,7 @@ export function App() {
                                                 true,
                                             )
                                         }
+                                        onMuteChange={(muted) => send(`bus-mute:${bus.id}`, { command: "setBusMuted", id: bus.id, muted })}
                                     />
                                 );
                             })}
@@ -350,6 +352,8 @@ export function App() {
                                         key={route.id}
                                         name={route.name}
                                         kind="BlackHole route"
+                                        muteAvailable={mixerState.outputs.find((output) => output.uid === route.deviceUID)?.muteWritable ?? false}
+                                        muted={mixerState.outputs.find((output) => output.uid === route.deviceUID)?.muted ?? false}
                                         available={route.available}
                                         selected={
                                             selectedItem ===
@@ -378,6 +382,7 @@ export function App() {
                                                 true,
                                             )
                                         }
+                                        onMuteChange={(muted) => send(`device-mute:${route.deviceUID}`, { command: "setDeviceMuted", uid: route.deviceUID, muted })}
                                     />
                                 );
                             })}

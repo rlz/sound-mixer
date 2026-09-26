@@ -298,8 +298,7 @@ extension CoreAudioDeviceCatalog {
     private func setOutputMuted(uid: String, muted: Bool) throws -> Bool {
         guard started, let device = latestDevices.first(where: { $0.uid == uid }),
               device.isAlive, device.outputChannels > 0 else { throw VolumeError.deviceUnavailable }
-        guard !device.name.localizedCaseInsensitiveContains("BlackHole"),
-              let control = CoreAudioOutputMute.read(deviceID: device.deviceID), control.writable
+        guard let control = CoreAudioOutputMute.read(deviceID: device.deviceID), control.writable
         else { throw VolumeError.muteUnsupported }
 
         if originalVolumes[uid] == nil {

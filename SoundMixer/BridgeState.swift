@@ -82,6 +82,7 @@ struct BridgeNamedItem: Encodable {
     let id: String
     let name: String
     let category: String
+    let muted: Bool
 }
 
 struct BridgeRoute: Encodable {

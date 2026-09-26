@@ -15,6 +15,7 @@ final class AudioGraphRenderer {
     private let mixStates: [UUID: [MixInputState]]
     private let outputState: [MixInputState]
     private let mutedSources: Set<SourceReference>
+    private let busMuteStates: [UUID: BusMuteState]
     private let busDestinationMeters: [UUID: RealtimePeakMeter]
     private let outputDestinationMeter: RealtimePeakMeter?
     private static let maximumFrames = 8192
@@ -30,6 +31,9 @@ final class AudioGraphRenderer {
         outputMix = output.mix
         self.targetKey = targetKey
         mutedSources = Set(graph.configuration.mutedSources)
+        busMuteStates = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map {
+            ($0.id, BusMuteState(Set(graph.configuration.mutedBuses).contains($0.id)))
+        })
         busDestinationMeters = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map {
             ($0.id, meters["bus:\($0.id.uuidString)/destination"])
         }.compactMap { key, meter in meter.map { (key, $0) } })
@@ -85,6 +89,7 @@ final class AudioGraphRenderer {
             else { continue }
             storage.clear(frames: frames)
             renderMix(bus.mix, states: states, into: storage, frames: frames)
+            if busMuteStates[busID]?.value.load(ordering: .relaxed) == true { storage.clear(frames: frames) }
             busDestinationMeters[busID]?.record(
                 left: storage.readLeftBuffer(frames), right: storage.readRightBuffer(frames), frameCount: frames
             )
@@ -96,6 +101,10 @@ final class AudioGraphRenderer {
 
     /// Publishes gain changes to the render thread without rebuilding its audio graph.
     func updateGains(from graph: MixGraphSnapshot) {
+        let mutedBusIDs = Set(graph.configuration.mutedBuses)
+        for (id, state) in busMuteStates {
+            state.value.store(mutedBusIDs.contains(id), ordering: .relaxed)
+        }
         let busMixes = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map { ($0.id, $0.mix) })
         for (id, states) in mixStates {
             guard let mix = busMixes[id] else { continue }
@@ -250,6 +259,14 @@ final class AudioGraphRenderer {
 
     private static func sourceKey(_ reference: SourceReference) -> String {
         sourceMeterKey(reference)
+    }
+}
+
+private final class BusMuteState {
+    let value: Atomic<Bool>
+
+    init(_ muted: Bool) {
+        value = Atomic(muted)
     }
 }
 

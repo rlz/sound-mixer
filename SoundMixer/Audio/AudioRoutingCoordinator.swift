@@ -277,6 +277,7 @@ final class AudioRoutingCoordinator {
             for index in copy.buses.indices {
                 normalize(&copy.buses[index].mix)
             }
+            copy.mutedBuses = []
             for index in copy.blackHoleRoutes.indices {
                 normalize(&copy.blackHoleRoutes[index].mix)
             }

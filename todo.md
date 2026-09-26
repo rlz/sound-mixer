@@ -23,6 +23,9 @@ Statuses: `[ ]` = not started, `[~]` = in progress. Tasks are ordered by depende
 
 ## 3. Bridge and interface
 
+- [x] Add destination mute controls. **Done when:** virtual-bus mute silences that bus for downstream routes and mixes; BlackHole mute controls the actual device mute so system listeners are affected; state is visible, accessible, and persisted where applicable. Implemented; BlackHole hardware support and restore behavior need live Mac verification.
+- [x] Apply virtual-bus mute without restarting capture. **Done when:** changing only a bus mute updates renderer state in place and leaves capture/output routes running. Bus mute now uses an atomic render state and is recognized as a live-only graph update.
+
 - [x] Remove redundant master-switch and source-capture captions. **Done when:** the header uses only its compact On/Off control, source capture guidance is not repeated as a footer, and header text remains readable against the dark toolbar.
 
 - [x] Classify system, virtual, and BlackHole items consistently. **Done when:** system means every Core Audio device except BlackHole, virtual means internal buses, and blackhole means configured stereo-pair routes; standalone BlackHole devices are hidden from Inputs/Outputs and created pairs appear as inputs. The bridge publishes categories, panels label each kind consistently, BlackHole input devices are filtered from Inputs, and requirements/README describe the same behavior.

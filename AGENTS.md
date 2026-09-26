@@ -41,4 +41,5 @@ These rules apply to the entire repository. User requirements and files in `requ
 
 - Take tasks from `todo.md` in dependency order, update their status after completion, and do not mark a task complete without meeting its acceptance criterion.
 - Document decisions for unspecified scenarios in the requirements before implementing them.
+- When the sandbox blocks a necessary command or file access, immediately request the required sandbox escalation with a concise justification and continue after it is approved. Do not spend time trying alternate cache paths or other workarounds first.
 - If Git cannot write its index in the sandbox, request the required escalation and continue the requested Git operation without narrating the routine index-lock failure.

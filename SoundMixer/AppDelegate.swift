@@ -278,6 +278,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case "deleteOutputMix": return try deleteOutputMix(body: body, store: store)
         case "resetMix": return try resetMix(body: body, store: store)
         case "setSourceMuted": return try setSourceMuted(body: body, store: store)
+        case "setBusMuted": return try setBusMuted(body: body, store: store)
         case "createBus": return try createBus(body: body, store: store)
         case "renameBus": return try renameBus(body: body, store: store)
         case "renameRoute": return try renameRoute(body: body, store: store)
@@ -404,6 +405,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
     }
 
+    private func setBusMuted(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "id", "muted"],
+              let idText = body["id"] as? String, let id = UUID(uuidString: idText),
+              let muted = body["muted"] as? Bool else { throw BridgeError.invalidPayload }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { config in
+            guard config.buses.contains(where: { $0.id == id }) else { throw BridgeError.unknownBus }
+            config.mutedBuses.removeAll { $0 == id }
+            if muted { config.mutedBuses.append(id) }
+        }
+    }
+
     private func createBus(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
         guard Set(body.keys) == ["requestId", "command", "name"], let name = body["name"] as? String
         else { throw BridgeError.invalidPayload }
@@ -430,6 +442,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         return try store.update(discoveredDevices: discoveredDescriptors()) { candidate in
             guard candidate.buses.contains(where: { $0.id == id }) else { throw BridgeError.unknownBus }
             candidate.buses.removeAll { $0.id == id }
+            candidate.mutedBuses.removeAll { $0 == id }
         }
     }
 
@@ -657,7 +670,7 @@ extension AppDelegate {
             isEnabled: configuration.isEnabled,
             devices: bridgeDevices(configuration: configuration, discovered: discovered),
             outputs: bridgeOutputs(configuration: configuration, discovered: discovered, deviceLevels: deviceLevels),
-            buses: configuration.buses.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name, category: "virtual") },
+            buses: configuration.buses.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name, category: "virtual", muted: configuration.mutedBuses.contains($0.id)) },
             blackHoleRoutes: configuration.blackHoleRoutes.map { route in
                 let device = discovered[route.deviceUID.rawValue]
                 let selected = Self.bridgeChannels(route.channels)
