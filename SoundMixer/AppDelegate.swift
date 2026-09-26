@@ -832,7 +832,7 @@ extension AppDelegate {
                 id: id,
                 name: process?.name ?? id,
                 available: process?.isProducingOutput ?? false,
-                captureState: captureStates[id] ?? "stopped",
+                captureState: captureStates["application:\(id)"] ?? "stopped",
                 muted: configuration.mutedSources.contains(.application(ApplicationID(rawValue: id))),
                 level: sourceLevels["application:\(id)"],
                 registered: configuration.applications.contains(ApplicationID(rawValue: id)),
