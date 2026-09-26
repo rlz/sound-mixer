@@ -42,6 +42,7 @@ export function OutputDeviceCard({
             available={output.available}
             selected={selected}
             channelCount={output.outputChannels}
+            selectOnSurface
             onSelect={onSelect}
         >
             {output.meterState?.startsWith("unavailable:") && (

@@ -854,19 +854,6 @@ export function App() {
                                                             </button>
                                                         }
                                                     >
-                                                        <span
-                                                            className={`text-xs ${input.muted || input.sourceMuted ? "text-amber-300" : available ? "text-emerald-300" : "text-amber-300"}`}
-                                                        >
-                                                            {input.muted ||
-                                                            input.sourceMuted
-                                                                ? "Muted"
-                                                                : available
-                                                                  ? captureState ===
-                                                                    "capturing"
-                                                                      ? "Capturing"
-                                                                      : "Available"
-                                                                  : "Unavailable"}
-                                                        </span>
                                                         {unavailableReason && (
                                                             <span
                                                                 className="mt-1 block text-xs text-amber-200"
@@ -1349,32 +1336,6 @@ export function App() {
                                             </button>
                                         }
                                     >
-                                        {(!device.available ||
-                                            captureState !== "stopped") && (
-                                            <p className="mt-1 text-xs text-slate-400">
-                                                {!device.available
-                                                    ? "Disconnected"
-                                                    : captureState ===
-                                                        "capturing"
-                                                      ? "Capturing"
-                                                      : captureState.startsWith(
-                                                              "unavailable:",
-                                                          )
-                                                        ? captureState
-                                                              .slice(
-                                                                  "unavailable:"
-                                                                      .length,
-                                                              )
-                                                              .trim()
-                                                        : captureState ===
-                                                            "permissionDenied"
-                                                          ? "Permission denied"
-                                                          : captureState ===
-                                                              "idle"
-                                                            ? "No signal"
-                                                            : "Starting"}
-                                            </p>
-                                        )}
                                         {captureState ===
                                             "permissionDenied" && (
                                             <button
@@ -1627,23 +1588,11 @@ export function App() {
                                                     aria-hidden="true"
                                                 />
                                             </button>
-                                            <p className="mt-1 text-xs text-slate-400">
-                                                {route.available
-                                                    ? captureState ===
-                                                      "capturing"
-                                                        ? `Capturing input channels ${route.channels.join("/")}`
-                                                        : captureState.startsWith(
-                                                                "unavailable:",
-                                                            )
-                                                          ? captureState
-                                                                .slice(
-                                                                    "unavailable:"
-                                                                        .length,
-                                                                )
-                                                                .trim()
-                                                          : `Input channels ${route.channels.join("/")} available`
-                                                    : `Input channels ${route.channels.join("/")} unavailable`}
-                                            </p>
+                                            {!route.available && (
+                                                <p className="mt-1 text-xs text-amber-200" role="status">
+                                                    Input channels {route.channels.join("/")} unavailable
+                                                </p>
+                                            )}
                                             <LevelControl
                                                 name={route.name}
                                                 value={route.sourceLevel}
@@ -1788,40 +1737,11 @@ export function App() {
                                             </button>
                                         }
                                     >
-                                        <p
-                                            className={`mt-1 text-xs ${application.captureState.startsWith("unavailable:") || application.captureState === "permissionDenied" ? "text-amber-200" : "text-slate-400"}`}
-                                            role={
-                                                application.captureState.startsWith(
-                                                    "unavailable:",
-                                                ) ||
-                                                application.captureState ===
-                                                    "permissionDenied"
-                                                    ? "status"
-                                                    : undefined
-                                            }
-                                        >
-                                            {!application.available
-                                                ? "Application is not running or producing audio."
-                                                : application.captureState ===
-                                                    "capturing"
-                                                  ? "Capturing audio buffers."
-                                                  : application.captureState ===
-                                                      "starting"
-                                                    ? "Starting audio capture…"
-                                                    : application.captureState ===
-                                                        "permissionDenied"
-                                                      ? "System Audio Recording permission denied."
-                                                      : application.captureState.startsWith(
-                                                              "unavailable:",
-                                                          )
-                                                        ? application.captureState
-                                                              .slice(
-                                                                  "unavailable:"
-                                                                      .length,
-                                                              )
-                                                              .trim()
-                                                        : "Available"}
-                                        </p>
+                                        {(application.captureState.startsWith("unavailable:") || application.captureState === "permissionDenied") && (
+                                            <p className="mt-1 text-xs text-amber-200" role="status">
+                                                {application.captureState === "permissionDenied" ? "System Audio Recording permission denied." : application.captureState.slice("unavailable:".length).trim()}
+                                            </p>
+                                        )}
                                         {application.available &&
                                             application.captureState ===
                                                 "permissionDenied" && (

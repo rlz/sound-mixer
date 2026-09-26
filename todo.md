@@ -78,3 +78,10 @@ Statuses: `[ ]` = not started, `[~]` = in progress. Tasks are ordered by depende
 - [ ] Prepare a release build and repeat acceptance scenarios. **Done when:** a signed build is verified on a supported macOS version.
 - [~] Register application inputs independently of mixes. **Done when:** adding an application creates an active `app` input with its own live meter; it can be added to and removed from any mix, and removing the final mix row leaves it in Inputs. Separate persisted registration, immediate capture, and independent mix membership are implemented; live process-tap and migration behavior still need Mac verification.
 - [x] Show invalid-configuration cleanup as a dismissible notification. **Done when:** successful cleanup appears as a closable popup that dismisses after five seconds; cleanup failure remains an actionable startup error.
+
+- [x] Remove routine capture and mute captions from cards. **Done when:** cards rely on their status indicator, controls, and meters for routine state, while actionable permission and startup errors remain visible.
+- [x] Move device type to the first line of each card. **Done when:** the type caption appears above the item name and meter on shared input, output, and mix-input cards.
+- [x] Move channel count and card deletion action beside the device type. **Done when:** channel count and any trailing header action appear on the first line with the type caption.
+- [x] Move add-source actions beside the device type. **Done when:** add-input buttons appear in the card's first line with the type, channel count, and delete action.
+- [x] Make the full physical output card surface selectable. **Done when:** clicks on free card space, including the border, select the output, while clicks on controls operate only those controls.
+- [x] Keep output-card pointer styling consistent and allow text selection. **Done when:** the card uses the normal pointer, its text can be selected, and selecting text does not select the card.
