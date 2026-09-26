@@ -47,6 +47,7 @@ extension AppDelegate {
             }
             config.outputMixes.removeAll { $0.mix.inputs.isEmpty }
             config.mutedSources.removeAll { $0 == source }
+            config.sourceLevels.removeAll { $0.source == source }
         }
     }
 }

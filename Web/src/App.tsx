@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 import {
     faVolumeHigh,
     faVolumeXmark,
-    faMicrophone,
-    faDesktop,
     faPen,
     faTrashCan,
     faArrowRotateLeft,
@@ -19,18 +17,16 @@ import { AppHeader } from "./components/AppHeader";
 import { MasterSwitch } from "./components/MasterSwitch";
 import { PeakMeter } from "./components/PeakMeter";
 import { StableRange } from "./components/StableRange";
-import { AvailabilityDot } from "./components/AvailabilityDot";
 import { OutputDeviceCard } from "./components/OutputDeviceCard";
 import { VirtualDestinationCard } from "./components/VirtualDestinationCard";
+import { ItemCard } from "./components/ItemCard";
+import { LevelControl } from "./components/LevelControl";
+import {
+    decibelsToGain,
+    formatGainDecibels,
+    gainToDecibels,
+} from "./components/audioGain";
 import "./styles.css";
-
-const applicationGainToDecibels = (gain: number) =>
-    gain <= 0 ? -60 : Math.max(-60, 20 * Math.log10(gain));
-
-const formatApplicationGain = (decibels: number) =>
-    decibels <= -60
-        ? "Mute"
-        : `${decibels > 0 ? "+" : ""}${decibels.toFixed(1)} dB`;
 
 export function App() {
     const mixerState = useMixerStore((state) => state.mixerState);
@@ -120,6 +116,26 @@ export function App() {
             monoPlacement: "both",
         });
     };
+    const deleteVirtualItem = async (
+        kind: "bus" | "route",
+        id: string,
+        name: string,
+    ) => {
+        const approved = window.confirm(
+            kind === "route"
+                ? `Delete “${name}” and its saved mix? This also removes it as a source from every mix that uses it.`
+                : `Delete “${name}”? Mixes that use this bus will prevent deletion.`,
+        );
+        if (!approved) return;
+        const accepted = await send(`${kind}-delete:${id}`, {
+            command: kind === "route" ? "deleteRoute" : "deleteBus",
+            id,
+        });
+        if (accepted) {
+            setSelectedItem(null);
+            setBusNameDraft(null);
+        }
+    };
     const configuredInputIDs = new Set(
         (mixerState?.mixes ?? [])
             .flatMap((mix) => mix.inputs)
@@ -205,7 +221,7 @@ export function App() {
                     </p>
                 )}
 
-                <div className="grid min-h-0 flex-1 grid-cols-[clamp(250px,26vw,340px)_minmax(260px,1fr)_clamp(185px,21vw,275px)] overflow-hidden">
+                <div className="grid min-h-0 flex-1 grid-cols-3 overflow-hidden">
                     <nav
                         aria-label="Mixer items"
                         className="min-h-0 min-w-0 [scrollbar-gutter:stable] space-y-3.5 overflow-x-hidden overflow-y-auto overscroll-contain border-r border-slate-700 bg-slate-900 p-3.5"
@@ -290,6 +306,15 @@ export function App() {
                                         key={bus.id}
                                         name={bus.name}
                                         kind="bus"
+                                        deleteDisabled={pending !== null}
+                                        onDelete={() =>
+                                            void deleteVirtualItem(
+                                                "bus",
+                                                bus.id,
+                                                bus.name,
+                                            )
+                                        }
+                                        channelCount={2}
                                         muted={bus.muted}
                                         selected={
                                             selectedItem === `bus:${bus.id}`
@@ -314,7 +339,13 @@ export function App() {
                                                 true,
                                             )
                                         }
-                                        onMuteChange={(muted) => send(`bus-mute:${bus.id}`, { command: "setBusMuted", id: bus.id, muted })}
+                                        onMuteChange={(muted) =>
+                                            send(`bus-mute:${bus.id}`, {
+                                                command: "setBusMuted",
+                                                id: bus.id,
+                                                muted,
+                                            })
+                                        }
                                     />
                                 );
                             })}
@@ -353,8 +384,29 @@ export function App() {
                                         key={route.id}
                                         name={route.name}
                                         kind="BlackHole route"
-                                        muteAvailable={mixerState.outputs.find((output) => output.uid === route.deviceUID)?.muteWritable ?? false}
-                                        muted={mixerState.outputs.find((output) => output.uid === route.deviceUID)?.muted ?? false}
+                                        deleteDisabled={pending !== null}
+                                        onDelete={() =>
+                                            void deleteVirtualItem(
+                                                "route",
+                                                route.id,
+                                                route.name,
+                                            )
+                                        }
+                                        channelCount={route.channels.length}
+                                        muteAvailable={
+                                            mixerState.outputs.find(
+                                                (output) =>
+                                                    output.uid ===
+                                                    route.deviceUID,
+                                            )?.muteWritable ?? false
+                                        }
+                                        muted={
+                                            mixerState.outputs.find(
+                                                (output) =>
+                                                    output.uid ===
+                                                    route.deviceUID,
+                                            )?.muted ?? false
+                                        }
                                         available={route.available}
                                         selected={
                                             selectedItem ===
@@ -383,7 +435,16 @@ export function App() {
                                                 true,
                                             )
                                         }
-                                        onMuteChange={(muted) => send(`device-mute:${route.deviceUID}`, { command: "setDeviceMuted", uid: route.deviceUID, muted })}
+                                        onMuteChange={(muted) =>
+                                            send(
+                                                `device-mute:${route.deviceUID}`,
+                                                {
+                                                    command: "setDeviceMuted",
+                                                    uid: route.deviceUID,
+                                                    muted,
+                                                },
+                                            )
+                                        }
                                     />
                                 );
                             })}
@@ -469,35 +530,18 @@ export function App() {
                                                 title="Delete"
                                                 className="flex h-8 w-8 items-center justify-center rounded-md text-rose-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-300 disabled:opacity-50"
                                                 onClick={() => {
-                                                    if (
-                                                        selectedRoute &&
-                                                        window.confirm(
-                                                            `Delete “${selectedRoute.name}” and its saved mix? This also removes it as a source from every mix that uses it.`,
-                                                        )
-                                                    ) {
-                                                        void send(
-                                                            `route-delete:${selectedRoute.id}`,
-                                                            {
-                                                                command:
-                                                                    "deleteRoute",
-                                                                id: selectedRoute.id,
-                                                            },
+                                                    if (selectedRoute)
+                                                        void deleteVirtualItem(
+                                                            "route",
+                                                            selectedRoute.id,
+                                                            selectedRoute.name,
                                                         );
-                                                    } else if (
-                                                        selectedBus &&
-                                                        window.confirm(
-                                                            `Delete “${selectedBus.name}”? Mixes that use this bus will prevent deletion.`,
-                                                        )
-                                                    ) {
-                                                        void send(
-                                                            `bus-delete:${selectedBus.id}`,
-                                                            {
-                                                                command:
-                                                                    "deleteBus",
-                                                                id: selectedBus.id,
-                                                            },
+                                                    else if (selectedBus)
+                                                        void deleteVirtualItem(
+                                                            "bus",
+                                                            selectedBus.id,
+                                                            selectedBus.name,
                                                         );
-                                                    }
                                                 }}
                                             >
                                                 <FontAwesomeIcon
@@ -527,50 +571,47 @@ export function App() {
                                     }}
                                 >
                                     <div className="grid gap-3 sm:grid-cols-2">
-                                            <label className="text-sm">
-                                                BlackHole device
-                                                <select
-                                                    required
-                                                    value={routeDeviceUID}
-                                                    onChange={(event) =>
-                                                        setRouteDeviceUID(
-                                                            event.currentTarget
-                                                                .value,
-                                                        )
-                                                    }
-                                                    className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
-                                                >
-                                                    <option value="">
-                                                        Choose an available
-                                                        device
-                                                    </option>
-                                                    {mixerState?.outputs
-                                                        .filter(
-                                                            (output) =>
-                                                                output.isBlackHole &&
-                                                                output.available,
-                                                        )
-                                                        .map((output) => (
-                                                            <option
-                                                                key={output.uid}
-                                                                value={
-                                                                    output.uid
-                                                                }
-                                                            >
-                                                                {output.name} ·{" "}
-                                                                {
-                                                                    output.outputChannels
-                                                                }{" "}
-                                                                channels
-                                                            </option>
-                                                        ))}
-                                                </select>
-                                            </label>
+                                        <label className="text-sm">
+                                            BlackHole device
+                                            <select
+                                                required
+                                                value={routeDeviceUID}
+                                                onChange={(event) =>
+                                                    setRouteDeviceUID(
+                                                        event.currentTarget
+                                                            .value,
+                                                    )
+                                                }
+                                                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                                            >
+                                                <option value="">
+                                                    Choose an available device
+                                                </option>
+                                                {mixerState?.outputs
+                                                    .filter(
+                                                        (output) =>
+                                                            output.isBlackHole &&
+                                                            output.available,
+                                                    )
+                                                    .map((output) => (
+                                                        <option
+                                                            key={output.uid}
+                                                            value={output.uid}
+                                                        >
+                                                            {output.name} ·{" "}
+                                                            {
+                                                                output.outputChannels
+                                                            }{" "}
+                                                            channels
+                                                        </option>
+                                                    ))}
+                                            </select>
+                                        </label>
                                     </div>
                                     <p className="text-xs text-slate-400">
                                         Sound Mixer assigns the lowest free
-                                        adjacent stereo pair and names the
-                                        route from its channels.
+                                        adjacent stereo pair and names the route
+                                        from its channels.
                                     </p>
                                     <button
                                         type="submit"
@@ -726,128 +767,174 @@ export function App() {
                                             return (
                                                 <li
                                                     key={`${input.kind}:${input.id}`}
-                                                    className="rounded-xl border border-slate-800 bg-slate-900/70 p-3"
                                                 >
-                                                    <PeakMeter
+                                                    <ItemCard
+                                                        name={name}
+                                                        type={
+                                                            input.kind ===
+                                                            "inputDevice"
+                                                                ? "System"
+                                                                : input.kind ===
+                                                                    "blackHoleRoute"
+                                                                  ? "BlackHole"
+                                                                  : input.kind ===
+                                                                      "bus"
+                                                                    ? "Virtual"
+                                                                    : "Application"
+                                                        }
                                                         level={
                                                             input.levelReading
                                                         }
-                                                        label={`${name} mix source`}
-                                                    />
-                                                    <div className="mb-2 flex items-center justify-between gap-3">
-                                                        <div className="min-w-0">
-                                                            <span className="block truncate text-sm">
-                                                                {name}
-                                                            </span>
-                                                            <span
-                                                                className={`text-xs ${input.muted ? "text-amber-300" : available ? "text-emerald-300" : "text-amber-300"}`}
-                                                            >
-                                                                {input.muted
-                                                                    ? "Muted"
-                                                                    : available
-                                                                      ? captureState ===
-                                                                        "capturing"
-                                                                          ? "Capturing"
-                                                                          : "Available"
-                                                                      : "Unavailable"}
-                                                            </span>
-                                                            {unavailableReason && (
-                                                                <span
-                                                                    className="mt-1 block text-xs text-amber-200"
-                                                                    role="status"
-                                                                >
-                                                                    {
-                                                                        unavailableReason
-                                                                    }
-                                                                    {captureState ===
-                                                                        "permissionDenied" && (
-                                                                        <button
-                                                                            type="button"
-                                                                            className="ml-1 underline"
-                                                                            onClick={() =>
-                                                                                void send(
-                                                                                    `privacy:${input.id}`,
-                                                                                    {
-                                                                                        command:
-                                                                                            "openPrivacySettings",
-                                                                                    },
-                                                                                )
-                                                                            }
-                                                                        >
-                                                                            Open
-                                                                            System
-                                                                            Settings
-                                                                        </button>
-                                                                    )}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <button
-                                                            type="button"
-                                                            aria-label={`Remove ${name} from mix`}
-                                                            title="Remove from mix"
-                                                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-rose-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-300"
-                                                            onClick={() =>
-                                                                void send(
-                                                                    `mix-remove:${input.id}`,
-                                                                    {
-                                                                        command:
-                                                                            "removeMixInput",
-                                                                        ...selectedTarget,
-                                                                        kind: input.kind,
-                                                                        sourceID:
-                                                                            input.id,
-                                                                    },
-                                                                )
-                                                            }
-                                                        >
-                                                            <FontAwesomeIcon
-                                                                icon={
-                                                                    faTrashCan
+                                                        levelLabel={`${name} mix source`}
+                                                        available={available}
+                                                        status={
+                                                            !available ||
+                                                            captureState ===
+                                                                "permissionDenied" ||
+                                                            captureState.startsWith(
+                                                                "unavailable:",
+                                                            )
+                                                                ? "problem"
+                                                                : captureState ===
+                                                                    "capturing"
+                                                                  ? "active"
+                                                                  : "inactive"
+                                                        }
+                                                        channelCount={
+                                                            channelCount ||
+                                                            (input.kind ===
+                                                            "inputDevice"
+                                                                ? undefined
+                                                                : 2)
+                                                        }
+                                                        trailingAction={
+                                                            <button
+                                                                type="button"
+                                                                aria-label={`Remove ${name} from mix`}
+                                                                title="Remove from mix"
+                                                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-rose-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-300"
+                                                                onClick={() =>
+                                                                    void send(
+                                                                        `mix-remove:${input.id}`,
+                                                                        {
+                                                                            command:
+                                                                                "removeMixInput",
+                                                                            ...selectedTarget,
+                                                                            kind: input.kind,
+                                                                            sourceID:
+                                                                                input.id,
+                                                                        },
+                                                                    )
                                                                 }
-                                                                aria-hidden="true"
-                                                            />
-                                                        </button>
-                                                    </div>
-                                                    <label className="flex items-center gap-3 text-xs">
-                                                        {input.kind === "app"
-                                                            ? "App gain"
-                                                            : "Source level"}{" "}
-                                                        <StableRange
-                                                            value={
+                                                            >
+                                                                <FontAwesomeIcon
+                                                                    icon={
+                                                                        faTrashCan
+                                                                    }
+                                                                    aria-hidden="true"
+                                                                />
+                                                            </button>
+                                                        }
+                                                    >
+                                                        <span
+                                                            className={`text-xs ${input.muted ? "text-amber-300" : available ? "text-emerald-300" : "text-amber-300"}`}
+                                                        >
+                                                            {input.muted
+                                                                ? "Muted"
+                                                                : available
+                                                                  ? captureState ===
+                                                                    "capturing"
+                                                                      ? "Capturing"
+                                                                      : "Available"
+                                                                  : "Unavailable"}
+                                                        </span>
+                                                        {unavailableReason && (
+                                                            <span
+                                                                className="mt-1 block text-xs text-amber-200"
+                                                                role="status"
+                                                            >
+                                                                {
+                                                                    unavailableReason
+                                                                }
+                                                                {captureState ===
+                                                                    "permissionDenied" && (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="ml-1 underline"
+                                                                        onClick={() =>
+                                                                            void send(
+                                                                                `privacy:${input.id}`,
+                                                                                {
+                                                                                    command:
+                                                                                        "openPrivacySettings",
+                                                                                },
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        Open
+                                                                        System
+                                                                        Settings
+                                                                    </button>
+                                                                )}
+                                                            </span>
+                                                        )}
+
+                                                        <LevelControl
+                                                            name={name}
+                                                            value={input.level}
+                                                            muted={
                                                                 input.kind ===
-                                                                "app"
-                                                                    ? applicationGainToDecibels(
-                                                                          input.level,
+                                                                "bus"
+                                                                    ? (mixerState?.buses.find(
+                                                                          (
+                                                                              bus,
+                                                                          ) =>
+                                                                              bus.id ===
+                                                                              input.id,
                                                                       )
-                                                                    : input.level
+                                                                          ?.muted ??
+                                                                      false)
+                                                                    : input.muted
                                                             }
-                                                            label={`${name} ${input.kind === "app" ? "app gain" : "source level"}`}
-                                                            min={
-                                                                input.kind ===
-                                                                "app"
-                                                                    ? -60
-                                                                    : 0
-                                                            }
-                                                            max={
-                                                                input.kind ===
-                                                                "app"
-                                                                    ? 30
-                                                                    : 1
-                                                            }
-                                                            step={
-                                                                input.kind ===
-                                                                "app"
-                                                                    ? 0.5
-                                                                    : 0.01
-                                                            }
-                                                            formatValue={
-                                                                input.kind ===
-                                                                "app"
-                                                                    ? formatApplicationGain
-                                                                    : undefined
-                                                            }
-                                                            onCommit={(value) =>
+                                                            onMuteChange={(
+                                                                muted,
+                                                            ) => {
+                                                                if (
+                                                                    input.kind ===
+                                                                    "bus"
+                                                                )
+                                                                    void send(
+                                                                        `bus-mute:${input.id}`,
+                                                                        {
+                                                                            command:
+                                                                                "setBusMuted",
+                                                                            id: input.id,
+                                                                            muted,
+                                                                        },
+                                                                    );
+                                                                else
+                                                                    void send(
+                                                                        `mute-source:${input.kind}:${input.id}`,
+                                                                        {
+                                                                            command:
+                                                                                "setSourceMuted",
+                                                                            kind:
+                                                                                input.kind ===
+                                                                                "app"
+                                                                                    ? "application"
+                                                                                    : (input.kind as
+                                                                                          | "inputDevice"
+                                                                                          | "blackHoleRoute"),
+                                                                            sourceID:
+                                                                                input.id,
+                                                                            muted,
+                                                                        },
+                                                                    );
+                                                            }}
+                                                            levelLabel={`${name} source volume`}
+                                                            onLevelChange={(
+                                                                value,
+                                                            ) =>
                                                                 send(
                                                                     `mix-level:${input.id}`,
                                                                     {
@@ -857,233 +944,141 @@ export function App() {
                                                                         kind: input.kind,
                                                                         sourceID:
                                                                             input.id,
-                                                                        level:
-                                                                            input.kind ===
-                                                                            "app"
-                                                                                ? value <=
-                                                                                  -60
-                                                                                    ? 0
-                                                                                    : Math.pow(
-                                                                                          10,
-                                                                                          value /
-                                                                                              20,
-                                                                                      )
-                                                                                : value,
+                                                                        level: value,
                                                                     },
                                                                 )
                                                             }
                                                         />
-                                                        <span>
-                                                            {input.kind ===
-                                                            "app"
-                                                                ? formatApplicationGain(
-                                                                      applicationGainToDecibels(
-                                                                          input.level,
-                                                                      ),
-                                                                  )
-                                                                : `${Math.round(input.level * 100)}%`}
-                                                        </span>
-                                                    </label>
-                                                    {input.kind ===
-                                                        "inputDevice" && (
-                                                        <div className="mt-3">
-                                                            <button
-                                                                type="button"
-                                                                aria-expanded={
-                                                                    openChannelEditor ===
-                                                                    editorKey
-                                                                }
-                                                                aria-controls={`channels-${input.id}`}
-                                                                className="rounded border border-slate-700 px-2 py-1 text-xs text-sky-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
-                                                                onClick={() =>
-                                                                    setOpenChannelEditor(
+                                                        {input.kind ===
+                                                            "inputDevice" && (
+                                                            <div className="mt-3">
+                                                                <button
+                                                                    type="button"
+                                                                    aria-expanded={
                                                                         openChannelEditor ===
-                                                                            editorKey
-                                                                            ? null
-                                                                            : editorKey,
-                                                                    )
-                                                                }
-                                                            >
-                                                                Channels (
-                                                                {channelCount ||
-                                                                    input
-                                                                        .channelRouting
-                                                                        .length}
-                                                                )
-                                                            </button>
-                                                            {openChannelEditor ===
-                                                                editorKey && (
-                                                                <div
-                                                                    id={`channels-${input.id}`}
-                                                                    className="mt-2 rounded-lg border border-slate-800 bg-slate-950 p-3"
+                                                                        editorKey
+                                                                    }
+                                                                    aria-controls={`channels-${input.id}`}
+                                                                    className="rounded border border-slate-700 px-2 py-1 text-xs text-sky-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
+                                                                    onClick={() =>
+                                                                        setOpenChannelEditor(
+                                                                            openChannelEditor ===
+                                                                                editorKey
+                                                                                ? null
+                                                                                : editorKey,
+                                                                        )
+                                                                    }
                                                                 >
-                                                                    <label className="mb-3 flex items-center gap-2 text-xs">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={
-                                                                                input.channelsLinked
-                                                                            }
-                                                                            onChange={(
-                                                                                event,
-                                                                            ) => {
-                                                                                const linked =
-                                                                                    event
-                                                                                        .currentTarget
-                                                                                        .checked;
-                                                                                void send(
-                                                                                    `channels:${input.id}`,
-                                                                                    {
-                                                                                        command:
-                                                                                            "setPhysicalInputChannels",
-                                                                                        ...selectedTarget,
-                                                                                        sourceID:
-                                                                                            input.id,
-                                                                                        channelRouting:
-                                                                                            routing,
-                                                                                        channelLevels:
-                                                                                            levels,
-                                                                                        channelsLinked:
-                                                                                            linked,
-                                                                                    },
-                                                                                );
-                                                                            }}
-                                                                        />
-                                                                        Link
-                                                                        gains
-                                                                        while
-                                                                        preserving
-                                                                        relative
-                                                                        channel
-                                                                        levels
-                                                                    </label>
-                                                                    <div className="space-y-2">
-                                                                        {routing.map(
-                                                                            (
-                                                                                choice,
-                                                                                index,
-                                                                            ) => (
-                                                                                <div
-                                                                                    key={
-                                                                                        index
-                                                                                    }
-                                                                                    className="grid grid-cols-[minmax(9rem,1.2fr)_minmax(7rem,1fr)_minmax(7rem,1fr)] items-center gap-2 text-xs"
-                                                                                >
-                                                                                    <div className="min-w-0">
-                                                                                        <span>
-                                                                                            Channel{" "}
-                                                                                            {index +
-                                                                                                1}
-                                                                                        </span>
-                                                                                        <PeakMeter
-                                                                                            level={
-                                                                                                mixerState?.inputCaptureStates.find(
-                                                                                                    (
-                                                                                                        state,
-                                                                                                    ) =>
-                                                                                                        state.uid ===
-                                                                                                        input.id,
-                                                                                                )
-                                                                                                    ?.channelLevels[
-                                                                                                    index
-                                                                                                ]
-                                                                                            }
-                                                                                            label={`${name} channel ${index + 1}`}
-                                                                                        />
-                                                                                    </div>
-                                                                                    <select
-                                                                                        value={
-                                                                                            choice
+                                                                    Channels (
+                                                                    {channelCount ||
+                                                                        input
+                                                                            .channelRouting
+                                                                            .length}
+                                                                    )
+                                                                </button>
+                                                                {openChannelEditor ===
+                                                                    editorKey && (
+                                                                    <div
+                                                                        id={`channels-${input.id}`}
+                                                                        className="mt-2 rounded-lg border border-slate-800 bg-slate-950 p-3"
+                                                                    >
+                                                                        <label className="mb-3 flex items-center gap-2 text-xs">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={
+                                                                                    input.channelsLinked
+                                                                                }
+                                                                                onChange={(
+                                                                                    event,
+                                                                                ) => {
+                                                                                    const linked =
+                                                                                        event
+                                                                                            .currentTarget
+                                                                                            .checked;
+                                                                                    void send(
+                                                                                        `channels:${input.id}`,
+                                                                                        {
+                                                                                            command:
+                                                                                                "setPhysicalInputChannels",
+                                                                                            ...selectedTarget,
+                                                                                            sourceID:
+                                                                                                input.id,
+                                                                                            channelRouting:
+                                                                                                routing,
+                                                                                            channelLevels:
+                                                                                                levels,
+                                                                                            channelsLinked:
+                                                                                                linked,
+                                                                                        },
+                                                                                    );
+                                                                                }}
+                                                                            />
+                                                                            Link
+                                                                            gains
+                                                                            while
+                                                                            preserving
+                                                                            relative
+                                                                            channel
+                                                                            levels
+                                                                        </label>
+                                                                        <div className="space-y-2">
+                                                                            {routing.map(
+                                                                                (
+                                                                                    choice,
+                                                                                    index,
+                                                                                ) => (
+                                                                                    <div
+                                                                                        key={
+                                                                                            index
                                                                                         }
-                                                                                        aria-label={`Channel ${index + 1} routing`}
-                                                                                        disabled={
-                                                                                            pending !==
-                                                                                            null
-                                                                                        }
-                                                                                        className="rounded border border-slate-700 bg-slate-900 px-2 py-1"
-                                                                                        onChange={(
-                                                                                            event,
-                                                                                        ) => {
-                                                                                            const nextRouting =
-                                                                                                [
-                                                                                                    ...routing,
-                                                                                                ];
-                                                                                            nextRouting[
-                                                                                                index
-                                                                                            ] =
-                                                                                                event
-                                                                                                    .currentTarget
-                                                                                                    .value as typeof choice;
-                                                                                            void send(
-                                                                                                `channels:${input.id}`,
-                                                                                                {
-                                                                                                    command:
-                                                                                                        "setPhysicalInputChannels",
-                                                                                                    ...selectedTarget,
-                                                                                                    sourceID:
-                                                                                                        input.id,
-                                                                                                    channelRouting:
-                                                                                                        nextRouting,
-                                                                                                    channelLevels:
-                                                                                                        levels,
-                                                                                                    channelsLinked:
-                                                                                                        input.channelsLinked,
-                                                                                                },
-                                                                                            );
-                                                                                        }}
+                                                                                        className="grid grid-cols-[minmax(9rem,1.2fr)_minmax(7rem,1fr)_minmax(7rem,1fr)] items-center gap-2 text-xs"
                                                                                     >
-                                                                                        <option value="ignore">
-                                                                                            Ignore
-                                                                                        </option>
-                                                                                        <option value="first">
-                                                                                            First
-                                                                                        </option>
-                                                                                        <option value="second">
-                                                                                            Second
-                                                                                        </option>
-                                                                                        <option value="both">
-                                                                                            Both
-                                                                                        </option>
-                                                                                    </select>
-                                                                                    <label className="flex items-center gap-2">
-                                                                                        <StableRange
-                                                                                            value={
-                                                                                                input.channelsLinked
-                                                                                                    ? linkedLevel
-                                                                                                    : (levels[
-                                                                                                          index
-                                                                                                      ] ??
-                                                                                                      1)
-                                                                                            }
-                                                                                            label={
-                                                                                                input.channelsLinked
-                                                                                                    ? `${name} linked channel gain, channel 1 reference`
-                                                                                                    : `${name} channel ${index + 1} level`
-                                                                                            }
-                                                                                            disabled={
-                                                                                                input.channelsLinked &&
-                                                                                                index >
-                                                                                                    0
-                                                                                            }
-                                                                                            onCommit={(
-                                                                                                value,
-                                                                                            ) => {
-                                                                                                const nextLevels =
-                                                                                                    input.channelsLinked
-                                                                                                        ? scaleLinkedLevels(
-                                                                                                              value,
-                                                                                                          )
-                                                                                                        : [
-                                                                                                              ...levels,
-                                                                                                          ];
-                                                                                                if (
-                                                                                                    !input.channelsLinked
-                                                                                                ) {
-                                                                                                    nextLevels[
+                                                                                        <div className="min-w-0">
+                                                                                            <span>
+                                                                                                Channel{" "}
+                                                                                                {index +
+                                                                                                    1}
+                                                                                            </span>
+                                                                                            <PeakMeter
+                                                                                                level={
+                                                                                                    mixerState?.inputCaptureStates.find(
+                                                                                                        (
+                                                                                                            state,
+                                                                                                        ) =>
+                                                                                                            state.uid ===
+                                                                                                            input.id,
+                                                                                                    )
+                                                                                                        ?.channelLevels[
                                                                                                         index
-                                                                                                    ] =
-                                                                                                        value;
+                                                                                                    ]
                                                                                                 }
-                                                                                                return send(
+                                                                                                label={`${name} channel ${index + 1}`}
+                                                                                            />
+                                                                                        </div>
+                                                                                        <select
+                                                                                            value={
+                                                                                                choice
+                                                                                            }
+                                                                                            aria-label={`Channel ${index + 1} routing`}
+                                                                                            disabled={
+                                                                                                pending !==
+                                                                                                null
+                                                                                            }
+                                                                                            className="rounded border border-slate-700 bg-slate-900 px-2 py-1"
+                                                                                            onChange={(
+                                                                                                event,
+                                                                                            ) => {
+                                                                                                const nextRouting =
+                                                                                                    [
+                                                                                                        ...routing,
+                                                                                                    ];
+                                                                                                nextRouting[
+                                                                                                    index
+                                                                                                ] =
+                                                                                                    event
+                                                                                                        .currentTarget
+                                                                                                        .value as typeof choice;
+                                                                                                void send(
                                                                                                     `channels:${input.id}`,
                                                                                                     {
                                                                                                         command:
@@ -1092,95 +1087,182 @@ export function App() {
                                                                                                         sourceID:
                                                                                                             input.id,
                                                                                                         channelRouting:
-                                                                                                            routing,
+                                                                                                            nextRouting,
                                                                                                         channelLevels:
-                                                                                                            nextLevels,
+                                                                                                            levels,
                                                                                                         channelsLinked:
                                                                                                             input.channelsLinked,
                                                                                                     },
                                                                                                 );
                                                                                             }}
-                                                                                        />
-                                                                                        <span>
-                                                                                            {Math.round(
-                                                                                                (levels[
-                                                                                                    index
-                                                                                                ] ??
-                                                                                                    1) *
-                                                                                                    100,
-                                                                                            )}
-
-                                                                                            %
-                                                                                        </span>
-                                                                                    </label>
-                                                                                </div>
-                                                                            ),
-                                                                        )}
-                                                                        {channelCount ===
-                                                                            0 && (
-                                                                            <p className="text-amber-200">
-                                                                                Input
-                                                                                channels
-                                                                                are
-                                                                                unavailable.
-                                                                                Saved
-                                                                                settings
-                                                                                are
-                                                                                retained.
-                                                                            </p>
-                                                                        )}
+                                                                                        >
+                                                                                            <option value="ignore">
+                                                                                                Ignore
+                                                                                            </option>
+                                                                                            <option value="first">
+                                                                                                First
+                                                                                            </option>
+                                                                                            <option value="second">
+                                                                                                Second
+                                                                                            </option>
+                                                                                            <option value="both">
+                                                                                                Both
+                                                                                            </option>
+                                                                                        </select>
+                                                                                        <label className="flex items-center gap-2">
+                                                                                            <StableRange
+                                                                                                value={gainToDecibels(
+                                                                                                    input.channelsLinked
+                                                                                                        ? linkedLevel
+                                                                                                        : (levels[
+                                                                                                              index
+                                                                                                          ] ??
+                                                                                                              1),
+                                                                                                )}
+                                                                                                label={
+                                                                                                    input.channelsLinked
+                                                                                                        ? `${name} linked channel gain, channel 1 reference`
+                                                                                                        : `${name} channel ${index + 1} level`
+                                                                                                }
+                                                                                                disabled={
+                                                                                                    input.channelsLinked &&
+                                                                                                    index >
+                                                                                                        0
+                                                                                                }
+                                                                                                onCommit={(
+                                                                                                    decibels,
+                                                                                                ) => {
+                                                                                                    const value =
+                                                                                                        decibelsToGain(
+                                                                                                            decibels,
+                                                                                                        );
+                                                                                                    const nextLevels =
+                                                                                                        input.channelsLinked
+                                                                                                            ? scaleLinkedLevels(
+                                                                                                                  value,
+                                                                                                              )
+                                                                                                            : [
+                                                                                                                  ...levels,
+                                                                                                              ];
+                                                                                                    if (
+                                                                                                        !input.channelsLinked
+                                                                                                    ) {
+                                                                                                        nextLevels[
+                                                                                                            index
+                                                                                                        ] =
+                                                                                                            value;
+                                                                                                    }
+                                                                                                    return send(
+                                                                                                        `channels:${input.id}`,
+                                                                                                        {
+                                                                                                            command:
+                                                                                                                "setPhysicalInputChannels",
+                                                                                                            ...selectedTarget,
+                                                                                                            sourceID:
+                                                                                                                input.id,
+                                                                                                            channelRouting:
+                                                                                                                routing,
+                                                                                                            channelLevels:
+                                                                                                                nextLevels,
+                                                                                                            channelsLinked:
+                                                                                                                input.channelsLinked,
+                                                                                                        },
+                                                                                                    );
+                                                                                                }}
+                                                                                                min={
+                                                                                                    -60
+                                                                                                }
+                                                                                                max={
+                                                                                                    0
+                                                                                                }
+                                                                                                step={
+                                                                                                    0.5
+                                                                                                }
+                                                                                                formatValue={
+                                                                                                    formatGainDecibels
+                                                                                                }
+                                                                                            />
+                                                                                            <span>
+                                                                                                {formatGainDecibels(
+                                                                                                    gainToDecibels(
+                                                                                                        levels[
+                                                                                                            index
+                                                                                                        ] ??
+                                                                                                            1,
+                                                                                                    ),
+                                                                                                )}
+                                                                                            </span>
+                                                                                        </label>
+                                                                                    </div>
+                                                                                ),
+                                                                            )}
+                                                                            {channelCount ===
+                                                                                0 && (
+                                                                                <p className="text-amber-200">
+                                                                                    Input
+                                                                                    channels
+                                                                                    are
+                                                                                    unavailable.
+                                                                                    Saved
+                                                                                    settings
+                                                                                    are
+                                                                                    retained.
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                    {input.kind === "app" && (
-                                                        <label className="mt-2 flex items-center gap-2 text-xs">
-                                                            Mono placement{" "}
-                                                            <select
-                                                                value={
-                                                                    input.monoPlacement
-                                                                }
-                                                                disabled={
-                                                                    pending !==
-                                                                    null
-                                                                }
-                                                                onChange={(
-                                                                    event,
-                                                                ) =>
-                                                                    void send(
-                                                                        `mono:${input.id}`,
-                                                                        {
-                                                                            command:
-                                                                                "setMonoPlacement",
-                                                                            ...selectedTarget,
-                                                                            kind: input.kind,
-                                                                            sourceID:
-                                                                                input.id,
-                                                                            monoPlacement:
-                                                                                event
-                                                                                    .currentTarget
-                                                                                    .value as
-                                                                                    | "left"
-                                                                                    | "right"
-                                                                                    | "both",
-                                                                        },
-                                                                    )
-                                                                }
-                                                                className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
-                                                            >
-                                                                <option value="both">
-                                                                    Stereo
-                                                                </option>
-                                                                <option value="left">
-                                                                    Left
-                                                                </option>
-                                                                <option value="right">
-                                                                    Right
-                                                                </option>
-                                                            </select>
-                                                        </label>
-                                                    )}
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {input.kind ===
+                                                            "app" && (
+                                                            <label className="mt-2 flex items-center gap-2 text-xs">
+                                                                Mono placement{" "}
+                                                                <select
+                                                                    value={
+                                                                        input.monoPlacement
+                                                                    }
+                                                                    disabled={
+                                                                        pending !==
+                                                                        null
+                                                                    }
+                                                                    onChange={(
+                                                                        event,
+                                                                    ) =>
+                                                                        void send(
+                                                                            `mono:${input.id}`,
+                                                                            {
+                                                                                command:
+                                                                                    "setMonoPlacement",
+                                                                                ...selectedTarget,
+                                                                                kind: input.kind,
+                                                                                sourceID:
+                                                                                    input.id,
+                                                                                monoPlacement:
+                                                                                    event
+                                                                                        .currentTarget
+                                                                                        .value as
+                                                                                        | "left"
+                                                                                        | "right"
+                                                                                        | "both",
+                                                                            },
+                                                                        )
+                                                                    }
+                                                                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                                                                >
+                                                                    <option value="both">
+                                                                        Stereo
+                                                                    </option>
+                                                                    <option value="left">
+                                                                        Left
+                                                                    </option>
+                                                                    <option value="right">
+                                                                        Right
+                                                                    </option>
+                                                                </select>
+                                                            </label>
+                                                        )}
+                                                    </ItemCard>
                                                 </li>
                                             );
                                         })}
@@ -1216,56 +1298,63 @@ export function App() {
                                             input.id === device.uid,
                                     ) ?? false;
                                 return (
-                                    <div
+                                    <ItemCard
                                         key={device.uid}
-                                        className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2"
-                                    >
-                                        <div className="flex items-start justify-between gap-2">
-                                            <span className="flex min-w-0 items-center gap-2 truncate text-sm">
-                                                <FontAwesomeIcon
-                                                    icon={faMicrophone}
-                                                    aria-hidden="true"
-                                                    className="text-slate-400"
-                                                />
-                                                <AvailabilityDot
-                                                    available={device.available}
-                                                />
-                                                {device.name}
-                                            </span>
+                                        name={device.name}
+                                        type="System"
+                                        level={inputState?.level}
+                                        levelLabel={`${device.name} input`}
+                                        available={device.available}
+                                        status={
+                                            !device.available ||
+                                            captureState ===
+                                                "permissionDenied" ||
+                                            captureState.startsWith(
+                                                "unavailable:",
+                                            )
+                                                ? "problem"
+                                                : captureState === "capturing"
+                                                  ? "active"
+                                                  : "inactive"
+                                        }
+                                        channelCount={device.inputChannels}
+                                        leadingAction={
                                             <button
                                                 type="button"
-                                                disabled={pending !== null}
-                                                aria-pressed={device.muted}
-                                                aria-label={`${device.muted ? "Unmute" : "Mute"} ${device.name} globally`}
-                                                title={`${device.muted ? "Unmute" : "Mute"} ${device.name} globally`}
-                                                className="inline-flex min-h-7 min-w-7 items-center justify-center rounded-md text-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 disabled:opacity-50"
+                                                disabled={
+                                                    !selectedTarget ||
+                                                    alreadyInSelectedMix ||
+                                                    pending !== null
+                                                }
+                                                aria-label={
+                                                    alreadyInSelectedMix
+                                                        ? `${device.name} is already in the selected mix`
+                                                        : `Add ${device.name} to the selected mix`
+                                                }
+                                                title={
+                                                    alreadyInSelectedMix
+                                                        ? "Already in mix"
+                                                        : `Add ${device.name} to mix`
+                                                }
+                                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
                                                 onClick={() =>
-                                                    void send(
-                                                        `mute-input:${device.uid}`,
-                                                        {
-                                                            command:
-                                                                "setSourceMuted",
-                                                            kind: "inputDevice",
-                                                            sourceID:
-                                                                device.uid,
-                                                            muted: !device.muted,
-                                                        },
+                                                    addSourceToSelectedMix(
+                                                        "inputDevice",
+                                                        device.uid,
                                                     )
                                                 }
                                             >
                                                 <FontAwesomeIcon
                                                     icon={
-                                                        device.muted
-                                                            ? faVolumeXmark
-                                                            : faVolumeHigh
+                                                        alreadyInSelectedMix
+                                                            ? faCheck
+                                                            : faPlus
                                                     }
                                                     aria-hidden="true"
                                                 />
                                             </button>
-                                        </div>
-                                        <p className="mt-1 text-xs text-slate-400">
-                                            System
-                                        </p>
+                                        }
+                                    >
                                         {(!device.available ||
                                             captureState !== "stopped") && (
                                             <p className="mt-1 text-xs text-slate-400">
@@ -1310,45 +1399,40 @@ export function App() {
                                                 Open System Settings
                                             </button>
                                         )}
-                                        <PeakMeter
-                                            level={inputState?.level}
-                                            label={device.name}
-                                        />
-                                        <button
-                                            type="button"
-                                            disabled={
-                                                !selectedTarget ||
-                                                alreadyInSelectedMix ||
-                                                pending !== null
-                                            }
-                                            aria-label={
-                                                alreadyInSelectedMix
-                                                    ? `${device.name} is already in the selected mix`
-                                                    : `Add ${device.name} to the selected mix`
-                                            }
-                                            title={
-                                                alreadyInSelectedMix
-                                                    ? "Already in mix"
-                                                    : `Add ${device.name} to mix`
-                                            }
-                                            className="mt-1 flex h-8 w-8 items-center justify-center rounded text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
-                                            onClick={() =>
-                                                addSourceToSelectedMix(
-                                                    "inputDevice",
-                                                    device.uid,
+                                        <LevelControl
+                                            name={device.name}
+                                            value={device.sourceLevel}
+                                            muted={device.muted}
+                                            onMuteChange={(muted) =>
+                                                void send(
+                                                    `mute-input:${device.uid}`,
+                                                    {
+                                                        command:
+                                                            "setSourceMuted",
+                                                        kind: "inputDevice",
+                                                        sourceID: device.uid,
+                                                        muted,
+                                                    },
                                                 )
                                             }
-                                        >
-                                            <FontAwesomeIcon
-                                                icon={
-                                                    alreadyInSelectedMix
-                                                        ? faCheck
-                                                        : faPlus
-                                                }
-                                                aria-hidden="true"
-                                            />
-                                        </button>
-                                    </div>
+                                            onLevelChange={(level) =>
+                                                send(
+                                                    `source-level:${device.uid}`,
+                                                    {
+                                                        command:
+                                                            "setSourceLevel",
+                                                        kind: "inputDevice",
+                                                        sourceID: device.uid,
+                                                        level,
+                                                    },
+                                                    undefined,
+                                                    true,
+                                                )
+                                            }
+                                            levelLabel={`${device.name} input volume`}
+                                            muteDisabled={pending !== null}
+                                        />
+                                    </ItemCard>
                                 );
                             })}
                             {(mixerState?.buses ?? []).map((bus) => {
@@ -1364,64 +1448,98 @@ export function App() {
                                         mix.id === bus.id,
                                 );
                                 return (
-                                    <div
+                                    <ItemCard
                                         key={`bus-input:${bus.id}`}
-                                        className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2"
+                                        name={bus.name}
+                                        type="Virtual"
+                                        level={busMix?.levelReading}
+                                        levelLabel={`${bus.name} output`}
+                                        channelCount={2}
+                                        leadingAction={
+                                            <button
+                                                type="button"
+                                                disabled={
+                                                    !selectedTarget ||
+                                                    alreadyInSelectedMix ||
+                                                    pending !== null ||
+                                                    (selectedTarget.target ===
+                                                        "bus" &&
+                                                        selectedTarget.id ===
+                                                            bus.id)
+                                                }
+                                                aria-label={
+                                                    alreadyInSelectedMix
+                                                        ? `${bus.name} is already in the selected mix`
+                                                        : `Add ${bus.name} to the selected mix`
+                                                }
+                                                title={
+                                                    alreadyInSelectedMix
+                                                        ? "Already in mix"
+                                                        : `Add ${bus.name} to mix`
+                                                }
+                                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-sky-300 hover:bg-slate-800 disabled:opacity-50"
+                                                onClick={() =>
+                                                    addSourceToSelectedMix(
+                                                        "bus",
+                                                        bus.id,
+                                                    )
+                                                }
+                                            >
+                                                <FontAwesomeIcon
+                                                    icon={
+                                                        alreadyInSelectedMix
+                                                            ? faCheck
+                                                            : faPlus
+                                                    }
+                                                    aria-hidden="true"
+                                                />
+                                            </button>
+                                        }
+                                        trailingAction={
+                                            <button
+                                                type="button"
+                                                disabled={pending !== null}
+                                                aria-label={`Delete ${bus.name}`}
+                                                title="Delete"
+                                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-rose-300 hover:bg-slate-800 disabled:opacity-50"
+                                                onClick={() =>
+                                                    void deleteVirtualItem(
+                                                        "bus",
+                                                        bus.id,
+                                                        bus.name,
+                                                    )
+                                                }
+                                            >
+                                                <FontAwesomeIcon
+                                                    icon={faTrashCan}
+                                                    aria-hidden="true"
+                                                />
+                                            </button>
+                                        }
                                     >
-                                        <div className="flex min-w-0 items-center gap-2 truncate text-sm">
-                                            <FontAwesomeIcon
-                                                icon={faVolumeHigh}
-                                                aria-hidden="true"
-                                                className="text-slate-400"
-                                            />
-                                            {bus.name}
-                                        </div>
-                                        <p className="mt-1 text-xs text-slate-400">
-                                            Virtual
-                                        </p>
-                                        <PeakMeter
-                                            level={busMix?.levelReading}
-                                            label={`${bus.name} output`}
-                                        />
-                                        <button
-                                            type="button"
-                                            disabled={
-                                                !selectedTarget ||
-                                                alreadyInSelectedMix ||
-                                                pending !== null ||
-                                                (selectedTarget.target ===
-                                                    "bus" &&
-                                                    selectedTarget.id ===
-                                                        bus.id)
-                                            }
-                                            aria-label={
-                                                alreadyInSelectedMix
-                                                    ? `${bus.name} is already in the selected mix`
-                                                    : `Add ${bus.name} to the selected mix`
-                                            }
-                                            title={
-                                                alreadyInSelectedMix
-                                                    ? "Already in mix"
-                                                    : `Add ${bus.name} to mix`
-                                            }
-                                            className="mt-1 flex h-8 w-8 items-center justify-center rounded text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
-                                            onClick={() =>
-                                                addSourceToSelectedMix(
-                                                    "bus",
-                                                    bus.id,
+                                        <LevelControl
+                                            name={bus.name}
+                                            value={bus.sourceLevel}
+                                            muted={false}
+                                            showMute={false}
+                                            onMuteChange={() => undefined}
+                                            onLevelChange={(level) =>
+                                                send(
+                                                    `source-level:bus:${bus.id}`,
+                                                    {
+                                                        command:
+                                                            "setSourceLevel",
+                                                        kind: "bus",
+                                                        sourceID: bus.id,
+                                                        level,
+                                                    },
+                                                    undefined,
+                                                    true,
                                                 )
                                             }
-                                        >
-                                            <FontAwesomeIcon
-                                                icon={
-                                                    alreadyInSelectedMix
-                                                        ? faCheck
-                                                        : faPlus
-                                                }
-                                                aria-hidden="true"
-                                            />
-                                        </button>
-                                    </div>
+                                            levelLabel={`${bus.name} input volume`}
+                                        />
+                                    </ItemCard>
                                 );
                             })}
                             {(mixerState?.blackHoleRoutes ?? []).map(
@@ -1435,53 +1553,76 @@ export function App() {
                                         ) ?? false;
                                     const captureState = route.captureState;
                                     return (
-                                        <div
+                                        <ItemCard
                                             key={route.id}
-                                            className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2"
-                                        >
-                                            <div className="flex items-start justify-between gap-2">
-                                                <span className="flex min-w-0 items-center gap-2 truncate text-sm">
-                                                    <FontAwesomeIcon
-                                                        icon={faVolumeHigh}
-                                                        aria-hidden="true"
-                                                        className="text-slate-400"
-                                                    />
-                                                    {route.name}
-                                                </span>
+                                            name={route.name}
+                                            type="BlackHole"
+                                            level={route.level}
+                                            levelLabel={`${route.name} input pair`}
+                                            available={route.available}
+                                            status={
+                                                !route.available ||
+                                                captureState.startsWith(
+                                                    "unavailable:",
+                                                )
+                                                    ? "problem"
+                                                    : captureState ===
+                                                        "capturing"
+                                                      ? "active"
+                                                      : "inactive"
+                                            }
+                                            channelCount={route.channels.length}
+                                            trailingAction={
                                                 <button
                                                     type="button"
                                                     disabled={pending !== null}
-                                                    aria-pressed={route.muted}
-                                                    aria-label={`${route.muted ? "Unmute" : "Mute"} ${route.name} globally`}
-                                                    title={`${route.muted ? "Unmute" : "Mute"} ${route.name} globally`}
-                                                    className="inline-flex min-h-7 min-w-7 items-center justify-center rounded-md text-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 disabled:opacity-50"
+                                                    aria-label={`Delete ${route.name}`}
+                                                    title="Delete"
+                                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-rose-300 hover:bg-slate-800 disabled:opacity-50"
                                                     onClick={() =>
-                                                        void send(
-                                                            `mute-route:${route.id}`,
-                                                            {
-                                                                command:
-                                                                    "setSourceMuted",
-                                                                kind: "blackHoleRoute",
-                                                                sourceID:
-                                                                    route.id,
-                                                                muted: !route.muted,
-                                                            },
+                                                        void deleteVirtualItem(
+                                                            "route",
+                                                            route.id,
+                                                            route.name,
                                                         )
                                                     }
                                                 >
                                                     <FontAwesomeIcon
-                                                        icon={
-                                                            route.muted
-                                                                ? faVolumeXmark
-                                                                : faVolumeHigh
-                                                        }
+                                                        icon={faTrashCan}
                                                         aria-hidden="true"
                                                     />
                                                 </button>
-                                            </div>
-                                            <p className="mt-1 text-xs text-slate-400">
-                                                BlackHole
-                                            </p>
+                                            }
+                                        >
+                                            <button
+                                                type="button"
+                                                disabled={pending !== null}
+                                                aria-pressed={route.muted}
+                                                aria-label={`${route.muted ? "Unmute" : "Mute"} ${route.name} globally`}
+                                                title={`${route.muted ? "Unmute" : "Mute"} ${route.name} globally`}
+                                                className="inline-flex min-h-7 min-w-7 items-center justify-center rounded-md text-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 disabled:opacity-50"
+                                                onClick={() =>
+                                                    void send(
+                                                        `mute-route:${route.id}`,
+                                                        {
+                                                            command:
+                                                                "setSourceMuted",
+                                                            kind: "blackHoleRoute",
+                                                            sourceID: route.id,
+                                                            muted: !route.muted,
+                                                        },
+                                                    )
+                                                }
+                                            >
+                                                <FontAwesomeIcon
+                                                    icon={
+                                                        route.muted
+                                                            ? faVolumeXmark
+                                                            : faVolumeHigh
+                                                    }
+                                                    aria-hidden="true"
+                                                />
+                                            </button>
                                             <p className="mt-1 text-xs text-slate-400">
                                                 {route.available
                                                     ? captureState ===
@@ -1499,9 +1640,27 @@ export function App() {
                                                           : `Input channels ${route.channels.join("/")} available`
                                                     : `Input channels ${route.channels.join("/")} unavailable`}
                                             </p>
-                                            <PeakMeter
-                                                level={route.level}
-                                                label={`${route.name} input pair`}
+                                            <LevelControl
+                                                name={route.name}
+                                                value={route.sourceLevel}
+                                                muted={route.muted}
+                                                showMute={false}
+                                                onMuteChange={() => undefined}
+                                                onLevelChange={(level) =>
+                                                    send(
+                                                        `source-level:route:${route.id}`,
+                                                        {
+                                                            command:
+                                                                "setSourceLevel",
+                                                            kind: "blackHoleRoute",
+                                                            sourceID: route.id,
+                                                            level,
+                                                        },
+                                                        undefined,
+                                                        true,
+                                                    )
+                                                }
+                                                levelLabel={`${route.name} input volume`}
                                             />
                                             <button
                                                 type="button"
@@ -1537,7 +1696,7 @@ export function App() {
                                                     aria-hidden="true"
                                                 />
                                             </button>
-                                        </div>
+                                        </ItemCard>
                                     );
                                 },
                             )}
@@ -1567,50 +1726,64 @@ export function App() {
                                             input.id === application.id,
                                     ) ?? false;
                                 return (
-                                    <div
+                                    <ItemCard
                                         key={application.id}
-                                        className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2"
-                                    >
-                                        <div className="flex items-start justify-between gap-2">
-                                            <span className="flex min-w-0 items-center gap-2 truncate text-sm">
-                                                <FontAwesomeIcon
-                                                    icon={faDesktop}
-                                                    aria-hidden="true"
-                                                    className="text-slate-400"
-                                                />
-                                                {application.name}
-                                            </span>
+                                        name={application.name}
+                                        type="Application"
+                                        level={application.level}
+                                        levelLabel={`${application.name} input`}
+                                        available={application.available}
+                                        status={
+                                            !application.available ||
+                                            application.captureState ===
+                                                "permissionDenied" ||
+                                            application.captureState.startsWith(
+                                                "unavailable:",
+                                            )
+                                                ? "problem"
+                                                : application.captureState ===
+                                                    "capturing"
+                                                  ? "active"
+                                                  : "inactive"
+                                        }
+                                        channelCount={2}
+                                        leadingAction={
                                             <button
                                                 type="button"
-                                                disabled={pending !== null}
-                                                aria-pressed={application.muted}
-                                                aria-label={`${application.muted ? "Unmute" : "Mute"} ${application.name} globally`}
-                                                title={`${application.muted ? "Unmute" : "Mute"} ${application.name} globally`}
-                                                className="inline-flex min-h-7 min-w-7 items-center justify-center rounded-md text-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 disabled:opacity-50"
+                                                disabled={
+                                                    !selectedTarget ||
+                                                    alreadyInSelectedMix ||
+                                                    pending !== null
+                                                }
+                                                aria-label={
+                                                    alreadyInSelectedMix
+                                                        ? `${application.name} is already in the selected mix`
+                                                        : `Add ${application.name} to the selected mix`
+                                                }
+                                                title={
+                                                    alreadyInSelectedMix
+                                                        ? "Already in mix"
+                                                        : `Add ${application.name} to mix`
+                                                }
+                                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-sky-300 hover:bg-slate-800 disabled:opacity-50"
                                                 onClick={() =>
-                                                    void send(
-                                                        `mute-app:${application.id}`,
-                                                        {
-                                                            command:
-                                                                "setSourceMuted",
-                                                            kind: "app",
-                                                            sourceID:
-                                                                application.id,
-                                                            muted: !application.muted,
-                                                        },
+                                                    addSourceToSelectedMix(
+                                                        "app",
+                                                        application.id,
                                                     )
                                                 }
                                             >
                                                 <FontAwesomeIcon
                                                     icon={
-                                                        application.muted
-                                                            ? faVolumeXmark
-                                                            : faVolumeHigh
+                                                        alreadyInSelectedMix
+                                                            ? faCheck
+                                                            : faPlus
                                                     }
                                                     aria-hidden="true"
                                                 />
                                             </button>
-                                        </div>
+                                        }
+                                    >
                                         <p
                                             className={`mt-1 text-xs ${application.captureState.startsWith("unavailable:") || application.captureState === "permissionDenied" ? "text-amber-200" : "text-slate-400"}`}
                                             role={
@@ -1664,45 +1837,43 @@ export function App() {
                                                     Open System Settings
                                                 </button>
                                             )}
-                                        <PeakMeter
-                                            level={application.level}
-                                            label={application.name}
-                                        />
-                                        <button
-                                            type="button"
-                                            disabled={
-                                                !selectedTarget ||
-                                                alreadyInSelectedMix ||
-                                                pending !== null
-                                            }
-                                            aria-label={
-                                                alreadyInSelectedMix
-                                                    ? `${application.name} is already in the selected mix`
-                                                    : `Add ${application.name} to the selected mix`
-                                            }
-                                            title={
-                                                alreadyInSelectedMix
-                                                    ? "Already in mix"
-                                                    : `Add ${application.name} to mix`
-                                            }
-                                            className="mt-1 flex h-8 w-8 items-center justify-center rounded text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
-                                            onClick={() =>
-                                                addSourceToSelectedMix(
-                                                    "app",
-                                                    application.id,
+                                        <LevelControl
+                                            name={application.name}
+                                            value={application.sourceLevel}
+                                            maxGainDecibels={30}
+                                            muted={application.muted}
+                                            showMute
+                                            onMuteChange={(muted) =>
+                                                void send(
+                                                    `mute-app:${application.id}`,
+                                                    {
+                                                        command:
+                                                            "setSourceMuted",
+                                                        kind: "app",
+                                                        sourceID:
+                                                            application.id,
+                                                        muted,
+                                                    },
                                                 )
                                             }
-                                        >
-                                            <FontAwesomeIcon
-                                                icon={
-                                                    alreadyInSelectedMix
-                                                        ? faCheck
-                                                        : faPlus
-                                                }
-                                                aria-hidden="true"
-                                            />
-                                        </button>
-                                    </div>
+                                            onLevelChange={(level) =>
+                                                send(
+                                                    `source-level:application:${application.id}`,
+                                                    {
+                                                        command:
+                                                            "setSourceLevel",
+                                                        kind: "application",
+                                                        sourceID:
+                                                            application.id,
+                                                        level,
+                                                    },
+                                                    undefined,
+                                                    true,
+                                                )
+                                            }
+                                            levelLabel={`${application.name} input volume`}
+                                        />
+                                    </ItemCard>
                                 );
                             })}
                         </ItemGroup>

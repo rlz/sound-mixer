@@ -259,8 +259,18 @@ public struct KnownDevice: Codable, Equatable, Sendable {
     }
 }
 
+public struct SourceLevel: Codable, Equatable, Sendable {
+    public var source: SourceReference
+    public var level: Double
+
+    public init(source: SourceReference, level: Double = 1) {
+        self.source = source
+        self.level = level
+    }
+}
+
 public struct MixerConfiguration: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 6
+    public static let currentSchemaVersion = 8
 
     public let schemaVersion: Int
     public var isEnabled: Bool
@@ -271,6 +281,7 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
     public var mutedSources: [SourceReference]
     public var mutedBuses: [UUID]
     public var applications: [ApplicationID]
+    public var sourceLevels: [SourceLevel]
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion
@@ -282,6 +293,7 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         case mutedSources
         case mutedBuses
         case applications
+        case sourceLevels
     }
 
     public init(
@@ -292,7 +304,8 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         knownDevices: [KnownDevice] = [],
         mutedSources: [SourceReference] = [],
         mutedBuses: [UUID] = [],
-        applications: [ApplicationID] = []
+        applications: [ApplicationID] = [],
+        sourceLevels: [SourceLevel] = []
     ) {
         schemaVersion = Self.currentSchemaVersion
         self.isEnabled = isEnabled
@@ -303,6 +316,7 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         self.mutedSources = mutedSources
         self.mutedBuses = mutedBuses
         self.applications = applications
+        self.sourceLevels = sourceLevels
         reconcileKnownDevices(with: [])
     }
 
@@ -329,6 +343,14 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
             throw DecodingError.dataCorruptedError(forKey: .mutedBuses, in: container, debugDescription: "Muted buses must be unique")
         }
         applications = try container.decode([ApplicationID].self, forKey: .applications)
+        sourceLevels = try container.decode([SourceLevel].self, forKey: .sourceLevels)
+        guard sourceLevels.allSatisfy({
+            let maximum = if case .application = $0.source { MixInput.maximumApplicationGain } else { 1.0 }
+            return $0.level.isFinite && (0 ... maximum).contains($0.level)
+        }),
+              Set(sourceLevels.map(\.source)).count == sourceLevels.count else {
+            throw DecodingError.dataCorruptedError(forKey: .sourceLevels, in: container, debugDescription: "Source levels must be unique and in range")
+        }
         guard Set(applications).count == applications.count else {
             throw DecodingError.dataCorruptedError(forKey: .applications, in: container, debugDescription: "Registered applications must be unique")
         }
@@ -365,6 +387,7 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         try container.encode(mutedSources, forKey: .mutedSources)
         try container.encode(mutedBuses, forKey: .mutedBuses)
         try container.encode(applications, forKey: .applications)
+        try container.encode(sourceLevels, forKey: .sourceLevels)
     }
 
     public func deviceDisplayName(for uid: DeviceUID) -> String {

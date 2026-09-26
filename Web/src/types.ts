@@ -24,6 +24,7 @@ export type DeviceState = {
     inputChannels: number;
     savedAs: string[];
     muted: boolean;
+    sourceLevel: number;
 };
 
 export type MixInputState = {
@@ -51,7 +52,13 @@ export type MixerState = {
     isEnabled: boolean;
     devices: DeviceState[];
     outputs: OutputState[];
-    buses: { id: string; name: string; category: "virtual"; muted: boolean }[];
+    buses: {
+        id: string;
+        name: string;
+        category: "virtual";
+        muted: boolean;
+        sourceLevel: number;
+    }[];
     blackHoleRoutes: {
         id: string;
         name: string;
@@ -62,6 +69,7 @@ export type MixerState = {
         captureState: string;
         level: number | null;
         muted: boolean;
+        sourceLevel: number;
     }[];
     applications: {
         id: string;
@@ -71,6 +79,7 @@ export type MixerState = {
         muted: boolean;
         captureState: string;
         level: number | null;
+        sourceLevel: number;
     }[];
     inputCaptureStates: {
         uid: string;
@@ -101,6 +110,13 @@ export type BridgeCommand =
           kind: "inputDevice" | "application" | "app" | "blackHoleRoute";
           sourceID: string;
           muted: boolean;
+      }
+    | {
+          command: "setSourceLevel";
+          kind:
+              "inputDevice" | "application" | "app" | "blackHoleRoute" | "bus";
+          sourceID: string;
+          level: number;
       }
     | { command: "createBus" }
     | { command: "renameBus"; id: string; name: string }

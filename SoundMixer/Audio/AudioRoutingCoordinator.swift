@@ -58,24 +58,10 @@ final class AudioRoutingCoordinator {
            !deviceRoutingChanged,
            Self.hasSameProcessRouting(lastProcesses, orderedProcesses)
         {
-            let desiredShape = RuntimeGraphShape(configuration: graph.configuration)
-            let previousShape = RuntimeGraphShape(configuration: lastGraph.configuration)
-            let changedRoutes = desiredShape.changedRouteKeys(from: previousShape)
-            let changedBuses = desiredShape.changedBusIDs(from: previousShape)
-            let changedMutedSources = Set(lastGraph.configuration.mutedSources)
-                .symmetricDifference(graph.configuration.mutedSources)
-            let changedMutedBuses = Set(lastGraph.configuration.mutedBuses)
-                .symmetricDifference(graph.configuration.mutedBuses)
-            for (key, renderer) in renderers where changedRoutes.contains(key) ||
-                renderer.depends(on: changedMutedSources, changedBuses: changedMutedBuses)
-            {
-                renderer.updateGains(from: graph)
-            }
-            for (id, pump) in busMeterPumps where changedBuses.contains(id) ||
-                pump.renderer.depends(on: changedMutedSources, changedBuses: changedMutedBuses)
-            {
-                pump.renderer.updateGains(from: graph)
-            }
+            // Gain-only edits do not rebuild routing. Republish the small gain
+            // snapshot to every renderer so global source gains reach all
+            // routes, including virtual and chained bus renderers.
+            republishGains(from: graph)
             remember(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled)
             return false
         }
@@ -243,8 +229,20 @@ final class AudioRoutingCoordinator {
         if deviceRoutingChanged || lastEnabled != true {
             updateDeviceMeters(devices: orderedDevices)
         }
+        // Device and process changes can bypass the gain-only fast path. Make
+        // sure surviving renderers still receive the newest global gains.
+        republishGains(from: graph)
         remember(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled)
         return true
+    }
+
+    private func republishGains(from graph: MixGraphSnapshot) {
+        for renderer in renderers.values {
+            renderer.updateGains(from: graph)
+        }
+        for pump in busMeterPumps.values {
+            pump.renderer.updateGains(from: graph)
+        }
     }
 
     private func updateDeviceMeters(devices: [AudioDeviceSnapshot]) {
@@ -587,6 +585,7 @@ final class AudioRoutingCoordinator {
             }
             copy.mutedBuses = []
             copy.mutedSources = []
+            copy.sourceLevels = []
             for index in copy.blackHoleRoutes.indices {
                 normalize(&copy.blackHoleRoutes[index].mix)
             }

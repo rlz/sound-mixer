@@ -11,8 +11,8 @@ A user manages several independent audio mixes on a Mac: selects sources, sets l
 - **BlackHole route** — a user-created stereo mixer output tied to a specific installed BlackHole device and automatically assigned the next available adjacent channel pair.
 - **Source** — an audio input device, audio from a particular application, or an internal virtual bus added to a mix.
 - **Device volume** — the selected physical output device's live Core Audio main volume, when the device exposes a writable control. It changes that device's actual output volume and is independent of Sound Mixer's digital signal meter. At 0%, Sound Mixer also enables the device's writable mute control when available. On normal exit, it restores the pre-change volume and mute values if they have not changed externally.
-- **Mix gain** — a saved software gain from 0% (silence) to 100% (unity) for an internal virtual bus or BlackHole route. Physical output mixes render at unity.
-- **Application gain** — a saved gain for one application's row in one mix, from mute through 0 dB (unity) to +30 dB (about 31.62×). Other mixes containing the same application keep their own gain.
+- **Software gain** — a saved digital gain shown in dB, with 0 dB as unity and mute at the slider's −60 dB endpoint. Software gains include source, per-mix, channel, and virtual destination levels. Application input gain can extend to +30 dB.
+- **Device volume** — a live Core Audio main-volume scalar shown from 0% to 100%. It is distinct from software gain and is never saved in mixer configuration.
 - **Master switch** — the on/off state of Sound Mixer's entire audio pipeline. It persists across launches.
 
 ## User scenarios

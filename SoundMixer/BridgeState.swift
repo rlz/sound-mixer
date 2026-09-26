@@ -40,6 +40,7 @@ struct BridgeApplication: Encodable {
     let muted: Bool
     let level: Double?
     let registered: Bool
+    let sourceLevel: Double
 }
 
 struct BridgeInputCaptureState: Encodable {
@@ -59,6 +60,7 @@ struct BridgeDevice: Encodable {
     let outputChannels: Int
     let savedAs: [String]
     let muted: Bool
+    let sourceLevel: Double
 }
 
 struct BridgeOutput: Encodable {
@@ -83,6 +85,7 @@ struct BridgeNamedItem: Encodable {
     let name: String
     let category: String
     let muted: Bool
+    let sourceLevel: Double
 }
 
 struct BridgeRoute: Encodable {
@@ -95,6 +98,7 @@ struct BridgeRoute: Encodable {
     let captureState: String
     let level: Double?
     let muted: Bool
+    let sourceLevel: Double
 }
 
 enum BridgeError: LocalizedError {

@@ -55,6 +55,16 @@ public enum DeviceCompatibilityIssue: Equatable {
 public enum GraphValidator {
     public static func validate(_ configuration: MixerConfiguration) throws {
         try validateIdentities(configuration)
+        guard Set(configuration.sourceLevels.map(\.source)).count == configuration.sourceLevels.count else {
+            throw GraphValidationError.duplicateSource
+        }
+        for sourceLevel in configuration.sourceLevels {
+            if case .application = sourceLevel.source {
+                try validateLevel(sourceLevel.level, maximum: MixInput.maximumApplicationGain)
+            } else {
+                try validateLevel(sourceLevel.level)
+            }
+        }
         try validateMixes(configuration)
         try validateMixGraph(configuration)
         try validateBlackHoleReservations(configuration)
@@ -137,11 +147,7 @@ public enum GraphValidator {
             try validateLevel(mix.level)
             var sources = Set<SourceKey>()
             for input in mix.inputs {
-                if case .application = input.source {
-                    try validateLevel(input.level, maximum: MixInput.maximumApplicationGain)
-                } else {
-                    try validateLevel(input.level)
-                }
+                try validateLevel(input.level)
                 guard input.channelRouting.count == input.channelLevels.count else {
                     throw GraphValidationError.invalidChannelSettings
                 }

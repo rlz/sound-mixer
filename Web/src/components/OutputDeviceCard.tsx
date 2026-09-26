@@ -1,10 +1,7 @@
-import { useEffect, useState } from "react";
-import { faVolumeHigh, faVolumeXmark } from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { useState } from "react";
 import type { OutputState } from "../types";
-import { AvailabilityDot } from "./AvailabilityDot";
-import { PeakMeter } from "./PeakMeter";
-import { StableRange } from "./StableRange";
+import { ItemCard } from "./ItemCard";
+import { LevelControl } from "./LevelControl";
 
 type OutputDeviceCardProps = {
     output: OutputState;
@@ -25,10 +22,9 @@ export function OutputDeviceCard({
     onMuteChange,
     onOpenPrivacySettings,
 }: OutputDeviceCardProps) {
-    const [volumeWriteFailed, setVolumeWriteFailed] = useState(false);
-    useEffect(() => {
-        setVolumeWriteFailed(false);
-    }, [output.uid, output.available, output.volume]);
+    const [failedVolumeKey, setFailedVolumeKey] = useState<string | null>(null);
+    const volumeKey = `${output.uid}:${output.available}:${output.volume}`;
+    const volumeWriteFailed = failedVolumeKey === volumeKey;
 
     const volumeAvailable =
         output.available &&
@@ -38,28 +34,16 @@ export function OutputDeviceCard({
     const muteAvailable = output.available && output.muteWritable;
 
     return (
-        <div
-            className={`rounded-lg border px-3 py-2 text-sm ${selected ? "border-sky-300 bg-sky-400/15 ring-1 ring-sky-300" : "border-slate-800 bg-slate-900/70"}`}
+        <ItemCard
+            name={output.name}
+            type="System"
+            level={output.levelReading}
+            levelLabel={`${output.name} system output`}
+            available={output.available}
+            selected={selected}
+            channelCount={output.outputChannels}
+            onSelect={onSelect}
         >
-            <button
-                type="button"
-                aria-current={selected ? "true" : undefined}
-                onClick={onSelect}
-                className="flex w-full min-w-0 items-center gap-2 text-left text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
-            >
-                <AvailabilityDot available={output.available} />
-                <span
-                    className="min-w-0 truncate font-medium"
-                    title={output.name}
-                >
-                    {output.name}
-                </span>
-            </button>
-            <p className="mt-1 text-[10px] text-slate-500">System</p>
-            <PeakMeter
-                level={output.levelReading}
-                label={`${output.name} system output`}
-            />
             {output.meterState?.startsWith("unavailable:") && (
                 <p className="mt-1 text-xs text-amber-300" role="status">
                     Output meter:{" "}
@@ -82,7 +66,6 @@ export function OutputDeviceCard({
                 </button>
             )}
             <div
-                className="mt-2 flex items-center gap-2"
                 title={
                     !output.available
                         ? "Output device is disconnected"
@@ -91,50 +74,34 @@ export function OutputDeviceCard({
                           : undefined
                 }
             >
-                <button
-                    type="button"
-                    className="inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-md text-slate-300 hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 disabled:opacity-40"
-                    aria-label={`${output.muted ? "Unmute" : "Mute"} ${output.name} output device`}
-                    aria-pressed={output.muted === true}
-                    title={
+                <LevelControl
+                    name={`${output.name} output device`}
+                    displayMode="percent"
+                    value={output.volume ?? 0}
+                    muted={output.muted === true}
+                    muteLabel={
                         !output.available
                             ? "Output device is disconnected"
                             : !output.muteWritable
                               ? "This device has no writable mute control"
-                              : output.muted
-                                ? `Unmute ${output.name}`
-                                : `Mute ${output.name}`
+                              : undefined
                     }
-                    disabled={!muteAvailable || pending}
-                    onClick={() => void onMuteChange(!output.muted)}
-                >
-                    <FontAwesomeIcon
-                        icon={output.muted ? faVolumeXmark : faVolumeHigh}
-                    />
-                </button>
-                <StableRange
-                    value={output.volume ?? 0}
-                    label={`${output.name} device volume${!output.available ? ", disconnected" : !output.volumeWritable ? ", unavailable" : ""}`}
-                    title={
-                        !output.available
-                            ? "Output device is disconnected"
-                            : !output.volumeWritable
-                              ? "This device has no writable main volume control"
-                              : `${output.name} device volume`
-                    }
+                    muteDisabled={!muteAvailable || pending}
+                    onMuteChange={(muted) => void onMuteChange(muted)}
+                    levelLabel={`${output.name} device volume${!output.available ? ", disconnected" : !output.volumeWritable ? ", unavailable" : ""}`}
                     disabled={!volumeAvailable}
-                    onCommit={async (level) => {
+                    displayedValue={
+                        output.volume === null
+                            ? "—"
+                            : `${Math.round(output.volume * 100)}%`
+                    }
+                    onLevelChange={async (level) => {
                         const accepted = await onVolumeChange(level);
-                        if (!accepted) setVolumeWriteFailed(true);
+                        if (!accepted) setFailedVolumeKey(volumeKey);
                         return accepted;
                     }}
                 />
-                <span className="w-9 shrink-0 text-right text-xs text-slate-300 tabular-nums">
-                    {output.volume === null
-                        ? "—"
-                        : `${Math.round(output.volume * 100)}%`}
-                </span>
             </div>
-        </div>
+        </ItemCard>
     );
 }

@@ -278,6 +278,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case "deleteOutputMix": return try deleteOutputMix(body: body, store: store)
         case "resetMix": return try resetMix(body: body, store: store)
         case "setSourceMuted": return try setSourceMuted(body: body, store: store)
+        case "setSourceLevel": return try setSourceLevel(body: body, store: store)
         case "setBusMuted": return try setBusMuted(body: body, store: store)
         case "createBus": return try createBus(body: body, store: store)
         case "renameBus": return try renameBus(body: body, store: store)
@@ -405,6 +406,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
     }
 
+    private func setSourceLevel(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "kind", "sourceID", "level"],
+              let kind = body["kind"] as? String,
+              let sourceID = body["sourceID"] as? String, !sourceID.isEmpty,
+              let level = body["level"] as? Double, level.isFinite else {
+            throw BridgeError.invalidPayload
+        }
+        let source: SourceReference
+        switch kind {
+        case "inputDevice": source = .inputDevice(DeviceUID(rawValue: sourceID))
+        case "application", "app": source = .application(ApplicationID(rawValue: sourceID))
+        case "blackHoleRoute":
+            guard let id = UUID(uuidString: sourceID) else { throw BridgeError.invalidPayload }
+            source = .blackHoleRoute(id)
+        case "bus":
+            guard let id = UUID(uuidString: sourceID) else { throw BridgeError.invalidPayload }
+            source = .bus(id)
+        default: throw BridgeError.invalidPayload
+        }
+        let maximum = if case .application = source { MixInput.maximumApplicationGain } else { 1.0 }
+        guard (0 ... maximum).contains(level) else { throw BridgeError.invalidPayload }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { config in
+            config.sourceLevels.removeAll { $0.source == source }
+            if level != 1 { config.sourceLevels.append(SourceLevel(source: source, level: level)) }
+        }
+    }
+
     private func setBusMuted(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
         guard Set(body.keys) == ["requestId", "command", "id", "muted"],
               let idText = body["id"] as? String, let id = UUID(uuidString: idText),
@@ -445,6 +473,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             guard candidate.buses.contains(where: { $0.id == id }) else { throw BridgeError.unknownBus }
             candidate.buses.removeAll { $0.id == id }
             candidate.mutedBuses.removeAll { $0 == id }
+            candidate.sourceLevels.removeAll { $0.source == .bus(id) }
         }
     }
 
@@ -504,7 +533,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let level = body["level"] as? Double
         let placement = (body["monoPlacement"] as? String).flatMap(MonoPlacement.init(rawValue:))
         if operation == .level {
-            let maximum = kind == "application" || kind == "app" ? MixInput.maximumApplicationGain : 1
+            let maximum = 1.0
             guard let level, level.isFinite, (0 ... maximum).contains(level) else {
                 throw BridgeError.invalidPayload
             }
@@ -672,7 +701,7 @@ extension AppDelegate {
             isEnabled: configuration.isEnabled,
             devices: bridgeDevices(configuration: configuration, discovered: discovered),
             outputs: bridgeOutputs(configuration: configuration, discovered: discovered, deviceLevels: deviceLevels),
-            buses: configuration.buses.map { BridgeNamedItem(id: $0.id.uuidString, name: $0.name, category: "virtual", muted: configuration.mutedBuses.contains($0.id)) },
+            buses: configuration.buses.map { bus in BridgeNamedItem(id: bus.id.uuidString, name: bus.name, category: "virtual", muted: configuration.mutedBuses.contains(bus.id), sourceLevel: configuration.sourceLevels.first(where: { $0.source == .bus(bus.id) })?.level ?? 1) },
             blackHoleRoutes: configuration.blackHoleRoutes.map { route in
                 let device = discovered[route.deviceUID.rawValue]
                 let selected = Self.bridgeChannels(route.channels)
@@ -684,7 +713,8 @@ extension AppDelegate {
                     channels: selected, available: pairAvailable,
                     captureState: captureStates["route:\(route.id.uuidString)"] ?? (pairAvailable ? "stopped" : "unavailable"),
                     level: sourceLevels["route:\(route.id.uuidString)"],
-                    muted: configuration.mutedSources.contains(.blackHoleRoute(route.id))
+                    muted: configuration.mutedSources.contains(.blackHoleRoute(route.id)),
+                    sourceLevel: configuration.sourceLevels.first(where: { $0.source == .blackHoleRoute(route.id) })?.level ?? 1
                 )
             },
             applications: bridgeApplications(configuration: configuration, sourceLevels: sourceLevels),
@@ -776,7 +806,8 @@ extension AppDelegate {
                 captureState: captureStates[id] ?? "stopped",
                 muted: configuration.mutedSources.contains(.application(ApplicationID(rawValue: id))),
                 level: sourceLevels["application:\(id)"],
-                registered: configuration.applications.contains(ApplicationID(rawValue: id))
+                registered: configuration.applications.contains(ApplicationID(rawValue: id)),
+                sourceLevel: configuration.sourceLevels.first(where: { $0.source == .application(ApplicationID(rawValue: id)) })?.level ?? 1
             )
         }
     }
@@ -821,7 +852,8 @@ extension AppDelegate {
                 inputChannels: live?.inputChannels ?? 0,
                 outputChannels: live?.outputChannels ?? 0,
                 savedAs: savedAs,
-                muted: configuration.mutedSources.contains(.inputDevice(deviceUID))
+                muted: configuration.mutedSources.contains(.inputDevice(deviceUID)),
+                sourceLevel: configuration.sourceLevels.first(where: { $0.source == .inputDevice(deviceUID) })?.level ?? 1
             )
         }
     }

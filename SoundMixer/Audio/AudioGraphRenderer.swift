@@ -132,7 +132,7 @@ final class AudioGraphRenderer {
         let busMixes = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map { ($0.id, $0.mix) })
         for (id, states) in mixStates {
             guard let mix = busMixes[id] else { continue }
-            Self.update(states: states, mix: mix, mutedSources: Set(graph.configuration.mutedSources))
+            Self.update(states: states, mix: mix, mutedSources: Set(graph.configuration.mutedSources), sourceLevels: graph.configuration.sourceLevels)
         }
         let mix: Mix? = if targetKey.hasPrefix("output:") {
             graph.configuration.outputMixes.first(where: { targetKey == "output:\($0.deviceUID.rawValue)" })?.mix
@@ -140,7 +140,7 @@ final class AudioGraphRenderer {
             graph.configuration.blackHoleRoutes.first(where: { targetKey == "route:\($0.id.uuidString)" })?.mix
         }
         if let mix {
-            Self.update(states: outputState, mix: mix, mutedSources: Set(graph.configuration.mutedSources))
+            Self.update(states: outputState, mix: mix, mutedSources: Set(graph.configuration.mutedSources), sourceLevels: graph.configuration.sourceLevels)
         }
     }
 
@@ -230,15 +230,17 @@ final class AudioGraphRenderer {
         state.peakMeter?.record(peak: rowPeak)
     }
 
-    private static func update(states: [MixInputState], mix: Mix, mutedSources: Set<SourceReference>) {
+    private static func update(states: [MixInputState], mix: Mix, mutedSources: Set<SourceReference>, sourceLevels: [SourceLevel]) {
+        let levels = Dictionary(uniqueKeysWithValues: sourceLevels.map { ($0.source, $0.level) })
         for (index, input) in mix.inputs.enumerated() where index < states.count {
             let state = states[index]
             let muted = mutedSources.contains(input.source)
-            state.sourceGain.store(Float(muted ? 0 : input.level), ordering: .relaxed)
+            let sourceLevel = levels[input.source] ?? 1
+            state.sourceGain.store(Float(muted ? 0 : input.level * sourceLevel), ordering: .relaxed)
             state.mainGain.store(Float(mix.level), ordering: .relaxed)
             for channel in state.channelGains.indices {
                 let gain = channel < input.channelLevels.count ? input.channelLevels[channel] : 1
-                state.channelGains[channel].value.store(Float(muted ? 0 : input.level * gain), ordering: .relaxed)
+                state.channelGains[channel].value.store(Float(muted ? 0 : input.level * sourceLevel * gain), ordering: .relaxed)
             }
         }
     }
