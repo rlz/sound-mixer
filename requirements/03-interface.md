@@ -50,6 +50,7 @@
 
 ## States and feedback
 
+- When invalid saved settings are discarded at startup, show a dismissible notification over the interface; close it automatically after five seconds. If the configuration file cannot be removed, keep the actionable startup error visible.
 - An empty mix explains how to add a source.
 - A destination has editable mix settings without a separately created mix object. An output mix is saved only while it has settings; removing its last source makes it equivalent to no mix. Bus and BlackHole route mix values at their defaults with no sources are likewise treated as absent. The mix editor always remains available for the selected destination. Its top Reset button clears its sources and restores default gain; for a physical output this removes the saved output mix, while buses and routes remain and only their mix settings reset.
 - Microphone or system-audio permission denial appears beside the affected source and provides an action to open System Settings.

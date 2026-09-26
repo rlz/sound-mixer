@@ -7,6 +7,7 @@ const requestCallbacks = new Map<
 
 window.soundMixerBridge = {
     onState: () => undefined,
+    onNotification: () => undefined,
     onCommandResult: ({ requestId, accepted, error }) => {
         requestCallbacks.get(requestId)?.(accepted, error);
         requestCallbacks.delete(requestId);

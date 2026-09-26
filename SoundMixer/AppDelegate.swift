@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var captureStates: [String: String] = [:]
     private var outputRouteErrors: [String: String] = [:]
     private var startupConfigurationWarning: String?
+    private var startupConfigurationWarningIsError = false
 
     func applicationDidFinishLaunching(_: Notification) {
         setupEditMenu()
@@ -63,6 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 ? "The invalid saved configuration was deleted. Sound Mixer started with empty settings and mixing off."
                 : nil
         } catch {
+            startupConfigurationWarningIsError = true
             return "The saved configuration could not be reset, so mixing is unavailable. \(error.localizedDescription)"
         }
     }
@@ -179,7 +181,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     func webView(_: WKWebView, didFinish _: WKNavigation!) {
         if let warning = startupConfigurationWarning {
             startupConfigurationWarning = nil
-            showLoadError(warning)
+            if startupConfigurationWarningIsError {
+                showLoadError(warning)
+            } else {
+                sendToWeb(method: "onNotification", payload: ["message": warning])
+            }
         }
         publishState()
     }

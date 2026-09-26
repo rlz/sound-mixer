@@ -166,6 +166,7 @@ declare global {
     interface Window {
         soundMixerBridge?: {
             onState: (state: MixerState) => void;
+            onNotification: (notification: { message: string }) => void;
             onCommandResult: (result: {
                 requestId: string;
                 accepted: boolean;
