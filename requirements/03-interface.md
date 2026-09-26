@@ -12,7 +12,7 @@
 
 ## Window
 
-- Use the device categories `system`, `virtual`, and `blackhole` consistently: system devices are discovered Core Audio devices excluding BlackHole; virtual items are internal buses; blackhole items are configured BlackHole stereo pairs. Never show the BlackHole driver as a standalone input or output. Keep available driver instances in the route-creation selector, and show a pair in Inputs only after its route has been created.
+- Use the device categories `system`, `virtual`, and `blackhole` consistently: system devices are discovered Core Audio devices excluding BlackHole; virtual items are internal buses; blackhole items are configured BlackHole stereo pairs. Show installed BlackHole driver devices in the physical Inputs and Outputs lists using their actual available channels. Keep available driver instances in the route-creation selector, and show configured channel pairs as separate route items.
 
 - Keep the React interface split into focused modules: shared state types, native bridge, Zustand store, application composition, and reusable UI components. Components read shared state through Zustand selectors and send native changes through the typed bridge; they do not access Core Audio.
 

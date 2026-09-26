@@ -157,7 +157,6 @@ export function App() {
     );
     const sourceDevices = (mixerState?.devices ?? []).filter(
         (device) =>
-            device.category === "system" &&
             (device.inputChannels > 0 || configuredInputIDs.has(device.uid)),
     );
     const sourceApplications = (mixerState?.applications ?? []).filter(
@@ -254,7 +253,6 @@ export function App() {
                     >
                         <ItemGroup title="System">
                             {mixerState?.outputs
-                                .filter((output) => !output.isBlackHole)
                                 .map((output) => (
                                     <OutputDeviceCard
                                         key={output.uid}
@@ -300,9 +298,7 @@ export function App() {
                                         }
                                     />
                                 ))}
-                            {mixerState?.outputs.every(
-                                (output) => output.isBlackHole,
-                            ) && (
+                            {mixerState?.outputs.length === 0 && (
                                 <p className="px-3 text-sm text-slate-500">
                                     No output devices.
                                 </p>
@@ -1041,7 +1037,11 @@ export function App() {
                                     <ItemCard
                                         key={device.uid}
                                         name={device.name}
-                                        type="System"
+                                        type={
+                                            device.category === "blackhole"
+                                                ? "BlackHole device"
+                                                : "System"
+                                        }
                                         level={inputState?.level}
                                         levelLabel={`${device.name} input`}
                                         available={device.available}

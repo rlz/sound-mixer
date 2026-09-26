@@ -36,7 +36,7 @@ export function OutputDeviceCard({
     return (
         <ItemCard
             name={output.name}
-            type="System"
+            type={output.isBlackHole ? "BlackHole device" : "System"}
             level={output.levelReading}
             levelLabel={`${output.name} system output`}
             available={output.available}
