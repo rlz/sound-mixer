@@ -45,6 +45,7 @@ extension AppDelegate {
             for index in config.blackHoleRoutes.indices {
                 config.blackHoleRoutes[index].mix.inputs.removeAll { $0.source == source }
             }
+            config.outputMixes.removeAll { $0.mix.inputs.isEmpty }
             config.mutedSources.removeAll { $0 == source }
         }
     }

@@ -98,11 +98,16 @@ export function App() {
             : null;
     const selectedMix =
         selectedTarget &&
-        mixerState?.mixes.find(
+        (mixerState?.mixes.find(
             (mix) =>
                 mix.target === selectedTarget.target &&
                 mix.id === selectedTarget.id,
-        );
+        ) ?? {
+            ...selectedTarget,
+            level: 1,
+            inputs: [],
+            levelReading: null,
+        });
     const addSourceToSelectedMix = (kind: string, sourceID: string) => {
         if (!selectedTarget || pending !== null) return;
         void send(`mix-add:${sourceID}`, {
@@ -634,9 +639,33 @@ export function App() {
                                 className="mb-5 rounded-2xl border border-slate-800 bg-slate-900 p-5"
                                 aria-label="Mix sources"
                             >
-                                <p className="text-xs text-slate-400">
-                                    Mix output
-                                </p>
+                                <div className="mb-2 flex items-center justify-between gap-3">
+                                    <p className="text-xs text-slate-400">
+                                        Mix output
+                                    </p>
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            pending !== null ||
+                                            (selectedMix.inputs.length === 0 &&
+                                                selectedMix.level === 1)
+                                        }
+                                        aria-label="Reset mix settings"
+                                        title="Reset mix settings"
+                                        className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-rose-400 hover:text-rose-200 disabled:opacity-40"
+                                        onClick={() =>
+                                            void send(
+                                                `mix-reset:${selectedTarget.id}`,
+                                                {
+                                                    command: "resetMix",
+                                                    ...selectedTarget,
+                                                },
+                                            )
+                                        }
+                                    >
+                                        Reset
+                                    </button>
+                                </div>
                                 <PeakMeter
                                     level={selectedMix.levelReading}
                                     label={`${selectedOutput?.name ?? selectedBus?.name ?? selectedRoute?.name ?? "Selected"} mix output`}
@@ -1413,31 +1442,6 @@ export function App() {
                                                     ? "channel"
                                                     : "channels"}
                                             </span>
-                                            {output.configured && (
-                                                <button
-                                                    type="button"
-                                                    disabled={pending !== null}
-                                                    className="text-xs text-rose-300 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
-                                                    onClick={() => {
-                                                        const confirmed =
-                                                            window.confirm(
-                                                                `Remove the saved mix for “${output.name}”? This removes only Sound Mixer settings; it does not remove the device.`,
-                                                            );
-                                                        if (confirmed) {
-                                                            void send(
-                                                                `output-delete:${output.uid}`,
-                                                                {
-                                                                    command:
-                                                                        "deleteOutputMix",
-                                                                    uid: output.uid,
-                                                                },
-                                                            );
-                                                        }
-                                                    }}
-                                                >
-                                                    Remove saved mix
-                                                </button>
-                                            )}
                                         </li>
                                     ))}
                             </ul>

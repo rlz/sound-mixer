@@ -53,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             let identifier = Bundle.main.bundleIdentifier ?? "com.rlz.soundmixer"
             let store = try ConfigurationStore(fileURL: ConfigurationStore.defaultFileURL(bundleIdentifier: identifier))
             try store.update { configuration in
+                configuration.outputMixes.removeAll { $0.mix.inputs.isEmpty }
                 for index in configuration.outputMixes.indices {
                     configuration.outputMixes[index].mix.level = 1
                 }
@@ -275,6 +276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case "setMasterEnabled": return try updateMixingEnabled(body: body, store: store)
         case "setVirtualMixLevel": return try setVirtualMixLevel(body: body, store: store)
         case "deleteOutputMix": return try deleteOutputMix(body: body, store: store)
+        case "resetMix": return try resetMix(body: body, store: store)
         case "setSourceMuted": return try setSourceMuted(body: body, store: store)
         case "createBus": return try createBus(body: body, store: store)
         case "renameBus": return try renameBus(body: body, store: store)
@@ -345,6 +347,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 throw BridgeError.unknownOutput
             }
             candidate.outputMixes.removeAll { $0.deviceUID.rawValue == uid }
+        }
+    }
+
+    private func resetMix(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "target", "id"],
+              let target = body["target"] as? String, ["output", "bus", "route"].contains(target),
+              let id = body["id"] as? String, !id.isEmpty
+        else { throw BridgeError.invalidPayload }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { config in
+            switch target {
+            case "output":
+                guard config.outputMixes.contains(where: { $0.deviceUID.rawValue == id }) else { throw BridgeError.unknownOutput }
+                config.outputMixes.removeAll { $0.deviceUID.rawValue == id }
+            case "bus":
+                guard let uuid = UUID(uuidString: id), let index = config.buses.firstIndex(where: { $0.id == uuid }) else { throw BridgeError.unknownBus }
+                config.buses[index].mix = Mix()
+            default:
+                guard let uuid = UUID(uuidString: id), let index = config.blackHoleRoutes.firstIndex(where: { $0.id == uuid }) else { throw BridgeError.unknownRoute }
+                config.blackHoleRoutes[index].mix = Mix()
+            }
         }
     }
 
@@ -480,6 +502,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 var value = config.outputMixes[index].mix
                 try applyInput(operation, reference: reference, level: level, placement: placement, to: &value)
                 config.outputMixes[index].mix = value
+                if operation == .remove, value.inputs.isEmpty {
+                    config.outputMixes.remove(at: index)
+                }
             case "bus":
                 guard let uuid = UUID(uuidString: id), let index = config.buses.firstIndex(where: { $0.id == uuid }) else { throw BridgeError.unknownBus }
                 var value = config.buses[index].mix
@@ -685,9 +710,10 @@ extension AppDelegate {
                 levelReading: renderLevels["\(targetKey)/destination"]
             )
         }
-        return configuration.outputMixes.map { item("output", $0.deviceUID.rawValue, $0.mix) }
-            + configuration.buses.map { item("bus", $0.id.uuidString, $0.mix) }
-            + configuration.blackHoleRoutes.map { item("route", $0.id.uuidString, $0.mix) }
+        func hasSettings(_ mix: Mix) -> Bool { !mix.inputs.isEmpty || mix.level != 1 }
+        return configuration.outputMixes.filter { hasSettings($0.mix) }.map { item("output", $0.deviceUID.rawValue, $0.mix) }
+            + configuration.buses.filter { hasSettings($0.mix) }.map { item("bus", $0.id.uuidString, $0.mix) }
+            + configuration.blackHoleRoutes.filter { hasSettings($0.mix) }.map { item("route", $0.id.uuidString, $0.mix) }
     }
 
     func bridgeApplications(configuration: MixerConfiguration, sourceLevels: [String: Double]) -> [BridgeApplication] {
@@ -739,7 +765,7 @@ extension AppDelegate {
             let live = discovered[uid]
             let deviceUID = DeviceUID(rawValue: uid)
             var savedAs: [String] = []
-            if configuration.outputMixes.contains(where: { $0.deviceUID == deviceUID }) {
+            if configuration.outputMixes.contains(where: { $0.deviceUID == deviceUID && !$0.mix.inputs.isEmpty }) {
                 savedAs.append("output")
             }
             if configuration.blackHoleRoutes.contains(where: { $0.deviceUID == deviceUID }) {

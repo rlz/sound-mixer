@@ -23,6 +23,8 @@ Statuses: `[ ]` = not started, `[~]` = in progress. Tasks are ordered by depende
 
 ## 3. Bridge and interface
 
+- [x] Treat empty mix settings as absent and expose reset in the editor. **Done when:** destinations can be edited without a separate mix-creation step, empty/default settings are omitted from state, removing the final output source removes its saved mix, and Reset clears the destination's mix settings.
+
 - [x] Keep the device-volume slider synchronized with macOS volume keys. **Done when:** after a local slider edit, later native volume snapshots move both the percentage and thumb; device readback rounding does not leave the thumb stuck, while active drags remain stable. The slider now follows confirmed native state after each write or interaction; physical volume-key behavior still needs manual Mac verification.
 - [x] Show virtual destination meters and Mix gain in the left pane. **Done when:** every virtual bus and BlackHole route card shows its live destination level, saved gain slider, and percentage; edits continue through the typed bridge without restarting routing, and the selected mix no longer duplicates these controls.
 - [x] Remove redundant output-card captions and enable text copying. **Done when:** output cards omit Disconnected, Muted, and unavailable-control captions while availability and control limitations remain accessible through the dot, button names, and tooltips; text can be selected and copied with standard macOS commands.

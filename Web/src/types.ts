@@ -90,6 +90,7 @@ export type BridgeCommand =
           level: number;
       }
     | { command: "deleteOutputMix"; uid: string }
+    | { command: "resetMix"; target: "output" | "bus" | "route"; id: string }
     | {
           command: "setSourceMuted";
           kind: "inputDevice" | "application" | "blackHoleRoute";
