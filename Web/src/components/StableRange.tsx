@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 type StableRangeProps = {
     value: number;
     label: string;
+    title?: string;
     disabled?: boolean;
     min?: number;
     max?: number;
@@ -14,6 +15,7 @@ type StableRangeProps = {
 export function StableRange({
     value,
     label,
+    title,
     disabled = false,
     min = 0,
     max = 1,
@@ -26,6 +28,8 @@ export function StableRange({
     const committedValue = useRef<number | null>(null);
     const latestValue = useRef<number | null>(null);
     const applying = useRef(false);
+    const confirmedValue = useRef(value);
+    confirmedValue.current = value;
 
     useEffect(() => {
         if (
@@ -34,13 +38,10 @@ export function StableRange({
             latestValue.current !== null
         )
             return;
-        if (
-            committedValue.current !== null &&
-            Math.abs(value - committedValue.current) < 0.000001
-        ) {
-            committedValue.current = null;
-        }
-        if (committedValue.current === null) setDraft(value);
+        // Core Audio may report a rounded value, so an exact match with the
+        // requested value cannot be required before following native updates.
+        committedValue.current = null;
+        setDraft(value);
     }, [value]);
 
     const applyLatest = async () => {
@@ -52,17 +53,26 @@ export function StableRange({
             committedValue.current = next;
             if (!(await onCommit(next))) {
                 committedValue.current = null;
-                setDraft(value);
+                setDraft(confirmedValue.current);
                 latestValue.current = null;
                 break;
             }
         }
         applying.current = false;
+        if (!interaction.current) {
+            committedValue.current = null;
+            setDraft(confirmedValue.current);
+        }
     };
 
     const requestApply = (next: number) => {
-        if (committedValue.current === next && latestValue.current === null)
+        if (committedValue.current === next && latestValue.current === null) {
+            if (!interaction.current && !applying.current) {
+                committedValue.current = null;
+                setDraft(confirmedValue.current);
+            }
             return;
+        }
         latestValue.current = next;
         void applyLatest();
     };
@@ -70,11 +80,13 @@ export function StableRange({
     return (
         <input
             type="range"
+            className="min-w-0 flex-1"
             min={min}
             max={max}
             step={step}
             value={draft}
             aria-label={label}
+            title={title}
             aria-valuetext={formatValue(draft)}
             disabled={disabled}
             onPointerDown={() => {
@@ -86,7 +98,7 @@ export function StableRange({
             }}
             onPointerCancel={() => {
                 interaction.current = false;
-                setDraft(value);
+                setDraft(confirmedValue.current);
             }}
             onKeyDown={(event) => {
                 if (
@@ -129,7 +141,6 @@ export function StableRange({
             }}
             onChange={(event) => {
                 const next = Number(event.currentTarget.value);
-                interaction.current = true;
                 setDraft(next);
                 requestApply(next);
             }}

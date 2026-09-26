@@ -6,6 +6,8 @@ export type OutputState = {
     outputChannels: number;
     volume: number | null;
     volumeWritable: boolean;
+    muted: boolean | null;
+    muteWritable: boolean;
     configured: boolean;
     levelReading: number | null;
     routeError?: string | null;
@@ -79,6 +81,7 @@ export type BridgeCommand =
     | { command: "openPrivacySettings" }
     | { command: "setMasterEnabled"; enabled: boolean }
     | { command: "setDeviceVolume"; uid: string; level: number }
+    | { command: "setDeviceMuted"; uid: string; muted: boolean }
     | {
           command: "setVirtualMixLevel";
           target: "bus" | "route";

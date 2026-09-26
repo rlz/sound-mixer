@@ -12,6 +12,8 @@ struct AudioDeviceSnapshot: Equatable, Sendable {
     let nominalSampleRate: Double
     let outputVolume: Double?
     let canSetOutputVolume: Bool
+    let outputMuted: Bool?
+    let canSetOutputMute: Bool
 
     func hasSameRouting(as other: AudioDeviceSnapshot) -> Bool {
         deviceID == other.deviceID && uid == other.uid && isAlive == other.isAlive &&
@@ -24,9 +26,9 @@ final class CoreAudioDeviceCatalog {
     var onChange: (([AudioDeviceSnapshot]) -> Void)?
 
     private struct VolumeRestoreState {
-        let original: Float32
-        let lastSet: Float32
-        let selector: AudioObjectPropertySelector
+        let original: Float32?
+        let lastSet: Float32?
+        let selector: AudioObjectPropertySelector?
         let originalMute: Bool?
         let lastSetMute: Bool?
     }
@@ -104,7 +106,7 @@ final class CoreAudioDeviceCatalog {
         let lastSet = actual == control.value && requested != control.value ? requested : actual
         if let previous = originalVolumes[uid] {
             originalVolumes[uid] = VolumeRestoreState(
-                original: previous.original,
+                original: previous.original ?? control.value,
                 lastSet: lastSet,
                 selector: control.address.mSelector,
                 originalMute: previous.originalMute,
@@ -137,10 +139,11 @@ final class CoreAudioDeviceCatalog {
     }
 
     private func restoreVolume(_ saved: VolumeRestoreState, deviceID: AudioDeviceID) {
-        guard let current = CoreAudioOutputVolume.read(deviceID: deviceID), current.writable,
+        guard let original = saved.original, let lastSet = saved.lastSet,
+              let current = CoreAudioOutputVolume.read(deviceID: deviceID), current.writable,
               current.address.mSelector == saved.selector,
-              abs(current.value - saved.lastSet) <= 0.015 else { return }
-        try? CoreAudioOutputVolume.write(saved.original, deviceID: deviceID, address: current.address)
+              abs(current.value - lastSet) <= 0.015 else { return }
+        try? CoreAudioOutputVolume.write(original, deviceID: deviceID, address: current.address)
     }
 
     private func restoreMute(_ saved: VolumeRestoreState, deviceID: AudioDeviceID) {
@@ -168,6 +171,7 @@ final class CoreAudioDeviceCatalog {
             installListeners(for: id)
             guard let name = stringProperty(id, kAudioObjectPropertyName) else { return nil }
             let volume = CoreAudioOutputVolume.read(deviceID: id)
+            let mute = CoreAudioOutputMute.read(deviceID: id)
             return AudioDeviceSnapshot(
                 deviceID: id,
                 uid: uid,
@@ -177,7 +181,9 @@ final class CoreAudioDeviceCatalog {
                 outputChannels: channelCount(id, kAudioDevicePropertyScopeOutput),
                 nominalSampleRate: doubleProperty(id, kAudioDevicePropertyNominalSampleRate) ?? 0,
                 outputVolume: volume.map { Double($0.value) },
-                canSetOutputVolume: volume?.writable ?? false
+                canSetOutputVolume: volume?.writable ?? false,
+                outputMuted: mute?.value,
+                canSetOutputMute: mute?.writable ?? false
             )
         }
         latestDevices = snapshots
@@ -274,16 +280,57 @@ final class CoreAudioDeviceCatalog {
     }
 }
 
-private enum VolumeError: LocalizedError {
+extension CoreAudioDeviceCatalog {
+    func setOutputMuted(uid: String, muted: Bool, completion: @escaping (Result<Bool, Error>) -> Void) {
+        queue.async { [weak self] in
+            let result: Result<Bool, Error>
+            do {
+                guard let self else { throw VolumeError.deviceUnavailable }
+                result = try .success(setOutputMuted(uid: uid, muted: muted))
+                refresh()
+            } catch {
+                result = .failure(error)
+            }
+            DispatchQueue.main.async { completion(result) }
+        }
+    }
+
+    private func setOutputMuted(uid: String, muted: Bool) throws -> Bool {
+        guard started, let device = latestDevices.first(where: { $0.uid == uid }),
+              device.isAlive, device.outputChannels > 0 else { throw VolumeError.deviceUnavailable }
+        guard !device.name.localizedCaseInsensitiveContains("BlackHole"),
+              let control = CoreAudioOutputMute.read(deviceID: device.deviceID), control.writable
+        else { throw VolumeError.muteUnsupported }
+
+        if originalVolumes[uid] == nil {
+            originalVolumes[uid] = VolumeRestoreState(
+                original: nil, lastSet: nil, selector: nil,
+                originalMute: control.value, lastSetMute: control.value
+            )
+        }
+        try CoreAudioOutputMute.write(muted, deviceID: device.deviceID, address: control.address)
+        if let previous = originalVolumes[uid] {
+            originalVolumes[uid] = VolumeRestoreState(
+                original: previous.original, lastSet: previous.lastSet, selector: previous.selector,
+                originalMute: previous.originalMute, lastSetMute: muted
+            )
+        }
+        return CoreAudioOutputMute.read(deviceID: device.deviceID)?.value ?? muted
+    }
+}
+
+enum VolumeError: LocalizedError {
     case deviceUnavailable
     case unsupported
+    case muteUnsupported
     case audioStatus(OSStatus)
 
     var errorDescription: String? {
         switch self {
         case .deviceUnavailable: "The output device is unavailable."
         case .unsupported: "This output device does not expose a writable main volume control."
-        case let .audioStatus(status): "Core Audio could not set device volume (status \(status))."
+        case .muteUnsupported: "This output device does not expose a writable mute control."
+        case let .audioStatus(status): "Core Audio could not change the output device control (status \(status))."
         }
     }
 }
@@ -322,38 +369,6 @@ private enum CoreAudioOutputVolume {
         var value = value
         let status = AudioObjectSetPropertyData(
             deviceID, &address, 0, nil, UInt32(MemoryLayout<Float32>.size), &value
-        )
-        guard status == noErr else { throw VolumeError.audioStatus(status) }
-    }
-}
-
-private enum CoreAudioOutputMute {
-    struct Control {
-        let address: AudioObjectPropertyAddress
-        let value: Bool
-        let writable: Bool
-    }
-
-    static func read(deviceID: AudioDeviceID) -> Control? {
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyMute,
-            mScope: kAudioDevicePropertyScopeOutput,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        guard AudioObjectHasProperty(deviceID, &address) else { return nil }
-        var rawValue = UInt32(0)
-        var size = UInt32(MemoryLayout<UInt32>.size)
-        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &rawValue) == noErr else { return nil }
-        var settable = DarwinBoolean(false)
-        let writable = AudioObjectIsPropertySettable(deviceID, &address, &settable) == noErr && settable.boolValue
-        return Control(address: address, value: rawValue != 0, writable: writable)
-    }
-
-    static func write(_ muted: Bool, deviceID: AudioDeviceID, address: AudioObjectPropertyAddress) throws {
-        var address = address
-        var value: UInt32 = muted ? 1 : 0
-        let status = AudioObjectSetPropertyData(
-            deviceID, &address, 0, nil, UInt32(MemoryLayout<UInt32>.size), &value
         )
         guard status == noErr else { throw VolumeError.audioStatus(status) }
     }

@@ -15,6 +15,8 @@ import { MasterSwitch } from "./components/MasterSwitch";
 import { PeakMeter } from "./components/PeakMeter";
 import { StableRange } from "./components/StableRange";
 import { AvailabilityDot } from "./components/AvailabilityDot";
+import { OutputDeviceCard } from "./components/OutputDeviceCard";
+import { VirtualDestinationCard } from "./components/VirtualDestinationCard";
 import "./styles.css";
 
 const applicationGainToDecibels = (gain: number) =>
@@ -217,16 +219,15 @@ export function App() {
                             {mixerState?.outputs
                                 .filter((output) => !output.isBlackHole)
                                 .map((output) => (
-                                    <button
+                                    <OutputDeviceCard
                                         key={output.uid}
-                                        type="button"
-                                        aria-current={
+                                        output={output}
+                                        selected={
                                             selectedItem ===
                                             `output:${output.uid}`
-                                                ? "true"
-                                                : undefined
                                         }
-                                        onClick={() => {
+                                        pending={pending !== null}
+                                        onSelect={() => {
                                             setSelectedItem(
                                                 `output:${output.uid}`,
                                             );
@@ -234,15 +235,26 @@ export function App() {
                                             setEditingBusId(null);
                                             setEditingRouteId(null);
                                         }}
-                                        className={`item-panel flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `output:${output.uid}` ? "border-sky-300 bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "border-slate-800 text-slate-300 hover:bg-slate-800"}`}
-                                    >
-                                        <AvailabilityDot
-                                            available={output.available}
-                                        />
-                                        <span className="min-w-0 truncate">
-                                            {output.name}
-                                        </span>
-                                    </button>
+                                        onVolumeChange={(level) =>
+                                            send(
+                                                `device-volume:${output.uid}`,
+                                                {
+                                                    command: "setDeviceVolume",
+                                                    uid: output.uid,
+                                                    level,
+                                                },
+                                                undefined,
+                                                true,
+                                            )
+                                        }
+                                        onMuteChange={(muted) =>
+                                            send(`device-mute:${output.uid}`, {
+                                                command: "setDeviceMuted",
+                                                uid: output.uid,
+                                                muted,
+                                            })
+                                        }
+                                    />
                                 ))}
                             {mixerState?.outputs.every(
                                 (output) => output.isBlackHole,
@@ -266,26 +278,45 @@ export function App() {
                             >
                                 + Add virtual bus
                             </button>
-                            {mixerState?.buses.map((bus) => (
-                                <button
-                                    key={bus.id}
-                                    type="button"
-                                    aria-current={
-                                        selectedItem === `bus:${bus.id}`
-                                            ? "true"
-                                            : undefined
-                                    }
-                                    onClick={() => {
-                                        setSelectedItem(`bus:${bus.id}`);
-                                        setBusNameDraft(bus.name);
-                                        setEditingBusId(bus.id);
-                                        setEditingRouteId(null);
-                                    }}
-                                    className={`item-panel w-full rounded-lg border px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `bus:${bus.id}` ? "border-sky-300 bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "border-slate-800 text-slate-300 hover:bg-slate-800"}`}
-                                >
-                                    {bus.name}
-                                </button>
-                            ))}
+                            {mixerState?.buses.map((bus) => {
+                                const mix = mixerState.mixes.find(
+                                    (item) =>
+                                        item.target === "bus" &&
+                                        item.id === bus.id,
+                                );
+                                return (
+                                    <VirtualDestinationCard
+                                        key={bus.id}
+                                        name={bus.name}
+                                        kind="bus"
+                                        selected={
+                                            selectedItem === `bus:${bus.id}`
+                                        }
+                                        gain={mix?.level ?? 1}
+                                        level={mix?.levelReading ?? null}
+                                        onSelect={() => {
+                                            setSelectedItem(`bus:${bus.id}`);
+                                            setBusNameDraft(bus.name);
+                                            setEditingBusId(bus.id);
+                                            setEditingRouteId(null);
+                                        }}
+                                        onGainChange={(level) =>
+                                            send(
+                                                `virtual-level:${bus.id}`,
+                                                {
+                                                    command:
+                                                        "setVirtualMixLevel",
+                                                    target: "bus",
+                                                    id: bus.id,
+                                                    level,
+                                                },
+                                                undefined,
+                                                true,
+                                            )
+                                        }
+                                    />
+                                );
+                            })}
                             {mixerState?.buses.map(
                                 (bus) =>
                                     selectedItem === `bus:${bus.id}` && (
@@ -345,28 +376,49 @@ export function App() {
                             >
                                 + Add BlackHole route
                             </button>
-                            {mixerState?.blackHoleRoutes.map((route) => (
-                                <button
-                                    key={route.id}
-                                    type="button"
-                                    aria-current={
-                                        selectedItem === `blackHole:${route.id}`
-                                            ? "true"
-                                            : undefined
-                                    }
-                                    onClick={() => {
-                                        setSelectedItem(
-                                            `blackHole:${route.id}`,
-                                        );
-                                        setBusNameDraft(route.name);
-                                        setEditingRouteId(route.id);
-                                        setEditingBusId(null);
-                                    }}
-                                    className={`item-panel w-full rounded-lg border px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${selectedItem === `blackHole:${route.id}` ? "border-sky-300 bg-sky-400/15 text-sky-100 ring-1 ring-sky-300" : "border-slate-800 text-slate-300 hover:bg-slate-800"}`}
-                                >
-                                    {route.name}
-                                </button>
-                            ))}
+                            {mixerState?.blackHoleRoutes.map((route) => {
+                                const mix = mixerState.mixes.find(
+                                    (item) =>
+                                        item.target === "route" &&
+                                        item.id === route.id,
+                                );
+                                return (
+                                    <VirtualDestinationCard
+                                        key={route.id}
+                                        name={route.name}
+                                        kind="BlackHole route"
+                                        available={route.available}
+                                        selected={
+                                            selectedItem ===
+                                            `blackHole:${route.id}`
+                                        }
+                                        gain={mix?.level ?? 1}
+                                        level={mix?.levelReading ?? null}
+                                        onSelect={() => {
+                                            setSelectedItem(
+                                                `blackHole:${route.id}`,
+                                            );
+                                            setBusNameDraft(route.name);
+                                            setEditingRouteId(route.id);
+                                            setEditingBusId(null);
+                                        }}
+                                        onGainChange={(level) =>
+                                            send(
+                                                `virtual-level:${route.id}`,
+                                                {
+                                                    command:
+                                                        "setVirtualMixLevel",
+                                                    target: "route",
+                                                    id: route.id,
+                                                    level,
+                                                },
+                                                undefined,
+                                                true,
+                                            )
+                                        }
+                                    />
+                                );
+                            })}
                             {mixerState?.blackHoleRoutes.length === 0 && (
                                 <p className="px-3 text-sm text-slate-500">
                                     No BlackHole routes.
@@ -572,39 +624,6 @@ export function App() {
                                 className="mb-5 rounded-2xl border border-slate-800 bg-slate-900 p-5"
                                 aria-label="Mix sources"
                             >
-                                <PeakMeter
-                                    level={selectedMix.levelReading}
-                                    label="Destination output"
-                                />
-                                {selectedTarget.target !== "output" && (
-                                    <label className="mb-3 flex items-center gap-3 text-xs text-slate-300">
-                                        Mix gain
-                                        <StableRange
-                                            value={selectedMix.level}
-                                            label="Virtual destination mix gain"
-                                            onCommit={(level) =>
-                                                send(
-                                                    `virtual-level:${selectedTarget.id}`,
-                                                    {
-                                                        command:
-                                                            "setVirtualMixLevel",
-                                                        target: selectedTarget.target as
-                                                            | "bus"
-                                                            | "route",
-                                                        id: selectedTarget.id,
-                                                        level,
-                                                    },
-                                                )
-                                            }
-                                        />
-                                        <span className="w-9 text-right tabular-nums">
-                                            {Math.round(
-                                                selectedMix.level * 100,
-                                            )}
-                                            %
-                                        </span>
-                                    </label>
-                                )}
                                 <div className="mb-4 flex flex-wrap items-end gap-3">
                                     <label className="min-w-56 flex-1 text-sm">
                                         Add a source
@@ -1385,59 +1404,6 @@ export function App() {
                                                     ? "channel"
                                                     : "channels"}
                                             </span>
-                                            <div className="min-w-48 flex-1 text-xs text-slate-300">
-                                                <label className="flex items-center gap-3">
-                                                    Device volume
-                                                    <StableRange
-                                                        value={
-                                                            output.volume ?? 0
-                                                        }
-                                                        label={`${output.name} device volume`}
-                                                        disabled={
-                                                            !output.available ||
-                                                            !output.volumeWritable
-                                                        }
-                                                        onCommit={(level) =>
-                                                            send(
-                                                                `device-volume:${output.uid}`,
-                                                                {
-                                                                    command:
-                                                                        "setDeviceVolume",
-                                                                    uid: output.uid,
-                                                                    level,
-                                                                },
-                                                                undefined,
-                                                                true,
-                                                            )
-                                                        }
-                                                    />
-                                                    <span className="w-9 text-right tabular-nums">
-                                                        {output.volume === null
-                                                            ? "—"
-                                                            : `${Math.round(output.volume * 100)}%`}
-                                                    </span>
-                                                </label>
-                                                {output.available &&
-                                                    output.volumeWritable && (
-                                                        <p className="mt-1 text-slate-500">
-                                                            Previous device
-                                                            volume and mute
-                                                            state are restored
-                                                            on exit.
-                                                        </p>
-                                                    )}
-                                                {output.available &&
-                                                    !output.volumeWritable && (
-                                                        <p
-                                                            className="mt-1 text-amber-300"
-                                                            role="status"
-                                                        >
-                                                            This device has no
-                                                            writable main volume
-                                                            control.
-                                                        </p>
-                                                    )}
-                                            </div>
                                             {output.configured && (
                                                 <button
                                                     type="button"

@@ -67,6 +67,8 @@ struct BridgeOutput: Encodable {
     let outputChannels: Int
     let volume: Double?
     let volumeWritable: Bool
+    let muted: Bool?
+    let muteWritable: Bool
     let configured: Bool
     let routeError: String?
     let levelReading: Double?

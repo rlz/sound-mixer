@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var startupConfigurationWarning: String?
 
     func applicationDidFinishLaunching(_: Notification) {
+        setupEditMenu()
         let configurationWarning = loadConfiguration()
         setupAudioServices()
         let (window, webView) = createWindow()
@@ -33,6 +34,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func setupEditMenu() {
+        let menu = NSMenu()
+        let editItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editItem.submenu = editMenu
+        menu.addItem(editItem)
+        NSApp.mainMenu = menu
     }
 
     private func loadConfiguration() -> String? {
@@ -231,6 +243,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 try setDeviceVolume(body: body, requestID: requestID)
                 return
             }
+            if command == "setDeviceMuted" {
+                try setDeviceMuted(body: body, requestID: requestID)
+                return
+            }
             let configuration = try executeCommand(command, body: body)
             sendToWeb(method: "onCommandResult", payload: ["requestId": requestID, "accepted": true])
             updateAudioRouting()
@@ -285,6 +301,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
               let level = body["level"] as? Double, level.isFinite, (0 ... 1).contains(level),
               let deviceCatalog else { throw BridgeError.invalidPayload }
         deviceCatalog.setOutputVolume(uid: uid, level: level) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success:
+                sendToWeb(method: "onCommandResult", payload: ["requestId": requestID, "accepted": true])
+            case let .failure(error):
+                sendToWeb(method: "onCommandResult", payload: [
+                    "requestId": requestID, "accepted": false, "error": error.localizedDescription
+                ])
+            }
+        }
+    }
+
+    private func setDeviceMuted(body: [String: Any], requestID: String) throws {
+        guard Set(body.keys) == ["requestId", "command", "uid", "muted"],
+              let uid = body["uid"] as? String, !uid.isEmpty,
+              let muted = body["muted"] as? Bool,
+              let deviceCatalog else { throw BridgeError.invalidPayload }
+        deviceCatalog.setOutputMuted(uid: uid, muted: muted) { [weak self] result in
             guard let self else { return }
             switch result {
             case .success:
@@ -743,6 +777,8 @@ extension AppDelegate {
                 outputChannels: live?.outputChannels ?? 0,
                 volume: live?.outputVolume,
                 volumeWritable: live?.canSetOutputVolume ?? false,
+                muted: live?.outputMuted,
+                muteWritable: live?.canSetOutputMute ?? false,
                 configured: saved[uid] != nil,
                 routeError: outputRouteErrors[uid],
                 levelReading: renderLevels["output:\(uid)/destination"]

@@ -8,6 +8,13 @@ html {
 
 body {
     margin: 0;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+button {
+    -webkit-user-select: text;
+    user-select: text;
 }
 
 html,
@@ -49,7 +56,7 @@ body,
 
 .mixer-workspace {
     display: grid;
-    grid-template-columns: clamp(160px, 19vw, 250px) minmax(260px, 1fr) clamp(
+    grid-template-columns: clamp(250px, 26vw, 340px) minmax(260px, 1fr) clamp(
             185px,
             21vw,
             275px
