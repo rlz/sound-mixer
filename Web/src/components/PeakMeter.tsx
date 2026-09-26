@@ -1,9 +1,10 @@
 type PeakMeterProps = {
     level: number | null | undefined;
     label: string;
+    className?: string;
 };
 
-export function PeakMeter({ level, label }: PeakMeterProps) {
+export function PeakMeter({ level, label, className = "" }: PeakMeterProps) {
     const active = typeof level === "number" && Number.isFinite(level);
     const peak = active ? Math.min(Math.max(level, 0), 1) : 0;
     const decibels = peak > 0 ? 20 * Math.log10(peak) : -Infinity;
@@ -21,7 +22,7 @@ export function PeakMeter({ level, label }: PeakMeterProps) {
 
     return (
         <div
-            className="mt-2 flex items-center gap-2 text-xs text-slate-400"
+            className={`mt-2 flex items-center gap-2 text-xs text-slate-400 ${className}`}
             role="meter"
             aria-label={`${label} signal level`}
             aria-valuemin={0}

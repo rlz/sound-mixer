@@ -39,6 +39,7 @@ export function ChannelMatrixDialog({
         (_, index) => routing[index] ?? [],
     );
     const levels = rows.map((_, index) => channelLevels?.[index] ?? 1);
+    const matrixColumns = `360px repeat(${outputChannels}, 48px)`;
     const updateLevel = (index: number, decibels: number) => {
         const value = decibelsToGain(decibels);
         const next = [...levels];
@@ -48,11 +49,11 @@ export function ChannelMatrixDialog({
 
     return (
         <DialogShell
-            title="channel routing"
+            title="Chanel Routing"
             labelledBy="channel-routing-title"
             onClose={onClose}
-            className="max-w-[95vw]"
-            bodyClassName="text-sm"
+            className="w-[min(1100px,95vw)] max-w-[95vw]"
+            bodyClassName="text-sm !pb-0"
             onDialogKeyDown={(event) => {
                 if (event.key === "Tab") {
                     const controls =
@@ -74,60 +75,94 @@ export function ChannelMatrixDialog({
                 }
             }}
         >
-            <table className="border-separate border-spacing-1 text-xs">
-                <thead>
-                    <tr>
-                        <th scope="col" className="px-2 text-left">
-                            Input
-                        </th>
-                        <th
-                            scope="colgroup"
-                            colSpan={outputChannels}
-                            className="pb-1 text-center"
+            <div className="-mx-4 overflow-x-auto px-4 text-xs">
+                <div className="w-max space-y-px">
+                    <div
+                        className="grid gap-px"
+                        style={{ gridTemplateColumns: matrixColumns }}
+                    >
+                        <span className="flex items-center px-2">Input</span>
+                        <span
+                            className="flex items-center justify-start"
+                            style={{ gridColumn: `span ${outputChannels}` }}
                         >
                             Out
-                        </th>
-                    </tr>
-                    <tr>
-                        <th aria-hidden="true" />
+                        </span>
+                    </div>
+                    <div
+                        className="grid gap-px"
+                        style={{ gridTemplateColumns: matrixColumns }}
+                    >
+                        <span aria-hidden="true" />
                         {Array.from({ length: outputChannels }, (_, output) => (
-                            <th
-                                scope="col"
+                            <span
                                 key={output}
-                                className="min-w-16 px-2 text-center"
+                                className="flex size-12 items-center justify-center"
                             >
                                 {output + 1}
-                            </th>
+                            </span>
                         ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map((selected, input) => (
-                        <tr key={input}>
-                            <th
-                                scope="row"
-                                className="min-w-28 pr-2 text-left font-normal"
+                    </div>
+                    <div className="space-y-px">
+                        {rows.map((selected, input) => (
+                            <div
+                                key={input}
+                                className="grid gap-px"
+                                style={{ gridTemplateColumns: matrixColumns }}
                             >
-                                In {input + 1}
-                                {meters && (
-                                    <PeakMeter
-                                        level={meters[input]}
-                                        label={`${name} input channel ${input + 1}`}
-                                    />
-                                )}
-                            </th>
-                            {Array.from(
-                                { length: outputChannels },
-                                (_, output) => {
-                                    const active = selected.includes(
-                                        output + 1,
-                                    );
-                                    return (
-                                        <td
-                                            key={output}
-                                            className="text-center"
-                                        >
+                                <div className="flex h-12 items-center gap-2 px-2">
+                                    <span className="w-6 shrink-0 text-center font-medium tabular-nums">
+                                        {input + 1}
+                                    </span>
+                                    <span className="flex min-w-0 flex-1 flex-col justify-center gap-1">
+                                        {meters && (
+                                            <PeakMeter
+                                                level={meters[input]}
+                                                label={`${name} input channel ${input + 1}`}
+                                                className="mt-0 w-full"
+                                            />
+                                        )}
+                                        {onGainChange && (
+                                            <span className="flex min-w-0 items-center gap-2 whitespace-nowrap">
+                                                <StableRange
+                                                    value={gainToDecibels(
+                                                        levels[input],
+                                                    )}
+                                                    label={`${name} channel ${input + 1} gain`}
+                                                    disabled={gainDisabled}
+                                                    onCommit={(value) =>
+                                                        updateLevel(
+                                                            input,
+                                                            value,
+                                                        )
+                                                    }
+                                                    min={-60}
+                                                    max={0}
+                                                    step={0.5}
+                                                    formatValue={
+                                                        formatGainDecibels
+                                                    }
+                                                />
+                                                <span className="w-12 shrink-0 text-right whitespace-nowrap tabular-nums">
+                                                    {formatGainDecibels(
+                                                        gainToDecibels(
+                                                            levels[input],
+                                                        ),
+                                                    )}
+                                                </span>
+                                            </span>
+                                        )}
+                                    </span>
+                                </div>
+                                {Array.from(
+                                    { length: outputChannels },
+                                    (_, output) => {
+                                        const active = selected.includes(
+                                            output + 1,
+                                        );
+                                        return (
                                             <button
+                                                key={output}
                                                 type="button"
                                                 disabled={disabled}
                                                 aria-pressed={active}
@@ -150,48 +185,19 @@ export function ChannelMatrixDialog({
                                                           );
                                                     onRoutingChange(next);
                                                 }}
-                                                className={`h-8 w-12 rounded border focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${active ? "border-sky-300 bg-sky-500 text-slate-950" : "border-slate-600 bg-slate-900 hover:bg-slate-800"}`}
+                                                className={`size-12 rounded-none border focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${active ? "border-sky-300 bg-sky-500 text-slate-950" : "border-slate-600 bg-slate-900 hover:bg-slate-800"}`}
                                             >
                                                 {active ? "✓" : "·"}
                                             </button>
-                                        </td>
-                                    );
-                                },
-                            )}
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-            {onGainChange && (
-                <div className="mt-4 space-y-2 border-t border-slate-700 pt-3">
-                    <h3 className="text-xs font-medium text-slate-300">
-                        Channel gain
-                    </h3>
-                    {levels.map((level, index) => (
-                        <div
-                            key={index}
-                            className="flex items-center gap-3 text-xs"
-                        >
-                            <span className="w-20 shrink-0">
-                                In {index + 1} gain
-                            </span>
-                            <StableRange
-                                value={gainToDecibels(level)}
-                                label={`${name} channel ${index + 1} gain`}
-                                disabled={gainDisabled}
-                                onCommit={(value) => updateLevel(index, value)}
-                                min={-60}
-                                max={0}
-                                step={0.5}
-                                formatValue={formatGainDecibels}
-                            />
-                            <span>
-                                {formatGainDecibels(gainToDecibels(level))}
-                            </span>
-                        </div>
-                    ))}
+                                        );
+                                    },
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                    <div aria-hidden="true" className="h-8" />
                 </div>
-            )}
+            </div>
         </DialogShell>
     );
 }
