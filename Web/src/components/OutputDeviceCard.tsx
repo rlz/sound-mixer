@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { faVolumeHigh, faVolumeXmark } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { OutputState } from "../types";
@@ -24,7 +25,16 @@ export function OutputDeviceCard({
     onMuteChange,
     onOpenPrivacySettings,
 }: OutputDeviceCardProps) {
-    const volumeAvailable = output.available && output.volumeWritable;
+    const [volumeWriteFailed, setVolumeWriteFailed] = useState(false);
+    useEffect(() => {
+        setVolumeWriteFailed(false);
+    }, [output.uid, output.available, output.volume]);
+
+    const volumeAvailable =
+        output.available &&
+        output.volumeWritable &&
+        output.volume !== null &&
+        !volumeWriteFailed;
     const muteAvailable = output.available && output.muteWritable;
 
     return (
@@ -113,7 +123,11 @@ export function OutputDeviceCard({
                               : `${output.name} device volume`
                     }
                     disabled={!volumeAvailable}
-                    onCommit={onVolumeChange}
+                    onCommit={async (level) => {
+                        const accepted = await onVolumeChange(level);
+                        if (!accepted) setVolumeWriteFailed(true);
+                        return accepted;
+                    }}
                 />
                 <span className="w-9 shrink-0 text-right text-xs text-slate-300 tabular-nums">
                     {output.volume === null

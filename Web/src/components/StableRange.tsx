@@ -29,6 +29,7 @@ export function StableRange({
     const latestValue = useRef<number | null>(null);
     const applying = useRef(false);
     const confirmedValue = useRef(value);
+    const pointerStartValue = useRef<number | null>(null);
 
     useEffect(() => {
         confirmedValue.current = value;
@@ -92,15 +93,20 @@ export function StableRange({
             title={title}
             aria-valuetext={formatValue(draft)}
             disabled={disabled}
-            onPointerDown={() => {
+            onPointerDown={(event) => {
                 interaction.current = true;
+                pointerStartValue.current = Number(event.currentTarget.value);
             }}
             onPointerUp={(event) => {
                 interaction.current = false;
-                requestApply(Number(event.currentTarget.value));
+                const next = Number(event.currentTarget.value);
+                const start = pointerStartValue.current;
+                pointerStartValue.current = null;
+                if (start !== null && next !== start) requestApply(next);
             }}
             onPointerCancel={() => {
                 interaction.current = false;
+                pointerStartValue.current = null;
                 setDraft(confirmedValue.current);
             }}
             onKeyDown={(event) => {
