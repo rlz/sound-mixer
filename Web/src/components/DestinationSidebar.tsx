@@ -1,9 +1,9 @@
 import { memo } from "react";
-import { ItemGroup } from "./ItemGroup";
 import { OutputDeviceCard } from "./OutputDeviceCard";
 import { VirtualDestinationCard } from "./VirtualDestinationCard";
 import { useMixerStore } from "../store";
 import { useMixerCommand } from "../useMixerCommand";
+import { compareByName } from "../sortByName";
 
 export const DestinationSidebar = memo(function DestinationSidebar() {
     const outputs = useMixerStore((state) => state.mixerState?.outputs) ?? [];
@@ -18,6 +18,15 @@ export const DestinationSidebar = memo(function DestinationSidebar() {
     const setBusNameDraft = useMixerStore((state) => state.setBusNameDraft);
     const pending = useMixerStore((state) => state.pending);
     const send = useMixerCommand();
+    const visibleOutputs = outputs
+        .filter((output) => !hiddenUIDs.has(output.uid))
+        .sort((left, right) =>
+            compareByName(
+                { name: left.name, id: left.uid },
+                { name: right.name, id: right.uid },
+            ),
+        );
+    const sortedBuses = [...buses].sort(compareByName);
 
     const deleteVirtualItem = async (kind: "bus", id: string, name: string) => {
         const approved = window.confirm(
@@ -37,56 +46,49 @@ export const DestinationSidebar = memo(function DestinationSidebar() {
     return (
         <nav
             aria-label="Mixer items"
-            className="min-h-0 min-w-0 [scrollbar-gutter:stable] space-y-3.5 overflow-x-hidden overflow-y-auto overscroll-contain border-r border-slate-700 bg-slate-900 p-3.5"
+            className="flex min-h-0 min-w-0 flex-col border-r border-slate-700 bg-slate-900"
         >
-            <ItemGroup title="System">
-                {outputs
-                    .filter((output) => !hiddenUIDs.has(output.uid))
-                    .map((output) => (
-                        <OutputDeviceCard
-                            key={output.uid}
-                            output={output}
-                            selected={selectedItem === `output:${output.uid}`}
-                            pending={pending !== null}
-                            onSelect={() => {
-                                setSelectedItem(`output:${output.uid}`);
-                                setBusNameDraft(null);
-                            }}
-                            onVolumeChange={(level) =>
-                                send(
-                                    `device-volume:${output.uid}`,
-                                    {
-                                        command: "setDeviceVolume",
-                                        uid: output.uid,
-                                        level,
-                                    },
-                                    undefined,
-                                    true,
-                                )
-                            }
-                            onMuteChange={(muted) =>
-                                send(`device-mute:${output.uid}`, {
-                                    command: "setDeviceMuted",
+            <h2 className="shrink-0 border-b border-slate-700 px-3.5 py-3 text-sm font-semibold">
+                Output
+            </h2>
+            <div className="min-h-0 flex-1 [scrollbar-gutter:stable] space-y-1 overflow-x-hidden overflow-y-auto overscroll-contain p-3.5">
+                {visibleOutputs.map((output) => (
+                    <OutputDeviceCard
+                        key={output.uid}
+                        output={output}
+                        selected={selectedItem === `output:${output.uid}`}
+                        pending={pending !== null}
+                        onSelect={() => {
+                            setSelectedItem(`output:${output.uid}`);
+                            setBusNameDraft(null);
+                        }}
+                        onVolumeChange={(level) =>
+                            send(
+                                `device-volume:${output.uid}`,
+                                {
+                                    command: "setDeviceVolume",
                                     uid: output.uid,
-                                    muted,
-                                })
-                            }
-                            onOpenPrivacySettings={() =>
-                                void send(`privacy-output:${output.uid}`, {
-                                    command: "openPrivacySettings",
-                                })
-                            }
-                        />
-                    ))}
-                {outputs.filter((output) => !hiddenUIDs.has(output.uid))
-                    .length === 0 && (
-                    <p className="px-3 text-sm text-slate-500">
-                        No output devices.
-                    </p>
-                )}
-            </ItemGroup>
-            <ItemGroup title="Virtual">
-                {buses.map((bus) => {
+                                    level,
+                                },
+                                undefined,
+                                true,
+                            )
+                        }
+                        onMuteChange={(muted) =>
+                            send(`device-mute:${output.uid}`, {
+                                command: "setDeviceMuted",
+                                uid: output.uid,
+                                muted,
+                            })
+                        }
+                        onOpenPrivacySettings={() =>
+                            void send(`privacy-output:${output.uid}`, {
+                                command: "openPrivacySettings",
+                            })
+                        }
+                    />
+                ))}
+                {sortedBuses.map((bus) => {
                     const mix = mixes.find(
                         (item) => item.target === "bus" && item.id === bus.id,
                     );
@@ -130,12 +132,12 @@ export const DestinationSidebar = memo(function DestinationSidebar() {
                         />
                     );
                 })}
-                {buses.length === 0 && (
+                {visibleOutputs.length === 0 && buses.length === 0 && (
                     <p className="px-3 text-sm text-slate-500">
-                        No virtual buses.
+                        No output destinations.
                     </p>
                 )}
-            </ItemGroup>
+            </div>
         </nav>
     );
 });

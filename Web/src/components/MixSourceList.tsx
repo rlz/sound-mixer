@@ -7,6 +7,7 @@ import { ChannelMatrixDialog } from "./ChannelMatrixDialog";
 import { LevelControl } from "./LevelControl";
 import { ItemCard } from "./ItemCard";
 import type { MixState } from "../types";
+import { compareByName } from "../sortByName";
 
 export const MixSourceList = memo(function MixSourceList() {
     const mixerState = useMixerStore((state) => state.mixerState);
@@ -42,6 +43,24 @@ export const MixSourceList = memo(function MixSourceList() {
     const deviceNames = new Map(
         mixerState?.devices.map((device) => [device.uid, device.name]) ?? [],
     );
+    const sourceName = (input: MixState["inputs"][number]) =>
+        input.kind === "inputDevice"
+            ? (deviceNames.get(input.id) ?? input.id)
+            : input.kind === "app"
+              ? (mixerState?.applications.find((app) => app.id === input.id)
+                    ?.name ?? input.id)
+              : (mixerState?.buses.find((bus) => bus.id === input.id)?.name ??
+                input.id);
+    const sourceOrder = (kind: string) =>
+        kind === "inputDevice" ? 0 : kind === "bus" ? 1 : 2;
+    const sortedInputs = [...(selectedMix?.inputs ?? [])].sort(
+        (left, right) =>
+            sourceOrder(left.kind) - sourceOrder(right.kind) ||
+            compareByName(
+                { name: sourceName(left), id: left.id },
+                { name: sourceName(right), id: right.id },
+            ),
+    );
     return (
         <>
             {selectedMix && selectedTarget && (
@@ -57,18 +76,8 @@ export const MixSourceList = memo(function MixSourceList() {
                         </p>
                     ) : (
                         <ul className="space-y-3">
-                            {selectedMix.inputs.map((input) => {
-                                const name =
-                                    input.kind === "inputDevice"
-                                        ? (deviceNames.get(input.id) ??
-                                          input.id)
-                                        : input.kind === "app"
-                                          ? (mixerState?.applications.find(
-                                                (app) => app.id === input.id,
-                                            )?.name ?? input.id)
-                                          : (mixerState?.buses.find(
-                                                (bus) => bus.id === input.id,
-                                            )?.name ?? input.id);
+                            {sortedInputs.map((input) => {
+                                const name = sourceName(input);
                                 const available =
                                     input.kind === "inputDevice"
                                         ? mixerState?.devices.some(

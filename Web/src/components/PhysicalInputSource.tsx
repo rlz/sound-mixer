@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { faCheck, faPlus, faTrashCan } from "@fortawesome/free-solid-svg-icons";
+import { faCheck, faPlus } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useMixerStore } from "../store";
 import { useMixerCommand } from "../useMixerCommand";
@@ -7,13 +7,27 @@ import type { MixState } from "../types";
 import { ItemCard } from "./ItemCard";
 import { LevelControl } from "./LevelControl";
 
-export const VirtualInputSources = memo(function VirtualInputSources() {
+export const PhysicalInputSource = memo(function PhysicalInputSource({
+    deviceUID,
+}: {
+    deviceUID: string;
+}) {
     const mixerState = useMixerStore((state) => state.mixerState);
     const selectedItem = useMixerStore((state) => state.selectedItem);
-    const setSelectedItem = useMixerStore((state) => state.setSelectedItem);
-    const setBusNameDraft = useMixerStore((state) => state.setBusNameDraft);
     const pending = useMixerStore((state) => state.pending);
     const send = useMixerCommand();
+    const configuredInputIDs = new Set(
+        (mixerState?.mixes ?? [])
+            .flatMap((mix) => mix.inputs)
+            .filter((input) => input.kind === "inputDevice")
+            .map((input) => input.id),
+    );
+    const sourceDevices = (mixerState?.devices ?? []).filter(
+        (device) =>
+            device.uid === deviceUID &&
+            !device.hidden &&
+            (device.inputChannels > 0 || configuredInputIDs.has(device.uid)),
+    );
     const selectedOutput = mixerState?.outputs.find(
         (output) => selectedItem === `output:${output.uid}`,
     );
@@ -48,45 +62,59 @@ export const VirtualInputSources = memo(function VirtualInputSources() {
     };
     return (
         <>
-            {(mixerState?.buses ?? []).map((bus) => {
+            {sourceDevices.map((device) => {
+                const inputState = mixerState?.inputCaptureStates.find(
+                    (state) => state.uid === device.uid,
+                );
+                const captureState = inputState?.state ?? "stopped";
                 const alreadyInSelectedMix =
                     selectedMix?.inputs.some(
-                        (input) => input.kind === "bus" && input.id === bus.id,
+                        (input) =>
+                            input.kind === "inputDevice" &&
+                            input.id === device.uid,
                     ) ?? false;
-                const busMix = mixerState?.mixes.find(
-                    (mix) => mix.target === "bus" && mix.id === bus.id,
-                );
                 return (
                     <ItemCard
-                        key={`bus-input:${bus.id}`}
-                        name={bus.name}
-                        type="Virtual"
-                        level={busMix?.levelReading}
-                        levelLabel={`${bus.name} output`}
-                        channelCount={bus.channelCount}
+                        key={device.uid}
+                        name={device.name}
+                        type="System"
+                        level={inputState?.level}
+                        levelLabel={`${device.name} input`}
+                        available={device.available}
+                        status={
+                            !device.available ||
+                            captureState === "permissionDenied" ||
+                            captureState.startsWith("unavailable:")
+                                ? "problem"
+                                : captureState === "capturing"
+                                  ? "active"
+                                  : "inactive"
+                        }
+                        channelCount={device.inputChannels}
                         leadingAction={
                             <button
                                 type="button"
                                 disabled={
                                     !selectedTarget ||
                                     alreadyInSelectedMix ||
-                                    pending !== null ||
-                                    (selectedTarget.target === "bus" &&
-                                        selectedTarget.id === bus.id)
+                                    pending !== null
                                 }
                                 aria-label={
                                     alreadyInSelectedMix
-                                        ? `${bus.name} is already in the selected mix`
-                                        : `Add ${bus.name} to the selected mix`
+                                        ? `${device.name} is already in the selected mix`
+                                        : `Add ${device.name} to the selected mix`
                                 }
                                 title={
                                     alreadyInSelectedMix
                                         ? "Already in mix"
-                                        : `Add ${bus.name} to mix`
+                                        : `Add ${device.name} to mix`
                                 }
-                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-sky-300 hover:bg-slate-800 disabled:opacity-50"
+                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
                                 onClick={() =>
-                                    addSourceToSelectedMix("bus", bus.id)
+                                    addSourceToSelectedMix(
+                                        "inputDevice",
+                                        device.uid,
+                                    )
                                 }
                             >
                                 <FontAwesomeIcon
@@ -97,58 +125,47 @@ export const VirtualInputSources = memo(function VirtualInputSources() {
                                 />
                             </button>
                         }
-                        trailingAction={
+                    >
+                        {captureState === "permissionDenied" && (
                             <button
                                 type="button"
-                                disabled={pending !== null}
-                                aria-label={`Delete ${bus.name}`}
-                                title="Delete"
-                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-rose-300 hover:bg-slate-800 disabled:opacity-50"
+                                className="text-xs text-amber-200 underline"
                                 onClick={() =>
-                                    void send(`bus-delete:${bus.id}`, {
-                                        command: "deleteBus",
-                                        id: bus.id,
-                                    }).then((accepted) => {
-                                        if (accepted) {
-                                            setSelectedItem(null);
-                                            setBusNameDraft(null);
-                                        }
+                                    void send(`privacy-input:${device.uid}`, {
+                                        command: "openPrivacySettings",
                                     })
                                 }
                             >
-                                <FontAwesomeIcon
-                                    icon={faTrashCan}
-                                    aria-hidden="true"
-                                />
+                                Open System Settings
                             </button>
-                        }
-                    >
+                        )}
                         <LevelControl
-                            name={bus.name}
-                            value={bus.sourceLevel}
-                            muted={bus.muted}
+                            name={device.name}
+                            value={device.sourceLevel}
+                            muted={device.muted}
                             onMuteChange={(muted) =>
-                                void send(`bus-mute:${bus.id}`, {
+                                void send(`mute-input:${device.uid}`, {
                                     command: "setSourceMuted",
-                                    kind: "bus",
-                                    sourceID: bus.id,
+                                    kind: "inputDevice",
+                                    sourceID: device.uid,
                                     muted,
                                 })
                             }
                             onLevelChange={(level) =>
                                 send(
-                                    `virtual-level:${bus.id}`,
+                                    `source-level:${device.uid}`,
                                     {
-                                        command: "setVirtualMixLevel",
-                                        target: "bus",
-                                        id: bus.id,
+                                        command: "setSourceLevel",
+                                        kind: "inputDevice",
+                                        sourceID: device.uid,
                                         level,
                                     },
                                     undefined,
                                     true,
                                 )
                             }
-                            levelLabel={`${bus.name} virtual bus mix gain`}
+                            levelLabel={`${device.name} input volume`}
+                            muteDisabled={pending !== null}
                         />
                     </ItemCard>
                 );
