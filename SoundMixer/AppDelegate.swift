@@ -789,7 +789,7 @@ extension AppDelegate {
                 muteWritable: live?.canSetOutputMute ?? false,
                 configured: saved[uid] != nil,
                 routeError: outputRouteErrors[uid],
-                levelReading: deviceLevels[uid],
+                levelReading: live?.outputMuted == true || live?.outputVolume == 0 ? 0 : deviceLevels[uid],
                 meterState: captureStates["device:\(uid)"]
             )
         }

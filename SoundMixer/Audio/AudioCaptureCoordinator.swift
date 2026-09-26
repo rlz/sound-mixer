@@ -51,9 +51,8 @@ final class AudioCaptureCoordinator {
     func startOutputMeter(uid: String, meter: RealtimePeakMeter) {
         queue.async { [weak self] in
             guard let self else { return }
-            let description = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
+            let description = CATapDescription(excludingProcesses: [], deviceUID: uid, stream: 0)
             description.name = "Sound Mixer output meter"
-            description.deviceUID = uid
             description.isPrivate = true
             description.muteBehavior = .unmuted
             startTap(id: "device:\(uid)", description: description, meter: meter)
