@@ -47,6 +47,7 @@ export function VirtualDestinationCard({
             available={available}
             selected={selected}
             channelCount={channelCount}
+            selectOnSurface
             onSelect={onSelect}
             trailingAction={
                 <button

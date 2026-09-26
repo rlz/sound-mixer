@@ -33,7 +33,17 @@ export function ItemCard({
     trailingAction,
     children,
 }: ItemCardProps) {
-    const title = (
+    const title = onSelect && !selectOnSurface ? (
+        <button
+            type="button"
+            aria-current={selected ? "true" : undefined}
+            onClick={onSelect}
+            className="min-w-0 flex-1 truncate text-left font-medium text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
+            title={name}
+        >
+            {name}
+        </button>
+    ) : (
         <span
             className="min-w-0 flex-1 select-text truncate font-medium text-slate-100"
             title={name}

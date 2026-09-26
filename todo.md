@@ -85,3 +85,4 @@ Statuses: `[ ]` = not started, `[~]` = in progress. Tasks are ordered by depende
 - [x] Move add-source actions beside the device type. **Done when:** add-input buttons appear in the card's first line with the type, channel count, and delete action.
 - [x] Make the full physical output card surface selectable. **Done when:** clicks on free card space, including the border, select the output, while clicks on controls operate only those controls.
 - [x] Keep output-card pointer styling consistent and allow text selection. **Done when:** the card uses the normal pointer, its text can be selected, and selecting text does not select the card.
+- [x] Make virtual destination cards selectable across their free surface. **Done when:** free-space clicks select virtual buses and BlackHole routes, while delete, mute, and level controls remain independent.
