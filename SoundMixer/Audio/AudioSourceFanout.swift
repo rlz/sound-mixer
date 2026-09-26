@@ -115,6 +115,16 @@ private final class SourceBuffer {
     ) {
         guard let data = source.buffers[source.isPlanar ? channel : 0].mData else { return }
         let samples = data.assumingMemoryBound(to: Float.self)
+        if source.sampleRate == 48000 {
+            if source.isPlanar {
+                planes[channel].update(from: samples, count: frames)
+            } else {
+                for frame in 0 ..< frames {
+                    planes[channel][frame] = samples[frame * source.channelCount + channel]
+                }
+            }
+            return
+        }
         for frame in 0 ..< frames {
             let position = min(Double(inputFrames - 1), Double(frame) * source.sampleRate / 48000)
             let inputFrame = Int(position)

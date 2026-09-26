@@ -56,12 +56,15 @@ final class RealtimeAudioRingBuffer {
         let count = min(frameCount, capacity - occupied)
         droppedFrameCount.wrappingAdd(Int64(frameCount - count), ordering: .relaxed)
         guard count > 0 else { return 0 }
+        let start = Int(writer) & mask
+        let firstCount = min(count, capacity - start)
 
         for channel in 0 ..< channelCount {
             let source = channels[channel]
             let destination = planes[channel]
-            for offset in 0 ..< count {
-                destination[(Int(writer) + offset) & mask] = source[offset]
+            destination.advanced(by: start).update(from: source, count: firstCount)
+            if firstCount < count {
+                destination.update(from: source.advanced(by: firstCount), count: count - firstCount)
             }
         }
         writeFrame.store(writer + Int64(count), ordering: .releasing)
@@ -83,64 +86,18 @@ final class RealtimeAudioRingBuffer {
         }
         let count = min(frameCount, available)
         underrunFrameCount.wrappingAdd(Int64(frameCount - count), ordering: .relaxed)
+        let start = Int(reader) & mask
+        let firstCount = min(count, capacity - start)
         for channel in 0 ..< channelCount {
             let destination = channels[channel]
             let source = planes[channel]
-            for offset in 0 ..< count {
-                destination[offset] = source[(Int(reader) + offset) & mask]
+            destination.update(from: source.advanced(by: start), count: firstCount)
+            if firstCount < count {
+                destination.advanced(by: firstCount).update(from: source, count: count - firstCount)
             }
             if count < frameCount {
                 destination.advanced(by: count).update(repeating: 0, count: frameCount - count)
             }
-        }
-        readFrame.store(reader + Int64(count), ordering: .releasing)
-        return count
-    }
-
-    @discardableResult
-    func write(left sourceLeft: UnsafeBufferPointer<Float>, right sourceRight: UnsafeBufferPointer<Float>, frameCount: Int) -> Int {
-        guard channelCount == 2, frameCount > 0 else { return 0 }
-        let writer = writeFrame.load(ordering: .relaxed)
-        let reader = readFrame.load(ordering: .acquiring)
-        let occupied = Int(writer - reader)
-        guard occupied >= 0, occupied <= capacity else { return 0 }
-        let count = min(frameCount, min(capacity - occupied, min(sourceLeft.count, sourceRight.count)))
-        droppedFrameCount.wrappingAdd(Int64(frameCount - count), ordering: .relaxed)
-        guard count > 0 else { return 0 }
-        for offset in 0 ..< count {
-            let index = (Int(writer) + offset) & mask
-            planes[0][index] = sourceLeft[offset]
-            planes[1][index] = sourceRight[offset]
-        }
-        writeFrame.store(writer + Int64(count), ordering: .releasing)
-        return count
-    }
-
-    @discardableResult
-    func read(
-        into outputLeft: UnsafeMutableBufferPointer<Float>,
-        _ outputRight: UnsafeMutableBufferPointer<Float>,
-        frameCount: Int
-    ) -> Int {
-        guard channelCount == 2, frameCount > 0 else { return 0 }
-        let reader = readFrame.load(ordering: .relaxed)
-        let writer = writeFrame.load(ordering: .acquiring)
-        let available = Int(writer - reader)
-        guard available >= 0, available <= capacity else {
-            outputLeft.update(repeating: 0)
-            outputRight.update(repeating: 0)
-            return 0
-        }
-        let count = min(frameCount, min(available, min(outputLeft.count, outputRight.count)))
-        underrunFrameCount.wrappingAdd(Int64(frameCount - count), ordering: .relaxed)
-        for offset in 0 ..< count {
-            let index = (Int(reader) + offset) & mask
-            outputLeft[offset] = planes[0][index]
-            outputRight[offset] = planes[1][index]
-        }
-        if count < frameCount {
-            outputLeft[count ..< min(frameCount, outputLeft.count)].update(repeating: 0)
-            outputRight[count ..< min(frameCount, outputRight.count)].update(repeating: 0)
         }
         readFrame.store(reader + Int64(count), ordering: .releasing)
         return count

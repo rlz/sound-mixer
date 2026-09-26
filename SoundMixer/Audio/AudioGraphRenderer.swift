@@ -9,7 +9,7 @@ final class AudioGraphRenderer {
     private let busesByID: [UUID: VirtualBus]
     private let busOrder: [UUID]
     private let sourceRings: [String: RealtimeAudioRingBuffer]
-    private let sourceBuffers: [String: AudioSourceStorage]
+    private let sourceBuffers: [String: MultiChannelStorage]
     private let sourceReferences: Set<SourceReference>
     private let busBuffers: [UUID: MultiChannelStorage]
     private let sourceKeys: [String]
@@ -75,7 +75,7 @@ final class AudioGraphRenderer {
         })
         sourceKeys = sources.sorted()
         sourceBuffers = Dictionary(uniqueKeysWithValues: sourceKeys.map { key in
-            (key, AudioSourceStorage(capacity: Self.maximumFrames, channelCount: sourceRings[key]?.channelCount ?? 2))
+            (key, MultiChannelStorage(capacity: Self.maximumFrames, channelCount: sourceRings[key]?.channelCount ?? 2))
         })
         busBuffers = Dictionary(uniqueKeysWithValues: busOrder.compactMap { id in
             allBusesByID[id].map { (id, MultiChannelStorage(capacity: Self.maximumFrames, channelCount: $0.channelCount)) }
@@ -365,47 +365,6 @@ private final class MultiChannelStorage {
         for plane in planes {
             plane.update(repeating: 0, count: frames)
         }
-    }
-
-    func readChannel(_ channel: Int, frames: Int) -> UnsafeBufferPointer<Float> {
-        UnsafeBufferPointer(start: planes[min(max(channel, 0), channelCount - 1)], count: frames)
-    }
-}
-
-private final class AudioSourceStorage {
-    let capacity: Int
-    let channelCount: Int
-    private let planes: [UnsafeMutablePointer<Float>]
-    private let planePointers: UnsafeMutablePointer<UnsafeMutablePointer<Float>>
-    var mutablePlanePointers: UnsafeBufferPointer<UnsafeMutablePointer<Float>> {
-        UnsafeBufferPointer(start: planePointers, count: channelCount)
-    }
-
-    init(capacity: Int, channelCount: Int) {
-        self.capacity = capacity
-        self.channelCount = channelCount
-        planes = (0 ..< channelCount).map { _ in
-            let plane = UnsafeMutablePointer<Float>.allocate(capacity: capacity)
-            plane.initialize(repeating: 0, count: capacity)
-            return plane
-        }
-        planePointers = .allocate(capacity: channelCount)
-        for channel in 0 ..< channelCount {
-            planePointers.advanced(by: channel).initialize(to: planes[channel])
-        }
-    }
-
-    deinit {
-        for plane in planes {
-            plane.deinitialize(count: capacity)
-            plane.deallocate()
-        }
-        planePointers.deinitialize(count: channelCount)
-        planePointers.deallocate()
-    }
-
-    func clear(frames: Int) {
-        for plane in planes { plane.update(repeating: 0, count: frames) }
     }
 
     func readChannel(_ channel: Int, frames: Int) -> UnsafeBufferPointer<Float> {

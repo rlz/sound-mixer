@@ -10,7 +10,7 @@ let package = Package(
         .target(
             name: "SoundMixerDomain",
             path: "SoundMixer",
-            sources: ["Domain", "Audio/RealtimePeakMeter.swift"]
+            sources: ["Domain", "Audio/RealtimePeakMeter.swift", "Audio/RealtimeAudioRingBuffer.swift"]
         ),
         .target(name: "SoundMixerStorage", dependencies: ["SoundMixerDomain"], path: "SoundMixer/Storage"),
         .testTarget(name: "SoundMixerDomainTests", dependencies: ["SoundMixerDomain"], path: "Tests/SoundMixerDomainTests"),
