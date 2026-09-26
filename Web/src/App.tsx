@@ -855,9 +855,10 @@ export function App() {
                                                         }
                                                     >
                                                         <span
-                                                            className={`text-xs ${input.muted ? "text-amber-300" : available ? "text-emerald-300" : "text-amber-300"}`}
+                                                            className={`text-xs ${input.muted || input.sourceMuted ? "text-amber-300" : available ? "text-emerald-300" : "text-amber-300"}`}
                                                         >
-                                                            {input.muted
+                                                            {input.muted ||
+                                                            input.sourceMuted
                                                                 ? "Muted"
                                                                 : available
                                                                   ? captureState ===
@@ -900,54 +901,27 @@ export function App() {
                                                         <LevelControl
                                                             name={name}
                                                             value={input.level}
-                                                            muted={
-                                                                input.kind ===
-                                                                "bus"
-                                                                    ? (mixerState?.buses.find(
-                                                                          (
-                                                                              bus,
-                                                                          ) =>
-                                                                              bus.id ===
-                                                                              input.id,
-                                                                      )
-                                                                          ?.muted ??
-                                                                      false)
-                                                                    : input.muted
-                                                            }
+                                                            muted={input.muted}
                                                             onMuteChange={(
                                                                 muted,
                                                             ) => {
-                                                                if (
-                                                                    input.kind ===
-                                                                    "bus"
-                                                                )
-                                                                    void send(
-                                                                        `bus-mute:${input.id}`,
-                                                                        {
-                                                                            command:
-                                                                                "setBusMuted",
-                                                                            id: input.id,
-                                                                            muted,
-                                                                        },
-                                                                    );
-                                                                else
-                                                                    void send(
-                                                                        `mute-source:${input.kind}:${input.id}`,
-                                                                        {
-                                                                            command:
-                                                                                "setSourceMuted",
-                                                                            kind:
-                                                                                input.kind ===
-                                                                                "app"
-                                                                                    ? "application"
-                                                                                    : (input.kind as
-                                                                                          | "inputDevice"
-                                                                                          | "blackHoleRoute"),
-                                                                            sourceID:
-                                                                                input.id,
-                                                                            muted,
-                                                                        },
-                                                                    );
+                                                                void send(
+                                                                    `mix-input-mute:${selectedMix.target}:${selectedMix.id}:${input.kind}:${input.id}`,
+                                                                    {
+                                                                        command:
+                                                                            "setMixInputMuted",
+                                                                        target: selectedMix.target,
+                                                                        id: selectedMix.id,
+                                                                        kind:
+                                                                            input.kind ===
+                                                                            "app"
+                                                                                ? "application"
+                                                                                : input.kind,
+                                                                        sourceID:
+                                                                            input.id,
+                                                                        muted,
+                                                                    },
+                                                                );
                                                             }}
                                                             levelLabel={`${name} source volume`}
                                                             onLevelChange={(

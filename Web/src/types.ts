@@ -36,6 +36,7 @@ export type MixInputState = {
     channelLevels: number[];
     channelsLinked: boolean;
     muted: boolean;
+    sourceMuted: boolean;
     levelReading: number | null;
 };
 
@@ -144,6 +145,14 @@ export type BridgeCommand =
           kind: string;
           sourceID: string;
           level: number;
+      }
+    | {
+          command: "setMixInputMuted";
+          target: "output" | "bus" | "route";
+          id: string;
+          kind: string;
+          sourceID: string;
+          muted: boolean;
       }
     | {
           command: "setMonoPlacement";

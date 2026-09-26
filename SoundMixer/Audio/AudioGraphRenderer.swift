@@ -234,7 +234,7 @@ final class AudioGraphRenderer {
         let levels = Dictionary(uniqueKeysWithValues: sourceLevels.map { ($0.source, $0.level) })
         for (index, input) in mix.inputs.enumerated() where index < states.count {
             let state = states[index]
-            let muted = mutedSources.contains(input.source)
+            let muted = input.isMuted || mutedSources.contains(input.source)
             let sourceLevel: Double = switch input.source {
             case .bus, .blackHoleRoute:
                 1

@@ -296,6 +296,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case "addApplicationInput": return try addApplicationInput(body: body, store: store)
         case "removeMixInput": return try editMixInput(body: body, store: store, operation: .remove)
         case "setMixInputLevel": return try editMixInput(body: body, store: store, operation: .level)
+        case "setMixInputMuted": return try editMixInput(body: body, store: store, operation: .muted)
         case "setMonoPlacement": return try editMixInput(body: body, store: store, operation: .placement)
         case "setPhysicalInputChannels": return try setPhysicalInputChannels(body: body, store: store)
         default:
@@ -536,11 +537,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
     }
 
-    private enum MixInputOperation: Equatable { case add, remove, level, placement }
+    private enum MixInputOperation: Equatable { case add, remove, level, placement, muted }
 
     private func editMixInput(body: [String: Any], store: ConfigurationStore, operation: MixInputOperation) throws -> MixerConfiguration {
         let common: Set = ["requestId", "command", "target", "id", "kind", "sourceID"]
-        let expected = common.union(operation == .add ? ["monoPlacement"] : (operation == .level ? ["level"] : (operation == .placement ? ["monoPlacement"] : [])))
+        let expected = common.union(operation == .add ? ["monoPlacement"] : (operation == .level ? ["level"] : (operation == .placement ? ["monoPlacement"] : (operation == .muted ? ["muted"] : []))))
         guard Set(body.keys) == expected,
               let target = body["target"] as? String, ["output", "bus", "route"].contains(target),
               let id = body["id"] as? String, !id.isEmpty,
@@ -585,7 +586,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                     index = config.outputMixes.count - 1
                 }
                 var value = config.outputMixes[index].mix
-                try applyInput(operation, reference: reference, level: level, placement: placement, to: &value)
+                try applyInput(operation, reference: reference, level: level, placement: placement, muted: body["muted"] as? Bool, to: &value)
                 config.outputMixes[index].mix = value
                 if operation == .remove, value.inputs.isEmpty {
                     config.outputMixes.remove(at: index)
@@ -593,18 +594,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             case "bus":
                 guard let uuid = UUID(uuidString: id), let index = config.buses.firstIndex(where: { $0.id == uuid }) else { throw BridgeError.unknownBus }
                 var value = config.buses[index].mix
-                try applyInput(operation, reference: reference, level: level, placement: placement, to: &value)
+                try applyInput(operation, reference: reference, level: level, placement: placement, muted: body["muted"] as? Bool, to: &value)
                 config.buses[index].mix = value
             default:
                 guard let uuid = UUID(uuidString: id), let index = config.blackHoleRoutes.firstIndex(where: { $0.id == uuid }) else { throw BridgeError.unknownRoute }
                 var value = config.blackHoleRoutes[index].mix
-                try applyInput(operation, reference: reference, level: level, placement: placement, to: &value)
+                try applyInput(operation, reference: reference, level: level, placement: placement, muted: body["muted"] as? Bool, to: &value)
                 config.blackHoleRoutes[index].mix = value
             }
         }
     }
 
-    private func applyInput(_ operation: MixInputOperation, reference: SourceReference, level: Double?, placement: MonoPlacement?, to mix: inout Mix) throws {
+    private func applyInput(_ operation: MixInputOperation, reference: SourceReference, level: Double?, placement: MonoPlacement?, muted: Bool?, to mix: inout Mix) throws {
         switch operation {
         case .add:
             guard !mix.inputs.contains(where: { $0.source == reference }), let placement else { throw BridgeError.invalidPayload }
@@ -626,6 +627,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case .placement:
             guard let index = mix.inputs.firstIndex(where: { $0.source == reference }), let placement else { throw BridgeError.invalidPayload }
             mix.inputs[index].monoPlacement = placement
+        case .muted:
+            guard let index = mix.inputs.firstIndex(where: { $0.source == reference }), let muted else { throw BridgeError.invalidPayload }
+            mix.inputs[index].isMuted = muted
         }
     }
 
@@ -784,7 +788,8 @@ extension AppDelegate {
                     channelRouting: input.channelRouting.map(\.rawValue),
                     channelLevels: input.channelLevels,
                     channelsLinked: input.channelsLinked,
-                    muted: configuration.mutedSources.contains(input.source),
+                    muted: input.isMuted,
+                    sourceMuted: configuration.mutedSources.contains(input.source),
                     levelReading: renderLevels["\(targetKey)/\(AudioGraphRenderer.sourceMeterKey(input.source))"]
                 )
             }

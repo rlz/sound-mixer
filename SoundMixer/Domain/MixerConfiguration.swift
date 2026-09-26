@@ -118,6 +118,7 @@ public struct MixInput: Codable, Equatable, Sendable {
 
     public var source: SourceReference
     public var level: Double
+    public var isMuted: Bool
     public var monoPlacement: MonoPlacement
     public var channelRouting: [ChannelRouting]
     public var channelLevels: [Double]
@@ -126,6 +127,7 @@ public struct MixInput: Codable, Equatable, Sendable {
     public init(
         source: SourceReference,
         level: Double = 1,
+        isMuted: Bool = false,
         monoPlacement: MonoPlacement = .both,
         channelRouting: [ChannelRouting] = [],
         channelLevels: [Double] = [],
@@ -133,6 +135,7 @@ public struct MixInput: Codable, Equatable, Sendable {
     ) {
         self.source = source
         self.level = level
+        self.isMuted = isMuted
         self.monoPlacement = monoPlacement
         self.channelRouting = channelRouting
         self.channelLevels = channelLevels
@@ -270,7 +273,7 @@ public struct SourceLevel: Codable, Equatable, Sendable {
 }
 
 public struct MixerConfiguration: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 8
+    public static let currentSchemaVersion = 9
 
     public let schemaVersion: Int
     public var isEnabled: Bool
@@ -345,10 +348,15 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         applications = try container.decode([ApplicationID].self, forKey: .applications)
         sourceLevels = try container.decode([SourceLevel].self, forKey: .sourceLevels)
         guard sourceLevels.allSatisfy({
-            let maximum = if case .application = $0.source { MixInput.maximumApplicationGain } else { 1.0 }
+            let maximum = if case .application = $0.source {
+                MixInput.maximumApplicationGain
+            } else {
+                1.0
+            }
             return $0.level.isFinite && (0 ... maximum).contains($0.level)
         }),
-              Set(sourceLevels.map(\.source)).count == sourceLevels.count else {
+            Set(sourceLevels.map(\.source)).count == sourceLevels.count
+        else {
             throw DecodingError.dataCorruptedError(forKey: .sourceLevels, in: container, debugDescription: "Source levels must be unique and in range")
         }
         guard Set(applications).count == applications.count else {

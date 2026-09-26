@@ -100,6 +100,7 @@ public struct RuntimeGraphShape: Equatable, Sendable {
         result.level = 1
         for index in result.inputs.indices {
             result.inputs[index].level = 1
+            result.inputs[index].isMuted = false
             // Channel count remains structural: it determines preallocated engines.
             result.inputs[index].channelLevels = Array(repeating: 1, count: result.inputs[index].channelLevels.count)
             result.inputs[index].channelsLinked = true
