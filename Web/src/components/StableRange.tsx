@@ -29,7 +29,10 @@ export function StableRange({
     const latestValue = useRef<number | null>(null);
     const applying = useRef(false);
     const confirmedValue = useRef(value);
-    confirmedValue.current = value;
+
+    useEffect(() => {
+        confirmedValue.current = value;
+    }, [value]);
 
     useEffect(() => {
         if (

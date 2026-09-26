@@ -10,7 +10,7 @@ export function AppHeader() {
             >
                 <FontAwesomeIcon icon={faSliders} />
             </div>
-            <span className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-300">
+            <span className="text-sm font-semibold tracking-[0.18em] text-sky-300 uppercase">
                 Sound Mixer
             </span>
         </header>

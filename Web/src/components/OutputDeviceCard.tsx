@@ -115,7 +115,7 @@ export function OutputDeviceCard({
                     disabled={!volumeAvailable}
                     onCommit={onVolumeChange}
                 />
-                <span className="w-9 shrink-0 text-right text-xs tabular-nums text-slate-300">
+                <span className="w-9 shrink-0 text-right text-xs text-slate-300 tabular-nums">
                     {output.volume === null
                         ? "—"
                         : `${Math.round(output.volume * 100)}%`}

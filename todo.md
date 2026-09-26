@@ -45,6 +45,7 @@ Statuses: `[ ]` = not started, `[~]` = in progress. Tasks are ordered by depende
 
 ## 4. Acceptance and release
 
+- [x] Update web dependencies and build tooling. **Done when:** direct packages use current compatible releases, the lockfile supports a clean `npm ci`, and formatting, linting, and web and app builds pass. Tailwind 4 and Vite 8 are integrated; TypeScript remains on 6.0.3 because `typescript-eslint` 8.70.1 supports TypeScript below 6.1.
 - [ ] Run the manual matrix in `requirements/05-quality-and-acceptance.md`, including Scarlett per-channel meters/gains and BlackHole pair loopback; measure latency, underruns, and CPU. **Done when:** observations cover linked defaults, independent gain changes, proportional scaling after re-linking, device details, and measurement conditions.
 - [x] Update the README with build, launch, permission, and BlackHole installation instructions. **Done when:** a new developer can run the app from the instructions.
 - [ ] Prepare a release build and repeat acceptance scenarios. **Done when:** a signed build is verified on a supported macOS version.

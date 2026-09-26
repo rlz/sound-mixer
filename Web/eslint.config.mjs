@@ -19,7 +19,7 @@ export default tseslint.config(
     {
         files: ["**/*.tsx"],
         extends: [
-            reactHooks.configs["recommended-latest"],
+            reactHooks.configs.flat["recommended-latest"],
             reactRefresh.configs.vite,
         ],
     },
