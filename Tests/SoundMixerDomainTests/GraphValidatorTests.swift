@@ -85,9 +85,19 @@ final class GraphValidatorTests: XCTestCase {
         ]))]))
     }
 
-    func testApplicationGainCanExceedUnityOnlyWithinItsOwnRow() throws {
-        let app = MixInput(source: .application(ApplicationID(rawValue: "app")), level: MixInput.maximumApplicationGain)
-        XCTAssertNoThrow(try GraphValidator.validate(MixerConfiguration(buses: [VirtualBus(name: "Boosted", mix: Mix(inputs: [app]))])))
+    func testApplicationGainCanExceedUnityOnlyAtGlobalSourceLevel() throws {
+        let source = SourceReference.application(ApplicationID(rawValue: "app"))
+        let app = MixInput(source: source)
+        let bus = VirtualBus(name: "Boosted", mix: Mix(inputs: [app]))
+        XCTAssertNoThrow(try GraphValidator.validate(MixerConfiguration(
+            buses: [bus], sourceLevels: [SourceLevel(source: source, level: MixInput.maximumApplicationGain)]
+        )))
+        var boostedRow = bus
+        boostedRow.mix.inputs[0].level = 2
+        assertError(.invalidLevel, in: MixerConfiguration(buses: [boostedRow]))
+        assertError(.invalidLevel, in: MixerConfiguration(
+            buses: [bus], sourceLevels: [SourceLevel(source: source, level: MixInput.maximumApplicationGain + 0.01)]
+        ))
 
         let device = MixInput(source: .inputDevice(DeviceUID(rawValue: "mic")), level: 2)
         assertError(.invalidLevel, in: MixerConfiguration(buses: [VirtualBus(name: "Invalid", mix: Mix(inputs: [device]))]))

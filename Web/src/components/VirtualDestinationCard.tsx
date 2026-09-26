@@ -83,7 +83,7 @@ export function VirtualDestinationCard({
                     !muteAvailable
                         ? "This BlackHole device has no writable mute control"
                         : kind === "BlackHole route"
-                          ? "Mutes the BlackHole device for system listeners"
+                          ? "Mutes this BlackHole route wherever it is used"
                           : "Stops this bus from feeding downstream mixes"
                 }
             />

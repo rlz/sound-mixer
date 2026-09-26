@@ -6,8 +6,8 @@ public struct RuntimeBusRenderingDefinition: Equatable, Sendable {
     public let mix: Mix
 }
 
-/// The configuration that determines one output renderer. Gain changes are applied
-/// in place by the coordinator before it considers replacing a renderer.
+/// The structure that determines one output renderer. Gains are excluded because
+/// they are published to existing renderers, including during device reconciliation.
 public struct RuntimeRouteRenderingDefinition: Equatable, Sendable {
     public let deviceUID: DeviceUID
     public let channels: [Int]
@@ -25,8 +25,7 @@ public struct RuntimeGraphShape: Equatable, Sendable {
         let buses = configuration.buses
         var routes: [String: RuntimeRouteRenderingDefinition] = [:]
         for output in configuration.outputMixes {
-            var mix = output.mix
-            mix.level = 1
+            let mix = Self.renderingStructure(output.mix)
             routes["output:\(output.deviceUID.rawValue)"] = RuntimeRouteRenderingDefinition(
                 deviceUID: output.deviceUID,
                 channels: [0, 1],
@@ -43,7 +42,7 @@ public struct RuntimeGraphShape: Equatable, Sendable {
             routes["blackhole:\(route.id.uuidString)"] = RuntimeRouteRenderingDefinition(
                 deviceUID: route.deviceUID,
                 channels: channels,
-                mix: route.mix,
+                mix: Self.renderingStructure(route.mix),
                 dependentBuses: Self.dependencies(of: route.mix, in: buses)
             )
         }
@@ -92,7 +91,40 @@ public struct RuntimeGraphShape: Equatable, Sendable {
             }
         }
         return visited.compactMap { id in
-            busesByID[id].map { RuntimeBusRenderingDefinition(id: id, mix: $0.mix) }
+            busesByID[id].map { RuntimeBusRenderingDefinition(id: id, mix: renderingStructure($0.mix)) }
         }.sorted { $0.id.uuidString < $1.id.uuidString }
+    }
+
+    private static func renderingStructure(_ mix: Mix) -> Mix {
+        var result = mix
+        result.level = 1
+        for index in result.inputs.indices {
+            result.inputs[index].level = 1
+            // Channel count remains structural: it determines preallocated engines.
+            result.inputs[index].channelLevels = Array(repeating: 1, count: result.inputs[index].channelLevels.count)
+            result.inputs[index].channelsLinked = true
+        }
+        return result
+    }
+}
+
+/// A transient process identity used only to decide whether capture needs reconciliation.
+public struct RuntimeProcessRoutingIdentity: Hashable, Sendable {
+    public let applicationID: String
+    public let processID: Int32
+    public let isProducingOutput: Bool
+
+    public init(applicationID: String, processID: Int32, isProducingOutput: Bool) {
+        self.applicationID = applicationID
+        self.processID = processID
+        self.isProducingOutput = isProducingOutput
+    }
+
+    public static func matches(_ lhs: [Self], _ rhs: [Self]) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        // Several audio processes can share a bundle ID. Preserve every PID and
+        // duplicate entry while ignoring discovery order.
+        return Dictionary(grouping: lhs, by: { $0 }).mapValues { $0.count } ==
+            Dictionary(grouping: rhs, by: { $0 }).mapValues { $0.count }
     }
 }

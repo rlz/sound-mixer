@@ -235,7 +235,12 @@ final class AudioGraphRenderer {
         for (index, input) in mix.inputs.enumerated() where index < states.count {
             let state = states[index]
             let muted = mutedSources.contains(input.source)
-            let sourceLevel = levels[input.source] ?? 1
+            let sourceLevel: Double = switch input.source {
+            case .bus, .blackHoleRoute:
+                1
+            case .inputDevice, .application:
+                levels[input.source] ?? 1
+            }
             state.sourceGain.store(Float(muted ? 0 : input.level * sourceLevel), ordering: .relaxed)
             state.mainGain.store(Float(mix.level), ordering: .relaxed)
             for channel in state.channelGains.indices {

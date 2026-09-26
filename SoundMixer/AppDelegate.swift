@@ -310,7 +310,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         else { throw BridgeError.invalidPayload }
         return try store.update(discoveredDevices: discoveredDescriptors()) { config in
             let applicationID = ApplicationID(rawValue: id)
-            if !config.applications.contains(applicationID) { config.applications.append(applicationID) }
+            if !config.applications.contains(applicationID) {
+                config.applications.append(applicationID)
+            }
         }
     }
 
@@ -399,12 +401,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         switch kind {
         case "inputDevice": source = .inputDevice(DeviceUID(rawValue: sourceID))
         case "application", "app": source = .application(ApplicationID(rawValue: sourceID))
+        case "bus":
+            guard let id = UUID(uuidString: sourceID) else { throw BridgeError.invalidPayload }
+            source = .bus(id)
         case "blackHoleRoute":
             guard let routeID = UUID(uuidString: sourceID) else { throw BridgeError.invalidPayload }
             source = .blackHoleRoute(routeID)
         default: throw BridgeError.invalidPayload
         }
         return try store.update(discoveredDevices: discoveredDescriptors()) { config in
+            if case let .bus(id) = source {
+                guard config.buses.contains(where: { $0.id == id }) else { throw BridgeError.unknownBus }
+                config.mutedBuses.removeAll { $0 == id }
+                if muted {
+                    config.mutedBuses.append(id)
+                }
+                return
+            }
             config.mutedSources.removeAll { $0 == source }
             if muted {
                 config.mutedSources.append(source)
@@ -416,7 +429,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         guard Set(body.keys) == ["requestId", "command", "kind", "sourceID", "level"],
               let kind = body["kind"] as? String,
               let sourceID = body["sourceID"] as? String, !sourceID.isEmpty,
-              let level = body["level"] as? Double, level.isFinite else {
+              let level = body["level"] as? Double, level.isFinite
+        else {
             throw BridgeError.invalidPayload
         }
         let source: SourceReference
@@ -426,16 +440,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case "blackHoleRoute":
             guard let id = UUID(uuidString: sourceID) else { throw BridgeError.invalidPayload }
             source = .blackHoleRoute(id)
-        case "bus":
-            guard let id = UUID(uuidString: sourceID) else { throw BridgeError.invalidPayload }
-            source = .bus(id)
         default: throw BridgeError.invalidPayload
         }
-        let maximum = if case .application = source { MixInput.maximumApplicationGain } else { 1.0 }
+        let maximum = if case .application = source {
+            MixInput.maximumApplicationGain
+        } else {
+            1.0
+        }
         guard (0 ... maximum).contains(level) else { throw BridgeError.invalidPayload }
         return try store.update(discoveredDevices: discoveredDescriptors()) { config in
             config.sourceLevels.removeAll { $0.source == source }
-            if level != 1 { config.sourceLevels.append(SourceLevel(source: source, level: level)) }
+            if level != 1 {
+                config.sourceLevels.append(SourceLevel(source: source, level: level))
+            }
         }
     }
 
@@ -446,7 +463,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         return try store.update(discoveredDevices: discoveredDescriptors()) { config in
             guard config.buses.contains(where: { $0.id == id }) else { throw BridgeError.unknownBus }
             config.mutedBuses.removeAll { $0 == id }
-            if muted { config.mutedBuses.append(id) }
+            if muted {
+                config.mutedBuses.append(id)
+            }
         }
     }
 
@@ -455,7 +474,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         return try store.update(discoveredDevices: discoveredDescriptors()) { candidate in
             let existingNames = Set(candidate.buses.map(\.name))
             var index = 1
-            while existingNames.contains("Virtual Bus \(index)") { index += 1 }
+            while existingNames.contains("Virtual Bus \(index)") {
+                index += 1
+            }
             candidate.buses.append(VirtualBus(name: "Virtual Bus \(index)"))
         }
     }
@@ -506,9 +527,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             if target == "bus" {
                 guard let index = candidate.buses.firstIndex(where: { $0.id == id }) else { throw BridgeError.unknownBus }
                 candidate.buses[index].mix.level = level
+                candidate.sourceLevels.removeAll { $0.source == .bus(id) }
             } else {
                 guard let index = candidate.blackHoleRoutes.firstIndex(where: { $0.id == id }) else { throw BridgeError.unknownRoute }
                 candidate.blackHoleRoutes[index].mix.level = level
+                candidate.sourceLevels.removeAll { $0.source == .blackHoleRoute(id) }
             }
         }
     }
@@ -707,7 +730,7 @@ extension AppDelegate {
             isEnabled: configuration.isEnabled,
             devices: bridgeDevices(configuration: configuration, discovered: discovered),
             outputs: bridgeOutputs(configuration: configuration, discovered: discovered, deviceLevels: deviceLevels),
-            buses: configuration.buses.map { bus in BridgeNamedItem(id: bus.id.uuidString, name: bus.name, category: "virtual", muted: configuration.mutedBuses.contains(bus.id), sourceLevel: configuration.sourceLevels.first(where: { $0.source == .bus(bus.id) })?.level ?? 1) },
+            buses: configuration.buses.map { bus in BridgeNamedItem(id: bus.id.uuidString, name: bus.name, category: "virtual", muted: configuration.mutedBuses.contains(bus.id), sourceLevel: bus.mix.level) },
             blackHoleRoutes: configuration.blackHoleRoutes.map { route in
                 let device = discovered[route.deviceUID.rawValue]
                 let selected = Self.bridgeChannels(route.channels)
@@ -720,7 +743,7 @@ extension AppDelegate {
                     captureState: captureStates["route:\(route.id.uuidString)"] ?? (pairAvailable ? "stopped" : "unavailable"),
                     level: sourceLevels["route:\(route.id.uuidString)"],
                     muted: configuration.mutedSources.contains(.blackHoleRoute(route.id)),
-                    sourceLevel: configuration.sourceLevels.first(where: { $0.source == .blackHoleRoute(route.id) })?.level ?? 1
+                    sourceLevel: route.mix.level
                 )
             },
             applications: bridgeApplications(configuration: configuration, sourceLevels: sourceLevels),

@@ -384,12 +384,16 @@ final class AudioRoutingCoordinator {
         _ lhs: [AudioProcessSnapshot],
         _ rhs: [AudioProcessSnapshot]
     ) -> Bool {
-        guard lhs.count == rhs.count else { return false }
-        let rightByID = Dictionary(rhs.map { ($0.applicationID, $0) }, uniquingKeysWith: { _, latest in latest })
-        return lhs.allSatisfy { process in
-            guard let other = rightByID[process.applicationID] else { return false }
-            return process.processID == other.processID && process.isProducingOutput == other.isProducingOutput
+        func identities(_ processes: [AudioProcessSnapshot]) -> [RuntimeProcessRoutingIdentity] {
+            processes.map {
+                RuntimeProcessRoutingIdentity(
+                    applicationID: $0.applicationID,
+                    processID: $0.processID,
+                    isProducingOutput: $0.isProducingOutput
+                )
+            }
         }
+        return RuntimeProcessRoutingIdentity.matches(identities(lhs), identities(rhs))
     }
 
     private func remember(

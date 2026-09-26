@@ -3,6 +3,45 @@ import Foundation
 import XCTest
 
 final class RuntimeGraphShapeTests: XCTestCase {
+    func testGainEditsDoNotReplaceOutputRenderersOrBusMeterPumps() {
+        let source = SourceReference.application(ApplicationID(rawValue: "com.example.player"))
+        let bus = VirtualBus(name: "Bus", mix: Mix(inputs: [MixInput(source: source)]))
+        let output = OutputMix(deviceUID: DeviceUID(rawValue: "speakers"), mix: Mix(inputs: [MixInput(source: .bus(bus.id))]))
+        let route = BlackHoleRoute(
+            name: "Pair", deviceUID: DeviceUID(rawValue: "blackhole"), channels: .stereo(left: 1, right: 2),
+            mix: Mix(inputs: [MixInput(source: source)])
+        )
+        let original = MixerConfiguration(outputMixes: [output], buses: [bus], blackHoleRoutes: [route])
+        let before = RuntimeGraphShape(configuration: original)
+        let edits: [(inout MixerConfiguration) -> Void] = [
+            { $0.outputMixes[0].mix.inputs[0].level = 0.3 },
+            { $0.buses[0].mix.inputs[0].level = 0.3 },
+            { $0.buses[0].mix.level = 0.3 },
+            { $0.blackHoleRoutes[0].mix.inputs[0].level = 0.3 },
+            { $0.blackHoleRoutes[0].mix.level = 0.3 }
+        ]
+        for (index, edit) in edits.enumerated() {
+            var changed = original
+            edit(&changed)
+            let after = RuntimeGraphShape(configuration: changed)
+            XCTAssertEqual(after.changedRouteKeys(from: before), [], "Gain edit \(index) replaces an output renderer")
+            XCTAssertEqual(after.changedBusIDs(from: before), [], "Gain edit \(index) replaces a meter pump")
+        }
+    }
+
+    func testChannelGainEditsPreserveRenderersButChannelRoutingEditsReplaceThem() {
+        let input = MixInput(source: .inputDevice(DeviceUID(rawValue: "mic")), channelRouting: [.first, .second], channelLevels: [1, 1])
+        let output = OutputMix(deviceUID: DeviceUID(rawValue: "speakers"), mix: Mix(inputs: [input]))
+        let original = MixerConfiguration(outputMixes: [output])
+        let before = RuntimeGraphShape(configuration: original)
+        var changed = original
+        changed.outputMixes[0].mix.inputs[0].channelLevels = [0.3, 0.7]
+        changed.outputMixes[0].mix.inputs[0].channelsLinked = false
+        XCTAssertEqual(RuntimeGraphShape(configuration: changed).changedRouteKeys(from: before), [])
+        changed.outputMixes[0].mix.inputs[0].channelRouting = [.both, .ignore]
+        XCTAssertEqual(RuntimeGraphShape(configuration: changed).changedRouteKeys(from: before), ["output:speakers"])
+    }
+
     func testIndependentVirtualBusCreationAndDeletionLeaveExistingRoutesAndMetersUntouched() {
         let source = SourceReference.application(ApplicationID(rawValue: "com.example.player"))
         let existingBus = VirtualBus(name: "Existing", mix: Mix(inputs: [MixInput(source: source)]))

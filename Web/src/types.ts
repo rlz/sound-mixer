@@ -107,7 +107,8 @@ export type BridgeCommand =
     | { command: "resetMix"; target: "output" | "bus" | "route"; id: string }
     | {
           command: "setSourceMuted";
-          kind: "inputDevice" | "application" | "app" | "blackHoleRoute";
+          kind:
+              "inputDevice" | "application" | "app" | "bus" | "blackHoleRoute";
           sourceID: string;
           muted: boolean;
       }

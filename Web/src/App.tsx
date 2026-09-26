@@ -212,7 +212,7 @@ export function App() {
         <main className="flex h-dvh min-h-0 w-full flex-col overflow-hidden bg-slate-950 text-slate-100">
             {notification && (
                 <div
-                    className="fixed right-4 top-4 z-50 flex max-w-md items-start gap-3 rounded-lg border border-amber-700 bg-slate-900 px-4 py-3 text-sm text-amber-100 shadow-xl"
+                    className="fixed top-4 right-4 z-50 flex max-w-md items-start gap-3 rounded-lg border border-amber-700 bg-slate-900 px-4 py-3 text-sm text-amber-100 shadow-xl"
                     role="status"
                     aria-live="polite"
                 >
@@ -426,20 +426,7 @@ export function App() {
                                             )
                                         }
                                         channelCount={route.channels.length}
-                                        muteAvailable={
-                                            mixerState.outputs.find(
-                                                (output) =>
-                                                    output.uid ===
-                                                    route.deviceUID,
-                                            )?.muteWritable ?? false
-                                        }
-                                        muted={
-                                            mixerState.outputs.find(
-                                                (output) =>
-                                                    output.uid ===
-                                                    route.deviceUID,
-                                            )?.muted ?? false
-                                        }
+                                        muted={route.muted}
                                         available={route.available}
                                         selected={
                                             selectedItem ===
@@ -469,14 +456,12 @@ export function App() {
                                             )
                                         }
                                         onMuteChange={(muted) =>
-                                            send(
-                                                `device-mute:${route.deviceUID}`,
-                                                {
-                                                    command: "setDeviceMuted",
-                                                    uid: route.deviceUID,
-                                                    muted,
-                                                },
-                                            )
+                                            send(`mute-route:${route.id}`, {
+                                                command: "setSourceMuted",
+                                                kind: "blackHoleRoute",
+                                                sourceID: route.id,
+                                                muted,
+                                            })
                                         }
                                     />
                                 );
@@ -979,6 +964,8 @@ export function App() {
                                                                             input.id,
                                                                         level: value,
                                                                     },
+                                                                    undefined,
+                                                                    true,
                                                                 )
                                                             }
                                                         />
@@ -1553,24 +1540,34 @@ export function App() {
                                         <LevelControl
                                             name={bus.name}
                                             value={bus.sourceLevel}
-                                            muted={false}
-                                            showMute={false}
-                                            onMuteChange={() => undefined}
-                                            onLevelChange={(level) =>
-                                                send(
-                                                    `source-level:bus:${bus.id}`,
+                                            muted={bus.muted}
+                                            onMuteChange={(muted) =>
+                                                void send(
+                                                    `bus-mute:${bus.id}`,
                                                     {
                                                         command:
-                                                            "setSourceLevel",
+                                                            "setSourceMuted",
                                                         kind: "bus",
                                                         sourceID: bus.id,
+                                                        muted,
+                                                    },
+                                                )
+                                            }
+                                            onLevelChange={(level) =>
+                                                send(
+                                                    `virtual-level:${bus.id}`,
+                                                    {
+                                                        command:
+                                                            "setVirtualMixLevel",
+                                                        target: "bus",
+                                                        id: bus.id,
                                                         level,
                                                     },
                                                     undefined,
                                                     true,
                                                 )
                                             }
-                                            levelLabel={`${bus.name} input volume`}
+                                            levelLabel={`${bus.name} virtual bus mix gain`}
                                         />
                                     </ItemCard>
                                 );
@@ -1681,19 +1678,19 @@ export function App() {
                                                 onMuteChange={() => undefined}
                                                 onLevelChange={(level) =>
                                                     send(
-                                                        `source-level:route:${route.id}`,
+                                                        `virtual-level:${route.id}`,
                                                         {
                                                             command:
-                                                                "setSourceLevel",
-                                                            kind: "blackHoleRoute",
-                                                            sourceID: route.id,
+                                                                "setVirtualMixLevel",
+                                                            target: "route",
+                                                            id: route.id,
                                                             level,
                                                         },
                                                         undefined,
                                                         true,
                                                     )
                                                 }
-                                                levelLabel={`${route.name} input volume`}
+                                                levelLabel={`${route.name} BlackHole route mix gain`}
                                             />
                                             <button
                                                 type="button"
