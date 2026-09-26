@@ -12,6 +12,7 @@ final class AudioRoutingCoordinator {
     private let output = CoreAudioOutputCoordinator()
     private var fanout: AudioSourceFanout?
     private var renderers: [String: AudioGraphRenderer] = [:]
+    private var busMeterPump: BusMeterPump?
     private var ringsByRoute: [String: [String: RealtimeAudioRingBuffer]] = [:]
     private var sourceMeters: [String: RealtimePeakMeter] = [:]
     private var renderMeters: [String: RealtimePeakMeter] = [:]
@@ -53,6 +54,7 @@ final class AudioRoutingCoordinator {
             for renderer in renderers.values {
                 renderer.updateGains(from: graph)
             }
+            busMeterPump?.renderer.updateGains(from: graph)
             remember(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled)
             return false
         }
@@ -72,6 +74,7 @@ final class AudioRoutingCoordinator {
             captureSources.insert(key)
         }
         startOutputRoutes(graph: graph, devices: deviceByUID, queues: &queuesBySource, sources: &captureSources)
+        startBusMeterPump(graph: graph, devices: deviceByUID, queues: &queuesBySource, sources: &captureSources)
         for route in graph.configuration.blackHoleRoutes {
             let key = "route:\(route.id.uuidString)"
             queuesBySource[key] = queuesBySource[key] ?? []
@@ -108,6 +111,8 @@ final class AudioRoutingCoordinator {
         capture.stopAll()
         output.stopAll()
         renderers.removeAll()
+        busMeterPump?.stop()
+        busMeterPump = nil
         ringsByRoute.removeAll()
         sourceMeters.removeAll()
         renderMeters.removeAll()
@@ -143,6 +148,8 @@ final class AudioRoutingCoordinator {
         capture.stopAll()
         output.stopAll()
         renderers.removeAll()
+        busMeterPump?.stop()
+        busMeterPump = nil
         ringsByRoute.removeAll()
         sourceMeters.removeAll()
         renderMeters.removeAll()
@@ -164,6 +171,42 @@ final class AudioRoutingCoordinator {
                 sources.insert(key)
             }
         }
+    }
+
+    private func startBusMeterPump(
+        graph: MixGraphSnapshot,
+        devices: [String: AudioDeviceSnapshot],
+        queues: inout [String: [RealtimeAudioRingBuffer]],
+        sources: inout Set<String>
+    ) {
+        guard !graph.configuration.buses.isEmpty else { return }
+        let sourceKeys = Set(graph.configuration.buses.flatMap {
+            Self.sourceKeys(in: $0.mix, buses: graph.configuration.buses)
+        })
+        var rings: [String: RealtimeAudioRingBuffer] = [:]
+        for key in sourceKeys {
+            let channels: Int
+            if key.hasPrefix("input:") {
+                let uid = String(key.dropFirst("input:".count))
+                channels = min(max(devices[uid]?.inputChannels ?? 2, 1), 64)
+            } else {
+                channels = 2
+            }
+            let ring = RealtimeAudioRingBuffer(channelCount: channels)
+            rings[key] = ring
+            queues[key, default: []].append(ring)
+            sources.insert(key)
+        }
+        let renderer = AudioGraphRenderer(
+            graph: graph,
+            output: OutputMix(deviceUID: DeviceUID(rawValue: "virtual-meter"), mix: Mix()),
+            sourceRings: rings,
+            targetKey: "virtual-meter",
+            meters: renderMeters
+        )
+        renderer.updateGains(from: graph)
+        busMeterPump = BusMeterPump(renderer: renderer)
+        busMeterPump?.start()
     }
 
     private func startOutputRoute(
@@ -319,6 +362,52 @@ final class AudioRoutingCoordinator {
 
     func deviceLevelReadings() -> [String: Double] {
         deviceMeters.compactMapValues { $0.reading() }
+    }
+}
+
+/// Drives virtual-bus rendering when no physical or BlackHole route consumes it.
+/// The scratch buffers are allocated once; the timer callback only renders and meters.
+private final class BusMeterPump {
+    let renderer: AudioGraphRenderer
+    private let queue = DispatchQueue(label: "com.rlz.soundmixer.virtual-bus-meter", qos: .userInitiated)
+    private let frameCount = 480
+    private let left: UnsafeMutablePointer<Float>
+    private let right: UnsafeMutablePointer<Float>
+    private var timer: DispatchSourceTimer?
+
+    init(renderer: AudioGraphRenderer) {
+        self.renderer = renderer
+        left = .allocate(capacity: frameCount)
+        right = .allocate(capacity: frameCount)
+        left.initialize(repeating: 0, count: frameCount)
+        right.initialize(repeating: 0, count: frameCount)
+    }
+
+    deinit {
+        left.deinitialize(count: frameCount)
+        right.deinitialize(count: frameCount)
+        left.deallocate()
+        right.deallocate()
+    }
+
+    func start() {
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now(), repeating: .milliseconds(10), leeway: .milliseconds(2))
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            let leftBuffer = UnsafeMutableBufferPointer(start: self.left, count: self.frameCount)
+            let rightBuffer = UnsafeMutableBufferPointer(start: self.right, count: self.frameCount)
+            self.renderer.render(left: leftBuffer, right: rightBuffer, frameCount: self.frameCount)
+        }
+        self.timer = timer
+        timer.resume()
+    }
+
+    func stop() {
+        guard let timer else { return }
+        self.timer = nil
+        timer.cancel()
+        queue.sync {}
     }
 }
 
