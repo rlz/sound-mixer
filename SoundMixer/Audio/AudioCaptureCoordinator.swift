@@ -68,6 +68,9 @@ final class AudioCaptureCoordinator {
         queue.async { [weak self] in
             guard let self else { return }
             let key = "route:\(id)"
+            if let session = inputSessions[key], session.matches(deviceID: deviceID, selectedChannels: channels) {
+                return
+            }
             inputSessions.removeValue(forKey: key)?.stop()
             publish(key, .starting)
             do {
@@ -114,6 +117,9 @@ final class AudioCaptureCoordinator {
 
     private func startProcess(id: String, processID: pid_t) {
         let key = "application:\(id)"
+        if processSessions[key]?.processID == processID {
+            return
+        }
         processSessions.removeValue(forKey: key)?.stop()
         publish(key, .starting)
         do {
@@ -123,13 +129,18 @@ final class AudioCaptureCoordinator {
             description.name = "Sound Mixer source"
             description.isPrivate = true
             description.muteBehavior = .unmuted
-            startTap(id: key, description: description)
+            startTap(id: key, description: description, processID: processID)
         } catch {
             publish(key, .unavailable(error.localizedDescription))
         }
     }
 
-    private func startTap(id: String, description: CATapDescription, meter: RealtimePeakMeter? = nil) {
+    private func startTap(
+        id: String,
+        description: CATapDescription,
+        meter: RealtimePeakMeter? = nil,
+        processID: pid_t? = nil
+    ) {
         processSessions.removeValue(forKey: id)?.stop()
         publish(id, .starting)
         do {
@@ -157,7 +168,9 @@ final class AudioCaptureCoordinator {
                 AudioHardwareDestroyProcessTap(tap)
                 throw CaptureError.audioStatus(aggregateStatus)
             }
-            let session = AudioProcessCaptureSession(id: id, tap: tap, aggregate: aggregate, owner: self, meter: meter)
+            let session = AudioProcessCaptureSession(
+                id: id, tap: tap, aggregate: aggregate, owner: self, meter: meter, processID: processID
+            )
             do {
                 try session.start()
                 processSessions[id] = session
@@ -176,6 +189,9 @@ final class AudioCaptureCoordinator {
     }
 
     private func startInputOnQueue(uid: String, deviceID: AudioDeviceID) {
+        if let session = inputSessions[uid], session.matches(deviceID: deviceID, selectedChannels: nil) {
+            return
+        }
         inputSessions.removeValue(forKey: uid)?.stop()
         publish(uid, .starting)
         do {

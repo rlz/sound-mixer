@@ -11,6 +11,8 @@
         A10000000000000000000003 /* dist in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* dist */; };
         A10000000000000000000004 /* MixerConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000015 /* MixerConfiguration.swift */; };
         A10000000000000000000005 /* GraphValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000016 /* GraphValidator.swift */; };
+        A10000000000000000000034 /* RuntimeGraphShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000035 /* RuntimeGraphShape.swift */; };
+        A10000000000000000000036 /* RealtimePublication.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000037 /* RealtimePublication.swift */; };
         A10000000000000000000006 /* ConfigurationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000017 /* ConfigurationStore.swift */; };
         A10000000000000000000007 /* CoreAudioDeviceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000018 /* CoreAudioDeviceCatalog.swift */; };
         A10000000000000000000008 /* CoreAudioProcessCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000019 /* CoreAudioProcessCatalog.swift */; };
@@ -36,6 +38,8 @@
         A10000000000000000000014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
         A10000000000000000000015 /* MixerConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MixerConfiguration.swift; sourceTree = "<group>"; };
         A10000000000000000000016 /* GraphValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphValidator.swift; sourceTree = "<group>"; };
+        A10000000000000000000035 /* RuntimeGraphShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeGraphShape.swift; sourceTree = "<group>"; };
+        A10000000000000000000037 /* RealtimePublication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimePublication.swift; sourceTree = "<group>"; };
         A10000000000000000000017 /* ConfigurationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationStore.swift; sourceTree = "<group>"; };
         A10000000000000000000018 /* CoreAudioDeviceCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAudioDeviceCatalog.swift; sourceTree = "<group>"; };
         A10000000000000000000019 /* CoreAudioProcessCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAudioProcessCatalog.swift; sourceTree = "<group>"; };
@@ -99,6 +103,7 @@
             children = (
                 A10000000000000000000015 /* MixerConfiguration.swift */,
                 A10000000000000000000016 /* GraphValidator.swift */,
+                A10000000000000000000035 /* RuntimeGraphShape.swift */,
                 A1000000000000000000001B /* StereoMixingEngine.swift */,
             );
             path = Domain;
@@ -114,7 +119,7 @@
         };
         A10000000000000000000026 /* Audio */ = {
             isa = PBXGroup;
-            children = (A10000000000000000000018 /* CoreAudioDeviceCatalog.swift */, A10000000000000000000033 /* CoreAudioOutputMute.swift */, A10000000000000000000019 /* CoreAudioProcessCatalog.swift */, A1000000000000000000001A /* AudioCaptureCoordinator.swift */, A1000000000000000000001C /* CoreAudioOutputCoordinator.swift */, A1000000000000000000001D /* RealtimeAudioRingBuffer.swift */, A1000000000000000000001E /* AudioGraphRenderer.swift */, A1000000000000000000001F /* AudioRoutingCoordinator.swift */, A10000000000000000000027 /* AudioCaptureSessions.swift */, A1000000000000000000002D /* RealtimePeakMeter.swift */, A1000000000000000000002F /* AudioSourceFanout.swift */,);
+            children = (A10000000000000000000018 /* CoreAudioDeviceCatalog.swift */, A10000000000000000000033 /* CoreAudioOutputMute.swift */, A10000000000000000000019 /* CoreAudioProcessCatalog.swift */, A1000000000000000000001A /* AudioCaptureCoordinator.swift */, A1000000000000000000001C /* CoreAudioOutputCoordinator.swift */, A1000000000000000000001D /* RealtimeAudioRingBuffer.swift */, A1000000000000000000001E /* AudioGraphRenderer.swift */, A1000000000000000000001F /* AudioRoutingCoordinator.swift */, A10000000000000000000027 /* AudioCaptureSessions.swift */, A1000000000000000000002D /* RealtimePeakMeter.swift */, A1000000000000000000002F /* AudioSourceFanout.swift */, A10000000000000000000037 /* RealtimePublication.swift */,);
             path = Audio;
             sourceTree = "<group>";
         };
@@ -179,6 +184,7 @@
                 A10000000000000000000002 /* main.swift in Sources */,
                 A10000000000000000000004 /* MixerConfiguration.swift in Sources */,
                 A10000000000000000000005 /* GraphValidator.swift in Sources */,
+                A10000000000000000000034 /* RuntimeGraphShape.swift in Sources */,
                 A10000000000000000000006 /* ConfigurationStore.swift in Sources */,
                 A10000000000000000000007 /* CoreAudioDeviceCatalog.swift in Sources */,
                 A10000000000000000000032 /* CoreAudioOutputMute.swift in Sources */,
@@ -189,6 +195,7 @@
                 A1000000000000000000000C /* RealtimeAudioRingBuffer.swift in Sources */,
                 A1000000000000000000000D /* AudioGraphRenderer.swift in Sources */,
                 A1000000000000000000000E /* AudioRoutingCoordinator.swift in Sources */,
+                A10000000000000000000036 /* RealtimePublication.swift in Sources */,
                 A1000000000000000000000F /* AudioCaptureSessions.swift in Sources */,
                 A1000000000000000000002C /* RealtimePeakMeter.swift in Sources */,
                 A1000000000000000000002E /* AudioSourceFanout.swift in Sources */,

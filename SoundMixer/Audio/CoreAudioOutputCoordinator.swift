@@ -2,8 +2,8 @@ import AudioToolbox
 import CoreAudio
 import Foundation
 
-/// Owns one HAL output unit per configured endpoint. The render closure is called on
-/// Core Audio's realtime thread and must only fill the provided stereo buffers.
+/// Owns one HAL output unit per Core Audio device. Routes using separate channel
+/// pairs share that unit, so adding a pair only publishes a new render snapshot.
 final class CoreAudioOutputCoordinator {
     typealias StereoRenderHandler = (UnsafeMutableBufferPointer<Float>, UnsafeMutableBufferPointer<Float>, Int) -> Void
 
@@ -16,7 +16,8 @@ final class CoreAudioOutputCoordinator {
     }
 
     private let queue = DispatchQueue(label: "com.rlz.soundmixer.audio-output")
-    private var sessions: [String: OutputSession] = [:]
+    private var sessions: [AudioDeviceID: OutputSession] = [:]
+    private var deviceByRouteKey: [String: AudioDeviceID] = [:]
 
     func start(route: Route, render: @escaping StereoRenderHandler) throws {
         guard !route.key.isEmpty, route.deviceChannelCount > 0,
@@ -27,22 +28,38 @@ final class CoreAudioOutputCoordinator {
         else { throw OutputError.invalidRoute }
 
         try queue.sync {
-            sessions.removeValue(forKey: route.key)?.stop()
-            let session = OutputSession(
-                deviceID: route.deviceID,
-                deviceChannelCount: route.deviceChannelCount,
-                selectedChannels: route.selectedChannels,
-                sampleRate: route.sampleRate,
-                render: render
-            )
+            if let oldDeviceID = deviceByRouteKey[route.key], oldDeviceID != route.deviceID {
+                removeRouteOnQueue(key: route.key)
+            }
+            if let existing = sessions[route.deviceID], existing.canReuseHardware(for: route) {
+                existing.update(route: route, render: render)
+                deviceByRouteKey[route.key] = route.deviceID
+                return
+            }
+            if let obsolete = sessions.removeValue(forKey: route.deviceID) {
+                for key in obsolete.routeKeys {
+                    deviceByRouteKey.removeValue(forKey: key)
+                }
+                obsolete.stop()
+            }
+            let session = OutputSession(route: route, render: render)
             try session.start()
-            sessions[route.key] = session
+            sessions[route.deviceID] = session
+            deviceByRouteKey[route.key] = route.deviceID
         }
     }
 
     func stop(key: String) {
         queue.sync {
-            sessions.removeValue(forKey: key)?.stop()
+            removeRouteOnQueue(key: key)
+        }
+    }
+
+    private func removeRouteOnQueue(key: String) {
+        guard let deviceID = deviceByRouteKey.removeValue(forKey: key), let session = sessions[deviceID] else { return }
+        session.remove(key: key)
+        if session.routeKeys.isEmpty {
+            sessions.removeValue(forKey: deviceID)?.stop()
         }
     }
 
@@ -52,36 +69,57 @@ final class CoreAudioOutputCoordinator {
                 session.stop()
             }
             sessions.removeAll()
+            deviceByRouteKey.removeAll()
         }
     }
 
     private final class OutputSession {
         let deviceID: AudioDeviceID
         let deviceChannelCount: Int
-        let selectedChannels: [Int]
         let sampleRate: Double
-        let render: StereoRenderHandler
+        private var routes: [String: RouteRender]
+        private let publication: RealtimePublication<RouteSnapshot>
+        var routeKeys: Set<String> {
+            Set(routes.keys)
+        }
+
         let maximumFrames = 8192
         let left: UnsafeMutablePointer<Float>
         let right: UnsafeMutablePointer<Float>
         var unit: AudioUnit?
 
-        init(
-            deviceID: AudioDeviceID,
-            deviceChannelCount: Int,
-            selectedChannels: [Int],
-            sampleRate: Double,
-            render: @escaping StereoRenderHandler
-        ) {
-            self.deviceID = deviceID
-            self.deviceChannelCount = deviceChannelCount
-            self.selectedChannels = selectedChannels
-            self.sampleRate = sampleRate
-            self.render = render
+        init(route: Route, render: @escaping StereoRenderHandler) {
+            deviceID = route.deviceID
+            deviceChannelCount = route.deviceChannelCount
+            sampleRate = route.sampleRate
+            let prepared = RouteRender(key: route.key, channels: route.selectedChannels, render: render)
+            routes = [route.key: prepared]
+            publication = RealtimePublication(RouteSnapshot(routes: [prepared]))
             left = .allocate(capacity: maximumFrames)
             right = .allocate(capacity: maximumFrames)
             left.initialize(repeating: 0, count: maximumFrames)
             right.initialize(repeating: 0, count: maximumFrames)
+        }
+
+        func canReuseHardware(for route: Route) -> Bool {
+            deviceID == route.deviceID && deviceChannelCount == route.deviceChannelCount &&
+                sampleRate == route.sampleRate
+        }
+
+        func update(route: Route, render: @escaping StereoRenderHandler) {
+            routes[route.key] = RouteRender(key: route.key, channels: route.selectedChannels, render: render)
+            publishRoutes()
+        }
+
+        func remove(key: String) {
+            routes.removeValue(forKey: key)
+            if !routes.isEmpty {
+                publishRoutes()
+            }
+        }
+
+        private func publishRoutes() {
+            publication.publish(RouteSnapshot(routes: routes.values.sorted { $0.key < $1.key }))
         }
 
         deinit {
@@ -168,21 +206,26 @@ final class CoreAudioOutputCoordinator {
             output.update(repeating: 0, count: sampleCount)
             let left = UnsafeMutableBufferPointer(start: session.left, count: frames)
             let right = UnsafeMutableBufferPointer(start: session.right, count: frames)
-            left.update(repeating: 0)
-            right.update(repeating: 0)
-            session.render(left, right, frames)
-
-            if session.selectedChannels.count == 1 {
-                let channel = session.selectedChannels[0]
-                for frame in 0 ..< frames {
-                    output[frame * session.deviceChannelCount + channel] = (left[frame] + right[frame]) * 0.5
-                }
-            } else {
-                let leftChannel = session.selectedChannels[0]
-                let rightChannel = session.selectedChannels[1]
-                for frame in 0 ..< frames {
-                    output[frame * session.deviceChannelCount + leftChannel] = left[frame]
-                    output[frame * session.deviceChannelCount + rightChannel] = right[frame]
+            let snapshot = session.publication.beginRead()
+            defer { session.publication.endRead() }
+            if let snapshot {
+                for route in snapshot.routes {
+                    left.update(repeating: 0)
+                    right.update(repeating: 0)
+                    route.render(left, right, frames)
+                    if route.channels.count == 1 {
+                        let channel = route.channels[0]
+                        for frame in 0 ..< frames {
+                            output[frame * session.deviceChannelCount + channel] = (left[frame] + right[frame]) * 0.5
+                        }
+                    } else {
+                        let leftChannel = route.channels[0]
+                        let rightChannel = route.channels[1]
+                        for frame in 0 ..< frames {
+                            output[frame * session.deviceChannelCount + leftChannel] = left[frame]
+                            output[frame * session.deviceChannelCount + rightChannel] = right[frame]
+                        }
+                    }
                 }
             }
             buffers[0].mDataByteSize = UInt32(sampleCount * MemoryLayout<Float>.size)
@@ -219,5 +262,19 @@ final class CoreAudioOutputCoordinator {
             case let .audioStatus(status): "Core Audio output failed with status \(status)."
             }
         }
+    }
+}
+
+private struct RouteRender {
+    let key: String
+    let channels: [Int]
+    let render: CoreAudioOutputCoordinator.StereoRenderHandler
+}
+
+private final class RouteSnapshot {
+    let routes: [RouteRender]
+
+    init(routes: [RouteRender]) {
+        self.routes = routes
     }
 }

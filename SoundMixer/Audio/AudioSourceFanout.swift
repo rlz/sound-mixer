@@ -138,6 +138,7 @@ private struct SourceAudioBlock {
 /// It fans each source into a distinct SPSC queue for every configured endpoint.
 final class AudioSourceFanout {
     private let queuesBySource: [String: [RealtimeAudioRingBuffer]]
+    private let inputChannelCounts: [String: Int]
     private let buffersBySource: [String: SourceBuffer]
     let metersBySource: [String: RealtimePeakMeter]
     let channelMetersBySource: [String: [RealtimePeakMeter]]
@@ -147,19 +148,51 @@ final class AudioSourceFanout {
 
     private let capacity = 8192
 
-    init(queuesBySource: [String: [RealtimeAudioRingBuffer]], inputChannelCounts: [String: Int]) {
+    init(
+        queuesBySource: [String: [RealtimeAudioRingBuffer]],
+        inputChannelCounts: [String: Int],
+        existing: AudioSourceFanout? = nil
+    ) {
         self.queuesBySource = queuesBySource
+        self.inputChannelCounts = inputChannelCounts
         buffersBySource = Dictionary(uniqueKeysWithValues: queuesBySource.map { key, _ in
             let count = inputChannelCounts[key] ?? 2
+            if let buffer = existing?.buffersBySource[key], buffer.channelCount >= count {
+                return (key, buffer)
+            }
             return (key, SourceBuffer(capacity: 8192, channelCount: count))
         })
-        metersBySource = Dictionary(uniqueKeysWithValues: queuesBySource.keys.map { ($0, RealtimePeakMeter()) })
+        metersBySource = Dictionary(uniqueKeysWithValues: queuesBySource.keys.map {
+            ($0, existing?.metersBySource[$0] ?? RealtimePeakMeter())
+        })
         channelMetersBySource = Dictionary(uniqueKeysWithValues: queuesBySource.keys.compactMap { key in
             guard key.hasPrefix("input:"), let count = inputChannelCounts[key], (1 ... 64).contains(count) else {
                 return nil
             }
-            return (key, (0 ..< count).map { _ in RealtimePeakMeter() })
+            let priorMeters = existing?.channelMetersBySource[key]
+            let meters: [RealtimePeakMeter] = if let priorMeters, priorMeters.count == count {
+                priorMeters
+            } else {
+                (0 ..< count).map { _ in RealtimePeakMeter() }
+            }
+            return (key, meters)
         })
+    }
+
+    func hasSameTopology(
+        queuesBySource: [String: [RealtimeAudioRingBuffer]],
+        inputChannelCounts: [String: Int]
+    ) -> Bool {
+        guard self.queuesBySource.count == queuesBySource.count else { return false }
+        for (source, queues) in queuesBySource {
+            guard let currentQueues = self.queuesBySource[source], currentQueues.count == queues.count,
+                  self.inputChannelCounts[source] == inputChannelCounts[source]
+            else { return false }
+            for desired in queues {
+                guard currentQueues.contains(where: { $0 === desired }) else { return false }
+            }
+        }
+        return true
     }
 
     func consume(id: String, buffers: UnsafePointer<AudioBufferList>, frames: UInt32, format: AudioStreamBasicDescription) {

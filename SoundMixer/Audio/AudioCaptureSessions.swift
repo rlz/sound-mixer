@@ -7,6 +7,7 @@ final class AudioProcessCaptureSession {
     let captureID: String
     let tap: AudioObjectID
     let aggregate: AudioObjectID
+    let processID: pid_t?
     weak var owner: AudioCaptureCoordinator?
     let meter: RealtimePeakMeter?
     var procID: AudioDeviceIOProcID?
@@ -26,12 +27,20 @@ final class AudioProcessCaptureSession {
         return .starting
     }
 
-    init(id: String, tap: AudioObjectID, aggregate: AudioObjectID, owner: AudioCaptureCoordinator, meter: RealtimePeakMeter? = nil) {
+    init(
+        id: String,
+        tap: AudioObjectID,
+        aggregate: AudioObjectID,
+        owner: AudioCaptureCoordinator,
+        meter: RealtimePeakMeter? = nil,
+        processID: pid_t? = nil
+    ) {
         captureID = id
         self.tap = tap
         self.aggregate = aggregate
         self.owner = owner
         self.meter = meter
+        self.processID = processID
     }
 
     func start() throws {
@@ -89,6 +98,10 @@ final class AudioInputCaptureSession {
     private let renderStatus = Atomic<Int32>(noErr)
     private let lastRenderedAt = Atomic<UInt64>(0)
     private var startedAt: UInt64 = 0
+
+    func matches(deviceID: AudioDeviceID, selectedChannels: [Int]?) -> Bool {
+        self.deviceID == deviceID && self.selectedChannels == selectedChannels
+    }
 
     var captureState: AudioCaptureState {
         let status = renderStatus.load(ordering: .relaxed)

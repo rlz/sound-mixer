@@ -10,6 +10,7 @@ final class AudioGraphRenderer {
     private let busOrder: [UUID]
     private let sourceRings: [String: RealtimeAudioRingBuffer]
     private let sourceBuffers: [String: AudioSourceStorage]
+    private let sourceReferences: Set<SourceReference>
     private let busBuffers: [UUID: StereoStorage]
     private let sourceKeys: [String]
     private let mixStates: [UUID: [MixInputState]]
@@ -31,18 +32,39 @@ final class AudioGraphRenderer {
         outputMix = output.mix
         self.targetKey = targetKey
         mutedSources = Set(graph.configuration.mutedSources)
-        busMuteStates = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map {
+        let allBusesByID = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map { ($0.id, $0) })
+        var pendingBusIDs = output.mix.inputs.compactMap { input -> UUID? in
+            guard case let .bus(id) = input.source else { return nil }
+            return id
+        }
+        var relevantBusIDs = Set<UUID>()
+        while let id = pendingBusIDs.popLast() {
+            guard relevantBusIDs.insert(id).inserted, let bus = allBusesByID[id] else { continue }
+            pendingBusIDs += bus.mix.inputs.compactMap { input -> UUID? in
+                guard case let .bus(dependencyID) = input.source else { return nil }
+                return dependencyID
+            }
+        }
+        let relevantBuses = graph.configuration.buses.filter { relevantBusIDs.contains($0.id) }
+        let relevantBusOrder = graph.busRenderOrder.filter { relevantBusIDs.contains($0) }
+        busMuteStates = Dictionary(uniqueKeysWithValues: relevantBuses.map {
             ($0.id, BusMuteState(Set(graph.configuration.mutedBuses).contains($0.id)))
         })
-        busDestinationMeters = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map {
+        busDestinationMeters = Dictionary(uniqueKeysWithValues: relevantBuses.map {
             ($0.id, meters["bus:\($0.id.uuidString)/destination"])
         }.compactMap { key, meter in meter.map { (key, $0) } })
         outputDestinationMeter = meters["\(targetKey)/destination"]
-        busesByID = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map { ($0.id, $0) })
-        busOrder = graph.busRenderOrder
+        busesByID = Dictionary(uniqueKeysWithValues: relevantBuses.map { ($0.id, $0) })
+        busOrder = relevantBusOrder
         self.sourceRings = sourceRings
 
-        let mixes = graph.configuration.buses.map(\.mix) + [output.mix]
+        let mixes = relevantBuses.map(\.mix) + [output.mix]
+        sourceReferences = Set(mixes.flatMap(\.inputs).map(\.source).filter {
+            if case .bus = $0 {
+                return false
+            }
+            return true
+        })
         let sources = Set(mixes.flatMap(\.inputs).compactMap { input -> String? in
             guard case .bus = input.source else { return Self.sourceKey(input.source) }
             return nil
@@ -52,7 +74,7 @@ final class AudioGraphRenderer {
             (key, AudioSourceStorage(capacity: Self.maximumFrames, channelCount: sourceRings[key]?.channelCount ?? 2))
         })
         busBuffers = Dictionary(uniqueKeysWithValues: busOrder.map { ($0, StereoStorage(capacity: Self.maximumFrames)) })
-        mixStates = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map { bus in
+        mixStates = Dictionary(uniqueKeysWithValues: relevantBuses.map { bus in
             (
                 bus.id,
                 Self.states(
@@ -89,7 +111,9 @@ final class AudioGraphRenderer {
             else { continue }
             storage.clear(frames: frames)
             renderMix(bus.mix, states: states, into: storage, frames: frames)
-            if busMuteStates[busID]?.value.load(ordering: .relaxed) == true { storage.clear(frames: frames) }
+            if busMuteStates[busID]?.value.load(ordering: .relaxed) == true {
+                storage.clear(frames: frames)
+            }
             busDestinationMeters[busID]?.record(
                 left: storage.readLeftBuffer(frames), right: storage.readRightBuffer(frames), frameCount: frames
             )
@@ -118,6 +142,11 @@ final class AudioGraphRenderer {
         if let mix {
             Self.update(states: outputState, mix: mix, mutedSources: Set(graph.configuration.mutedSources))
         }
+    }
+
+    func depends(on changedSources: Set<SourceReference>, changedBuses: Set<UUID>) -> Bool {
+        !sourceReferences.isDisjoint(with: changedSources) ||
+            !Set(busMuteStates.keys).isDisjoint(with: changedBuses)
     }
 
     private func renderMix(

@@ -20,6 +20,16 @@ struct AudioDeviceSnapshot: Equatable, Sendable {
             inputChannels == other.inputChannels && outputChannels == other.outputChannels &&
             nominalSampleRate == other.nominalSampleRate
     }
+
+    func hasSameInputRouting(as other: AudioDeviceSnapshot) -> Bool {
+        deviceID == other.deviceID && uid == other.uid && isAlive == other.isAlive &&
+            inputChannels == other.inputChannels && nominalSampleRate == other.nominalSampleRate
+    }
+
+    func hasSameOutputRouting(as other: AudioDeviceSnapshot) -> Bool {
+        deviceID == other.deviceID && uid == other.uid && isAlive == other.isAlive &&
+            outputChannels == other.outputChannels && nominalSampleRate == other.nominalSampleRate
+    }
 }
 
 final class CoreAudioDeviceCatalog {

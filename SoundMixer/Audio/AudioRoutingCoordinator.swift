@@ -2,21 +2,24 @@ import AudioToolbox
 import CoreAudio
 import Foundation
 
-/// Applies a validated graph to capture and output resources. Queue snapshots are
-/// replaced only after capture has stopped, so each ring keeps one producer.
+/// Applies a validated graph by replacing only changed source and endpoint resources.
 final class AudioRoutingCoordinator {
     var onRouteError: ((String, String) -> Void)?
     var onRoutingReset: (() -> Void)?
 
     private let capture: AudioCaptureCoordinator
     private let output = CoreAudioOutputCoordinator()
-    private var fanout: AudioSourceFanout?
+    private let fanout = RealtimePublication<AudioSourceFanout>()
     private var renderers: [String: AudioGraphRenderer] = [:]
-    private var busMeterPump: BusMeterPump?
+    private var activeRouteKeys = Set<String>()
+    private var busMeterPumps: [UUID: BusMeterPump] = [:]
+    private var ringsByBusMeter: [UUID: [String: RealtimeAudioRingBuffer]] = [:]
+    private var busMeterSignatures: [UUID: BusMeterSignature] = [:]
     private var ringsByRoute: [String: [String: RealtimeAudioRingBuffer]] = [:]
     private var sourceMeters: [String: RealtimePeakMeter] = [:]
     private var renderMeters: [String: RealtimePeakMeter] = [:]
     private var deviceMeters: [String: RealtimePeakMeter] = [:]
+    private var deviceMeterDevices: [String: AudioDeviceSnapshot] = [:]
     private var lastGraph: MixGraphSnapshot?
     private var lastDevices: [AudioDeviceSnapshot] = []
     private var lastProcesses: [AudioProcessSnapshot] = []
@@ -25,7 +28,10 @@ final class AudioRoutingCoordinator {
     init(capture: AudioCaptureCoordinator) {
         self.capture = capture
         capture.onAudio = { [weak self] id, buffers, frames, format in
-            self?.fanout?.consume(id: id, buffers: buffers, frames: frames, format: format)
+            guard let self else { return }
+            let current = fanout.beginRead()
+            defer { fanout.endRead() }
+            current?.consume(id: id, buffers: buffers, frames: frames, format: format)
         }
     }
 
@@ -45,36 +51,128 @@ final class AudioRoutingCoordinator {
             return $0.processID < $1.processID
         }
         let enabled = graph.configuration.isEnabled
+        let deviceRoutingChanged = lastDevices.count != orderedDevices.count ||
+            !zip(lastDevices, orderedDevices).allSatisfy { $0.hasSameRouting(as: $1) }
         guard needsUpdate(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled) else { return false }
         if let lastGraph, enabled, Self.hasOnlyGainChanges(from: lastGraph.configuration, to: graph.configuration),
-           lastDevices.count == orderedDevices.count,
-           zip(lastDevices, orderedDevices).allSatisfy({ $0.hasSameRouting(as: $1) }),
-           lastProcesses == orderedProcesses
+           !deviceRoutingChanged,
+           Self.hasSameProcessRouting(lastProcesses, orderedProcesses)
         {
-            for renderer in renderers.values {
+            let desiredShape = RuntimeGraphShape(configuration: graph.configuration)
+            let previousShape = RuntimeGraphShape(configuration: lastGraph.configuration)
+            let changedRoutes = desiredShape.changedRouteKeys(from: previousShape)
+            let changedBuses = desiredShape.changedBusIDs(from: previousShape)
+            let changedMutedSources = Set(lastGraph.configuration.mutedSources)
+                .symmetricDifference(graph.configuration.mutedSources)
+            let changedMutedBuses = Set(lastGraph.configuration.mutedBuses)
+                .symmetricDifference(graph.configuration.mutedBuses)
+            for (key, renderer) in renderers where changedRoutes.contains(key) ||
+                renderer.depends(on: changedMutedSources, changedBuses: changedMutedBuses)
+            {
                 renderer.updateGains(from: graph)
             }
-            busMeterPump?.renderer.updateGains(from: graph)
+            for (id, pump) in busMeterPumps where changedBuses.contains(id) ||
+                pump.renderer.depends(on: changedMutedSources, changedBuses: changedMutedBuses)
+            {
+                pump.renderer.updateGains(from: graph)
+            }
             remember(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled)
             return false
         }
-        onRoutingReset?()
-        remember(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled)
-        stopCurrentRouting()
-        guard enabled else { return true }
+        if let lastGraph, enabled,
+           !deviceRoutingChanged,
+           Self.hasSameProcessRouting(lastProcesses, orderedProcesses),
+           RuntimeGraphShape.hasOnlyEmptyBusChanges(from: lastGraph.configuration, to: graph.configuration)
+        {
+            retainRenderMeters(for: graph.configuration)
+            remember(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled)
+            return true
+        }
+        if !enabled {
+            onRoutingReset?()
+            remember(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled)
+            stopCurrentRouting()
+            return true
+        }
 
         let deviceByUID = Dictionary(orderedDevices.map { ($0.uid, $0) }, uniquingKeysWith: { first, _ in first })
         let processByID = Dictionary(orderedProcesses.map { ($0.applicationID, $0) }, uniquingKeysWith: { first, _ in first })
+
+        let routes = makeRoutes(graph.configuration)
+        let desiredRoutes = Dictionary(routes.map { ($0.key, $0) }, uniquingKeysWith: { _, latest in latest })
+        let previousConfiguration = lastGraph?.configuration
+        let desiredShape = RuntimeGraphShape(configuration: graph.configuration)
+        let changedShapes = lastGraph.map {
+            desiredShape.changedRouteKeys(from: RuntimeGraphShape(configuration: $0.configuration))
+        } ?? Set(desiredRoutes.keys)
+        let changedMutedSources = Set(previousConfiguration?.mutedSources ?? [])
+            .symmetricDifference(graph.configuration.mutedSources)
+        let changedMutedBuses = Set(previousConfiguration?.mutedBuses ?? [])
+            .symmetricDifference(graph.configuration.mutedBuses)
+        let changedRouteKeys = Set(desiredRoutes.compactMap { key, route in
+            guard !changedShapes.contains(key), activeRouteKeys.contains(key),
+                  renderers[key] != nil,
+                  let routeRings = ringsByRoute[key],
+                  routeRingsMatch(routeRings, route: route, devices: deviceByUID, buses: graph.configuration.buses),
+                  let oldDevice = lastDevices.first(where: { $0.uid == route.uid }),
+                  let newDevice = deviceByUID[route.uid], oldDevice.hasSameOutputRouting(as: newDevice)
+            else { return key }
+            return nil
+        })
+        let removedRouteKeys = Set(ringsByRoute.keys).subtracting(desiredRoutes.keys)
+        let routeWork = changedRouteKeys.union(removedRouteKeys)
+        if !routeWork.isEmpty {
+            onRoutingReset?()
+        }
+
+        var retiringRings: [(String, RealtimeAudioRingBuffer)] = []
+        var previousRingsByChangedRoute: [String: [String: RealtimeAudioRingBuffer]] = [:]
+        for key in routeWork {
+            if removedRouteKeys.contains(key) {
+                output.stop(key: key)
+            }
+            activeRouteKeys.remove(key)
+            renderers.removeValue(forKey: key)
+            if let oldRings = ringsByRoute.removeValue(forKey: key), !removedRouteKeys.contains(key) {
+                previousRingsByChangedRoute[key] = oldRings
+            }
+        }
+
         var queuesBySource: [String: [RealtimeAudioRingBuffer]] = [:]
         var captureSources = Set<String>()
-        renderMeters = Dictionary(uniqueKeysWithValues: Self.renderMeterKeys(graph.configuration).map { ($0, RealtimePeakMeter()) })
+        retainRenderMeters(for: graph.configuration)
         for device in orderedDevices where device.inputChannels > 0 {
             let key = "input:\(device.uid)"
             queuesBySource[key] = []
             captureSources.insert(key)
         }
-        startOutputRoutes(graph: graph, devices: deviceByUID, queues: &queuesBySource, sources: &captureSources)
-        startBusMeterPump(graph: graph, devices: deviceByUID, queues: &queuesBySource, sources: &captureSources)
+        for route in routes {
+            let routeRings: [String: RealtimeAudioRingBuffer]?
+            if routeWork.contains(route.key) {
+                let previousRings = previousRingsByChangedRoute[route.key] ?? [:]
+                routeRings = startOutputRoute(
+                    route, graph: graph, devices: deviceByUID, existingRings: previousRings
+                )
+                for (source, oldRing) in previousRings where routeRings?[source] !== oldRing {
+                    retiringRings.append((source, oldRing))
+                }
+                ringsByRoute[route.key] = routeRings
+            } else {
+                routeRings = ringsByRoute[route.key]
+                if renderers[route.key]?.depends(on: changedMutedSources, changedBuses: changedMutedBuses) == true {
+                    renderers[route.key]?.updateGains(from: graph)
+                }
+            }
+            for (source, ring) in routeRings ?? [:] {
+                queuesBySource[source, default: []].append(ring)
+                captureSources.insert(source)
+            }
+        }
+        reconcileBusMeters(
+            graph: graph, shape: desiredShape, devices: deviceByUID,
+            changedMutedSources: changedMutedSources, changedMutedBuses: changedMutedBuses,
+            queues: &queuesBySource, sources: &captureSources
+        )
         for route in graph.configuration.blackHoleRoutes {
             let key = "route:\(route.id.uuidString)"
             queuesBySource[key] = queuesBySource[key] ?? []
@@ -90,34 +188,186 @@ final class AudioRoutingCoordinator {
         }).merging(Dictionary(uniqueKeysWithValues: graph.configuration.blackHoleRoutes.map {
             ("route:\($0.id.uuidString)", 2)
         }), uniquingKeysWith: { first, _ in first })
-        fanout = AudioSourceFanout(queuesBySource: queuesBySource, inputChannelCounts: inputChannelCounts)
-        sourceMeters = fanout?.metersBySource ?? [:]
-        startCapture(sources: captureSources, graph: graph, devices: deviceByUID, processes: processByID)
-        startDeviceMeters(devices: orderedDevices)
+        let fanoutChanged = !hasSameFanoutTopology(
+            queuesBySource: queuesBySource,
+            inputChannelCounts: inputChannelCounts
+        )
+        var nextFanout: AudioSourceFanout?
+        if fanoutChanged {
+            let prepared = makeFanoutSnapshot(queuesBySource: queuesBySource, inputChannelCounts: inputChannelCounts)
+            nextFanout = prepared
+            sourceMeters = prepared.metersBySource
+            if !retiringRings.isEmpty {
+                var transitionQueues = queuesBySource
+                for (source, ring) in retiringRings {
+                    transitionQueues[source, default: []].append(ring)
+                }
+                fanout.publish(AudioSourceFanout(
+                    queuesBySource: transitionQueues,
+                    inputChannelCounts: inputChannelCounts,
+                    existing: prepared
+                ))
+            } else {
+                fanout.publish(prepared)
+            }
+        }
+
+        for route in routes where routeWork.contains(route.key) {
+            guard let device = deviceByUID[route.uid], let renderer = renderers[route.key] else {
+                output.stop(key: route.key)
+                continue
+            }
+            if startOutputUnit(route, device: device, renderer: renderer) {
+                activeRouteKeys.insert(route.key)
+            }
+        }
+        if !retiringRings.isEmpty, let nextFanout {
+            fanout.publish(nextFanout)
+        }
+
+        let previousSources = self.captureSources(for: lastGraph?.configuration, devices: lastDevices)
+        let obsoleteSources = previousSources.subtracting(captureSources)
+        let restartedSources = captureSourcesNeedingRestart(
+            graph: graph,
+            devices: orderedDevices,
+            processes: orderedProcesses
+        ).intersection(captureSources)
+        for source in obsoleteSources {
+            capture.stop(id: source)
+        }
+        for source in restartedSources {
+            capture.stop(id: source)
+        }
+        let sourcesToStart = captureSources.subtracting(previousSources).union(restartedSources)
+        startCapture(sources: sourcesToStart, graph: graph, devices: deviceByUID, processes: processByID)
+        if deviceRoutingChanged || lastEnabled != true {
+            updateDeviceMeters(devices: orderedDevices)
+        }
+        remember(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled)
         return true
     }
 
-    private func startDeviceMeters(devices: [AudioDeviceSnapshot]) {
-        deviceMeters = Dictionary(uniqueKeysWithValues: devices.filter { device in
+    private func updateDeviceMeters(devices: [AudioDeviceSnapshot]) {
+        let currentDevices = Dictionary(uniqueKeysWithValues: devices.filter { device in
             device.isAlive && device.outputChannels > 0 &&
                 !device.name.localizedCaseInsensitiveContains("BlackHole")
-        }.map { ($0.uid, RealtimePeakMeter()) })
-        for (uid, meter) in deviceMeters {
+        }.map { ($0.uid, $0) })
+        var nextMeters: [String: RealtimePeakMeter] = [:]
+        for (uid, device) in currentDevices {
+            if let previousDevice = deviceMeterDevices[uid],
+               previousDevice.hasSameOutputRouting(as: device),
+               let meter = deviceMeters[uid]
+            {
+                nextMeters[uid] = meter
+                continue
+            }
+            if deviceMeterDevices[uid] != nil {
+                capture.stop(id: "device:\(uid)")
+            }
+            let meter = RealtimePeakMeter()
+            nextMeters[uid] = meter
             capture.startOutputMeter(uid: uid, meter: meter)
         }
+        for uid in deviceMeterDevices.keys where currentDevices[uid] == nil {
+            capture.stop(id: "device:\(uid)")
+        }
+        deviceMeters = nextMeters
+        deviceMeterDevices = currentDevices
+    }
+
+    private func retainRenderMeters(for configuration: MixerConfiguration) {
+        let nextMeterKeys = Set(Self.renderMeterKeys(configuration))
+        renderMeters = renderMeters.filter { nextMeterKeys.contains($0.key) }
+        for key in nextMeterKeys where renderMeters[key] == nil {
+            renderMeters[key] = RealtimePeakMeter()
+        }
+    }
+
+    private func routeRingsMatch(
+        _ rings: [String: RealtimeAudioRingBuffer],
+        route: RenderRoute,
+        devices: [String: AudioDeviceSnapshot],
+        buses: [VirtualBus]
+    ) -> Bool {
+        let keys = Self.sourceKeys(in: route.mix, buses: buses)
+        guard Set(rings.keys) == Set(keys) else { return false }
+        return keys.allSatisfy { key in
+            rings[key]?.channelCount == sourceChannelCount(for: key, devices: devices)
+        }
+    }
+
+    private func sourceChannelCount(for key: String, devices: [String: AudioDeviceSnapshot]) -> Int {
+        guard key.hasPrefix("input:") else { return 2 }
+        let uid = String(key.dropFirst("input:".count))
+        return min(max(devices[uid]?.inputChannels ?? 2, 1), 64)
+    }
+
+    private func captureSourcesNeedingRestart(
+        graph: MixGraphSnapshot,
+        devices: [AudioDeviceSnapshot],
+        processes: [AudioProcessSnapshot]
+    ) -> Set<String> {
+        var result = Set<String>()
+        let previousDevices = Dictionary(lastDevices.map { ($0.uid, $0) }, uniquingKeysWith: { _, latest in latest })
+        let currentDevices = Dictionary(devices.map { ($0.uid, $0) }, uniquingKeysWith: { _, latest in latest })
+        for device in devices {
+            guard let previous = lastDevices.first(where: { $0.uid == device.uid }),
+                  !previous.hasSameInputRouting(as: device)
+            else { continue }
+            if device.inputChannels > 0 {
+                result.insert("input:\(device.uid)")
+            }
+            for route in graph.configuration.blackHoleRoutes where route.deviceUID.rawValue == device.uid {
+                result.insert("route:\(route.id.uuidString)")
+            }
+        }
+        let previousRoutes = Dictionary(
+            (lastGraph?.configuration.blackHoleRoutes ?? []).map { ($0.id, $0) },
+            uniquingKeysWith: { _, latest in latest }
+        )
+        for route in graph.configuration.blackHoleRoutes {
+            let routeChanged = previousRoutes[route.id].map {
+                $0.deviceUID != route.deviceUID || $0.channels != route.channels
+            } ?? true
+            let oldDevice = previousDevices[route.deviceUID.rawValue]
+            let newDevice = currentDevices[route.deviceUID.rawValue]
+            let deviceChanged: Bool = switch (oldDevice, newDevice) {
+            case (nil, nil): false
+            case let (old?, new?): !old.hasSameInputRouting(as: new)
+            default: true
+            }
+            if routeChanged || deviceChanged {
+                result.insert("route:\(route.id.uuidString)")
+            }
+        }
+        let previousProcesses = Dictionary(lastProcesses.map { ($0.applicationID, $0) }, uniquingKeysWith: { _, latest in latest })
+        let currentProcesses = Dictionary(processes.map { ($0.applicationID, $0) }, uniquingKeysWith: { _, latest in latest })
+        for id in Set(previousProcesses.keys).union(currentProcesses.keys) {
+            guard previousProcesses[id]?.processID != currentProcesses[id]?.processID ||
+                previousProcesses[id]?.isProducingOutput != currentProcesses[id]?.isProducingOutput
+            else { continue }
+            result.insert("application:\(id)")
+        }
+        return result
     }
 
     func stop() {
         capture.stopAll()
         output.stopAll()
         renderers.removeAll()
-        busMeterPump?.stop()
-        busMeterPump = nil
+        activeRouteKeys.removeAll()
+        for pump in busMeterPumps.values {
+            pump.stop()
+        }
+        busMeterPumps.removeAll()
+        ringsByBusMeter.removeAll()
+        busMeterSignatures.removeAll()
         ringsByRoute.removeAll()
         sourceMeters.removeAll()
         renderMeters.removeAll()
         deviceMeters.removeAll()
-        fanout = nil
+        deviceMeterDevices.removeAll()
+        fanout.publish(nil)
         lastEnabled = false
     }
 
@@ -129,7 +379,19 @@ final class AudioRoutingCoordinator {
     ) -> Bool {
         lastGraph != graph || lastDevices.count != devices.count ||
             !zip(lastDevices, devices).allSatisfy { $0.hasSameRouting(as: $1) } ||
-            lastProcesses != processes || lastEnabled != enabled
+            !Self.hasSameProcessRouting(lastProcesses, processes) || lastEnabled != enabled
+    }
+
+    private static func hasSameProcessRouting(
+        _ lhs: [AudioProcessSnapshot],
+        _ rhs: [AudioProcessSnapshot]
+    ) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        let rightByID = Dictionary(rhs.map { ($0.applicationID, $0) }, uniquingKeysWith: { _, latest in latest })
+        return lhs.allSatisfy { process in
+            guard let other = rightByID[process.applicationID] else { return false }
+            return process.processID == other.processID && process.isProducingOutput == other.isProducingOutput
+        }
     }
 
     private func remember(
@@ -148,41 +410,82 @@ final class AudioRoutingCoordinator {
         capture.stopAll()
         output.stopAll()
         renderers.removeAll()
-        busMeterPump?.stop()
-        busMeterPump = nil
+        activeRouteKeys.removeAll()
+        for pump in busMeterPumps.values {
+            pump.stop()
+        }
+        busMeterPumps.removeAll()
+        ringsByBusMeter.removeAll()
+        busMeterSignatures.removeAll()
         ringsByRoute.removeAll()
         sourceMeters.removeAll()
         renderMeters.removeAll()
         deviceMeters.removeAll()
-        fanout = nil
+        deviceMeterDevices.removeAll()
+        fanout.publish(nil)
     }
 
-    private func startOutputRoutes(
+    private func reconcileBusMeters(
         graph: MixGraphSnapshot,
+        shape: RuntimeGraphShape,
         devices: [String: AudioDeviceSnapshot],
+        changedMutedSources: Set<SourceReference>,
+        changedMutedBuses: Set<UUID>,
         queues: inout [String: [RealtimeAudioRingBuffer]],
         sources: inout Set<String>
     ) {
-        for route in makeRoutes(graph.configuration) {
-            guard let rings = startOutputRoute(route, graph: graph, devices: devices) else { continue }
-            ringsByRoute[route.key] = rings
-            for (key, ring) in rings {
-                queues[key, default: []].append(ring)
-                sources.insert(key)
+        let desiredIDs = Set(graph.configuration.buses.map(\.id))
+        for id in Array(busMeterPumps.keys) where !desiredIDs.contains(id) {
+            busMeterPumps.removeValue(forKey: id)?.stop()
+            ringsByBusMeter.removeValue(forKey: id)
+            busMeterSignatures.removeValue(forKey: id)
+        }
+        for bus in graph.configuration.buses {
+            guard !bus.mix.inputs.isEmpty else {
+                busMeterPumps.removeValue(forKey: bus.id)?.stop()
+                ringsByBusMeter.removeValue(forKey: bus.id)
+                busMeterSignatures.removeValue(forKey: bus.id)
+                continue
+            }
+            let sourceKeys = Self.sourceKeys(in: bus.mix, buses: graph.configuration.buses)
+            let inputChannels = Dictionary(uniqueKeysWithValues: sourceKeys.compactMap { source -> (String, Int)? in
+                guard source.hasPrefix("input:") else { return nil }
+                let uid = String(source.dropFirst("input:".count))
+                return (source, min(max(devices[uid]?.inputChannels ?? 2, 1), 64))
+            })
+            let rootMix = Mix(inputs: [MixInput(source: .bus(bus.id))])
+            let signature = BusMeterSignature(
+                dependencies: shape.busDependenciesByID[bus.id] ?? [],
+                inputChannels: inputChannels
+            )
+            if busMeterPumps[bus.id] == nil || busMeterSignatures[bus.id] != signature {
+                busMeterPumps.removeValue(forKey: bus.id)?.stop()
+                let prepared = makeBusMeterPump(
+                    bus: bus, graph: graph, devices: devices, sourceKeys: sourceKeys, rootMix: rootMix
+                )
+                ringsByBusMeter[bus.id] = prepared.rings
+                busMeterPumps[bus.id] = prepared.pump
+                busMeterSignatures[bus.id] = signature
+                prepared.pump.start()
+            } else if busMeterPumps[bus.id]?.renderer.depends(
+                on: changedMutedSources, changedBuses: changedMutedBuses
+            ) == true {
+                busMeterPumps[bus.id]?.renderer.updateGains(from: graph)
+            }
+            for (source, ring) in ringsByBusMeter[bus.id] ?? [:] {
+                queues[source, default: []].append(ring)
+                sources.insert(source)
             }
         }
     }
 
-    private func startBusMeterPump(
+    private func makeBusMeterPump(
+        bus: VirtualBus,
         graph: MixGraphSnapshot,
         devices: [String: AudioDeviceSnapshot],
-        queues: inout [String: [RealtimeAudioRingBuffer]],
-        sources: inout Set<String>
-    ) {
-        guard !graph.configuration.buses.isEmpty else { return }
-        let sourceKeys = Set(graph.configuration.buses.flatMap {
-            Self.sourceKeys(in: $0.mix, buses: graph.configuration.buses)
-        })
+        sourceKeys: [String],
+        rootMix: Mix
+    ) -> (pump: BusMeterPump, rings: [String: RealtimeAudioRingBuffer]) {
         var rings: [String: RealtimeAudioRingBuffer] = [:]
         for key in sourceKeys {
             let channels: Int
@@ -192,27 +495,25 @@ final class AudioRoutingCoordinator {
             } else {
                 channels = 2
             }
-            let ring = RealtimeAudioRingBuffer(channelCount: channels)
-            rings[key] = ring
-            queues[key, default: []].append(ring)
-            sources.insert(key)
+            rings[key] = RealtimeAudioRingBuffer(channelCount: channels)
         }
+        let meterPrefix = "bus:\(bus.id.uuidString)/"
         let renderer = AudioGraphRenderer(
             graph: graph,
-            output: OutputMix(deviceUID: DeviceUID(rawValue: "virtual-meter"), mix: Mix()),
+            output: OutputMix(deviceUID: DeviceUID(rawValue: "virtual-meter"), mix: rootMix),
             sourceRings: rings,
             targetKey: "virtual-meter",
-            meters: renderMeters
+            meters: renderMeters.filter { $0.key.hasPrefix(meterPrefix) }
         )
         renderer.updateGains(from: graph)
-        busMeterPump = BusMeterPump(renderer: renderer)
-        busMeterPump?.start()
+        return (BusMeterPump(renderer: renderer), rings)
     }
 
     private func startOutputRoute(
         _ route: RenderRoute,
         graph: MixGraphSnapshot,
-        devices: [String: AudioDeviceSnapshot]
+        devices: [String: AudioDeviceSnapshot],
+        existingRings: [String: RealtimeAudioRingBuffer]
     ) -> [String: RealtimeAudioRingBuffer]? {
         guard let device = devices[route.uid], device.isAlive,
               route.channels.max().map({ device.outputChannels > $0 }) ?? false,
@@ -224,12 +525,10 @@ final class AudioRoutingCoordinator {
 
         let sourceKeys = Self.sourceKeys(in: route.mix, buses: graph.configuration.buses)
         let rings = Dictionary(uniqueKeysWithValues: sourceKeys.map { key in
-            let channelCount: Int
-            if key.hasPrefix("input:") {
-                let uid = String(key.dropFirst("input:".count))
-                channelCount = min(max(devices[uid]?.inputChannels ?? 2, 1), 64)
-            } else {
-                channelCount = 2
+            let channelCount = sourceChannelCount(for: key, devices: devices)
+            if let existing = existingRings[key], existing.channelCount == channelCount {
+                // The route keeps the same HAL callback; publishing the new renderer transfers its existing queues.
+                return (key, existing)
             }
             return (key, RealtimeAudioRingBuffer(channelCount: channelCount))
         })
@@ -239,9 +538,18 @@ final class AudioRoutingCoordinator {
             sourceRings: rings,
             monoSourceKeys: [],
             targetKey: route.targetKey,
-            meters: renderMeters
+            meters: renderMeters.filter { $0.key.hasPrefix("\(route.targetKey)/") }
         )
         renderer.updateGains(from: graph)
+        renderers[route.key] = renderer
+        return rings
+    }
+
+    private func startOutputUnit(
+        _ route: RenderRoute,
+        device: AudioDeviceSnapshot,
+        renderer: AudioGraphRenderer
+    ) -> Bool {
         do {
             try output.start(
                 route: CoreAudioOutputCoordinator.Route(
@@ -253,11 +561,11 @@ final class AudioRoutingCoordinator {
                 ),
                 render: { left, right, frames in renderer.render(left: left, right: right, frameCount: frames) }
             )
-            renderers[route.key] = renderer
-            return rings
+            return true
         } catch {
+            output.stop(key: route.key)
             onRouteError?(route.key, error.localizedDescription)
-            return nil
+            return false
         }
     }
 
@@ -278,6 +586,7 @@ final class AudioRoutingCoordinator {
                 normalize(&copy.buses[index].mix)
             }
             copy.mutedBuses = []
+            copy.mutedSources = []
             for index in copy.blackHoleRoutes.indices {
                 normalize(&copy.blackHoleRoutes[index].mix)
             }
@@ -354,7 +663,9 @@ final class AudioRoutingCoordinator {
     }
 
     func inputChannelLevelReadings() -> [String: [Double?]] {
-        fanout?.channelReadingsBySource ?? [:]
+        let current = fanout.beginRead()
+        defer { fanout.endRead() }
+        return current?.channelReadingsBySource ?? [:]
     }
 
     func renderLevelReadings() -> [String: Double] {
@@ -363,6 +674,31 @@ final class AudioRoutingCoordinator {
 
     func deviceLevelReadings() -> [String: Double] {
         deviceMeters.compactMapValues { $0.reading() }
+    }
+
+    private func hasSameFanoutTopology(
+        queuesBySource: [String: [RealtimeAudioRingBuffer]],
+        inputChannelCounts: [String: Int]
+    ) -> Bool {
+        let current = fanout.beginRead()
+        defer { fanout.endRead() }
+        return current?.hasSameTopology(
+            queuesBySource: queuesBySource,
+            inputChannelCounts: inputChannelCounts
+        ) ?? false
+    }
+
+    private func makeFanoutSnapshot(
+        queuesBySource: [String: [RealtimeAudioRingBuffer]],
+        inputChannelCounts: [String: Int]
+    ) -> AudioSourceFanout {
+        let current = fanout.beginRead()
+        defer { fanout.endRead() }
+        return AudioSourceFanout(
+            queuesBySource: queuesBySource,
+            inputChannelCounts: inputChannelCounts,
+            existing: current
+        )
     }
 }
 
@@ -396,9 +732,9 @@ private final class BusMeterPump {
         timer.schedule(deadline: .now(), repeating: .milliseconds(10), leeway: .milliseconds(2))
         timer.setEventHandler { [weak self] in
             guard let self else { return }
-            let leftBuffer = UnsafeMutableBufferPointer(start: self.left, count: self.frameCount)
-            let rightBuffer = UnsafeMutableBufferPointer(start: self.right, count: self.frameCount)
-            self.renderer.render(left: leftBuffer, right: rightBuffer, frameCount: self.frameCount)
+            let leftBuffer = UnsafeMutableBufferPointer(start: left, count: frameCount)
+            let rightBuffer = UnsafeMutableBufferPointer(start: right, count: frameCount)
+            renderer.render(left: leftBuffer, right: rightBuffer, frameCount: frameCount)
         }
         self.timer = timer
         timer.resume()
@@ -433,6 +769,23 @@ extension AudioRoutingCoordinator {
         return keys
     }
 
+    private func captureSources(
+        for configuration: MixerConfiguration?,
+        devices: [AudioDeviceSnapshot]
+    ) -> Set<String> {
+        guard let configuration, configuration.isEnabled else { return [] }
+        var sources = Set(devices.filter { $0.inputChannels > 0 }.map { "input:\($0.uid)" })
+        sources.formUnion(configuration.applications.map { "application:\($0.rawValue)" })
+        sources.formUnion(configuration.blackHoleRoutes.map { "route:\($0.id.uuidString)" })
+        for route in makeRoutes(configuration) {
+            sources.formUnion(Self.sourceKeys(in: route.mix, buses: configuration.buses))
+        }
+        for bus in configuration.buses {
+            sources.formUnion(Self.sourceKeys(in: bus.mix, buses: configuration.buses))
+        }
+        return sources
+    }
+
     private func makeRoutes(_ configuration: MixerConfiguration) -> [RenderRoute] {
         var routes = configuration.outputMixes.map { output in
             var mix = output.mix
@@ -446,6 +799,7 @@ extension AudioRoutingCoordinator {
             )
         }
         routes += configuration.blackHoleRoutes.map { route in
+            guard !route.mix.inputs.isEmpty else { return nil }
             let channels: [Int] = switch route.channels {
             case let .mono(channel): [channel - 1]
             case let .stereo(left, right): [left - 1, right - 1]
@@ -457,7 +811,7 @@ extension AudioRoutingCoordinator {
                 mix: route.mix,
                 targetKey: "route:\(route.id.uuidString)"
             )
-        }
+        }.compactMap(\.self)
         return routes
     }
 
@@ -490,4 +844,9 @@ private struct RenderRoute {
     let channels: [Int]
     let mix: Mix
     let targetKey: String
+}
+
+private struct BusMeterSignature: Equatable {
+    let dependencies: [RuntimeBusRenderingDefinition]
+    let inputChannels: [String: Int]
 }
