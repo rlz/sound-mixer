@@ -9,13 +9,15 @@ export const InputsPanel = memo(function InputsPanel() {
     const mixerState = useMixerStore((state) => state.mixerState);
     const sourceDevices = (mixerState?.devices ?? []).filter(
         (device) =>
-            device.inputChannels > 0 ||
-            (mixerState?.mixes ?? []).some((mix) =>
-                mix.inputs.some(
-                    (input) =>
-                        input.kind === "inputDevice" && input.id === device.uid,
-                ),
-            ),
+            !device.hidden &&
+            (device.inputChannels > 0 ||
+                (mixerState?.mixes ?? []).some((mix) =>
+                    mix.inputs.some(
+                        (input) =>
+                            input.kind === "inputDevice" &&
+                            input.id === device.uid,
+                    ),
+                )),
     );
     return (
         <>

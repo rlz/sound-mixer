@@ -7,6 +7,10 @@ import { useMixerCommand } from "../useMixerCommand";
 
 export const DestinationSidebar = memo(function DestinationSidebar() {
     const outputs = useMixerStore((state) => state.mixerState?.outputs) ?? [];
+    const devices = useMixerStore((state) => state.mixerState?.devices) ?? [];
+    const hiddenUIDs = new Set(
+        devices.filter((device) => device.hidden).map((device) => device.uid),
+    );
     const buses = useMixerStore((state) => state.mixerState?.buses) ?? [];
     const mixes = useMixerStore((state) => state.mixerState?.mixes) ?? [];
     const selectedItem = useMixerStore((state) => state.selectedItem);
@@ -14,34 +18,6 @@ export const DestinationSidebar = memo(function DestinationSidebar() {
     const setBusNameDraft = useMixerStore((state) => state.setBusNameDraft);
     const pending = useMixerStore((state) => state.pending);
     const send = useMixerCommand();
-
-    const createBus = async () => {
-        const existingIDs = new Set(buses.map((bus) => bus.id));
-        let resolveCreatedBus: ((id: string) => void) | undefined;
-        const createdBus = new Promise<string>((resolve) => {
-            resolveCreatedBus = resolve;
-        });
-        const findCreatedBus = () => {
-            const state = useMixerStore.getState().mixerState;
-            const bus = state?.buses.find((item) => !existingIDs.has(item.id));
-            if (bus) resolveCreatedBus?.(bus.id);
-        };
-        const unsubscribe = useMixerStore.subscribe(findCreatedBus);
-        findCreatedBus();
-        const accepted = await send("bus-create", { command: "createBus" });
-        if (!accepted) {
-            unsubscribe();
-            return;
-        }
-        const id = await createdBus;
-        unsubscribe();
-        const created = useMixerStore
-            .getState()
-            .mixerState?.buses.find((bus) => bus.id === id);
-        if (!created) return;
-        setSelectedItem(`bus:${created.id}`);
-        setBusNameDraft(created.name);
-    };
 
     const deleteVirtualItem = async (kind: "bus", id: string, name: string) => {
         const approved = window.confirm(
@@ -64,57 +40,52 @@ export const DestinationSidebar = memo(function DestinationSidebar() {
             className="min-h-0 min-w-0 [scrollbar-gutter:stable] space-y-3.5 overflow-x-hidden overflow-y-auto overscroll-contain border-r border-slate-700 bg-slate-900 p-3.5"
         >
             <ItemGroup title="System">
-                {outputs.map((output) => (
-                    <OutputDeviceCard
-                        key={output.uid}
-                        output={output}
-                        selected={selectedItem === `output:${output.uid}`}
-                        pending={pending !== null}
-                        onSelect={() => {
-                            setSelectedItem(`output:${output.uid}`);
-                            setBusNameDraft(null);
-                        }}
-                        onVolumeChange={(level) =>
-                            send(
-                                `device-volume:${output.uid}`,
-                                {
-                                    command: "setDeviceVolume",
+                {outputs
+                    .filter((output) => !hiddenUIDs.has(output.uid))
+                    .map((output) => (
+                        <OutputDeviceCard
+                            key={output.uid}
+                            output={output}
+                            selected={selectedItem === `output:${output.uid}`}
+                            pending={pending !== null}
+                            onSelect={() => {
+                                setSelectedItem(`output:${output.uid}`);
+                                setBusNameDraft(null);
+                            }}
+                            onVolumeChange={(level) =>
+                                send(
+                                    `device-volume:${output.uid}`,
+                                    {
+                                        command: "setDeviceVolume",
+                                        uid: output.uid,
+                                        level,
+                                    },
+                                    undefined,
+                                    true,
+                                )
+                            }
+                            onMuteChange={(muted) =>
+                                send(`device-mute:${output.uid}`, {
+                                    command: "setDeviceMuted",
                                     uid: output.uid,
-                                    level,
-                                },
-                                undefined,
-                                true,
-                            )
-                        }
-                        onMuteChange={(muted) =>
-                            send(`device-mute:${output.uid}`, {
-                                command: "setDeviceMuted",
-                                uid: output.uid,
-                                muted,
-                            })
-                        }
-                        onOpenPrivacySettings={() =>
-                            void send(`privacy-output:${output.uid}`, {
-                                command: "openPrivacySettings",
-                            })
-                        }
-                    />
-                ))}
-                {outputs.length === 0 && (
+                                    muted,
+                                })
+                            }
+                            onOpenPrivacySettings={() =>
+                                void send(`privacy-output:${output.uid}`, {
+                                    command: "openPrivacySettings",
+                                })
+                            }
+                        />
+                    ))}
+                {outputs.filter((output) => !hiddenUIDs.has(output.uid))
+                    .length === 0 && (
                     <p className="px-3 text-sm text-slate-500">
                         No output devices.
                     </p>
                 )}
             </ItemGroup>
             <ItemGroup title="Virtual">
-                <button
-                    type="button"
-                    disabled={pending !== null}
-                    onClick={() => void createBus()}
-                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
-                >
-                    + Add virtual bus
-                </button>
                 {buses.map((bus) => {
                     const mix = mixes.find(
                         (item) => item.target === "bus" && item.id === bus.id,

@@ -60,6 +60,7 @@ struct BridgeDevice: Encodable {
     let savedAs: [String]
     let muted: Bool
     let sourceLevel: Double
+    let hidden: Bool
 }
 
 struct BridgeOutput: Encodable {

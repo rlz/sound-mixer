@@ -18,12 +18,14 @@ export type DeviceState = {
     uid: string;
     name: string;
     category: "system";
+    discovered: boolean;
     available: boolean;
     outputChannels: number;
     inputChannels: number;
     savedAs: string[];
     muted: boolean;
     sourceLevel: number;
+    hidden: boolean;
 };
 
 export type MixInputState = {
@@ -81,6 +83,7 @@ export type BridgeCommand =
     | { command: "ready" }
     | { command: "openPrivacySettings" }
     | { command: "setMasterEnabled"; enabled: boolean }
+    | { command: "setDeviceHidden"; uid: string; hidden: boolean }
     | { command: "setDeviceVolume"; uid: string; level: number }
     | { command: "setDeviceMuted"; uid: string; muted: boolean }
     | { command: "setBusMuted"; id: string; muted: boolean }
@@ -108,6 +111,7 @@ export type BridgeCommand =
     | { command: "renameBus"; id: string; name: string }
     | { command: "deleteBus"; id: string }
     | { command: "addApplicationInput"; applicationID: string }
+    | { command: "removeApplicationInput"; applicationID: string }
     | {
           command: "addMixInput" | "removeMixInput";
           target: "output" | "bus";

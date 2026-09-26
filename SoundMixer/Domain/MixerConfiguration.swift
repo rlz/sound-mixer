@@ -249,6 +249,7 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
     public var mutedBuses: [UUID]
     public var applications: [ApplicationID]
     public var sourceLevels: [SourceLevel]
+    public var hiddenDeviceUIDs: [DeviceUID]
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion
@@ -260,6 +261,7 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         case mutedBuses
         case applications
         case sourceLevels
+        case hiddenDeviceUIDs
     }
 
     public init(
@@ -270,7 +272,8 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         mutedSources: [SourceReference] = [],
         mutedBuses: [UUID] = [],
         applications: [ApplicationID] = [],
-        sourceLevels: [SourceLevel] = []
+        sourceLevels: [SourceLevel] = [],
+        hiddenDeviceUIDs: [DeviceUID] = []
     ) {
         schemaVersion = Self.currentSchemaVersion
         self.isEnabled = isEnabled
@@ -281,6 +284,7 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         self.mutedBuses = mutedBuses
         self.applications = applications
         self.sourceLevels = sourceLevels
+        self.hiddenDeviceUIDs = hiddenDeviceUIDs
         reconcileKnownDevices(with: [])
     }
 
@@ -307,6 +311,12 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         }
         applications = try container.decode([ApplicationID].self, forKey: .applications)
         sourceLevels = try container.decode([SourceLevel].self, forKey: .sourceLevels)
+        hiddenDeviceUIDs = try container.decodeIfPresent([DeviceUID].self, forKey: .hiddenDeviceUIDs) ?? []
+        guard Set(hiddenDeviceUIDs).count == hiddenDeviceUIDs.count,
+              hiddenDeviceUIDs.allSatisfy({ !$0.rawValue.isEmpty })
+        else {
+            throw DecodingError.dataCorruptedError(forKey: .hiddenDeviceUIDs, in: container, debugDescription: "Hidden device UIDs must be non-empty and unique")
+        }
         guard sourceLevels.allSatisfy({
             let maximum = if case .application = $0.source {
                 MixInput.maximumApplicationGain
@@ -355,6 +365,7 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         try container.encode(mutedBuses, forKey: .mutedBuses)
         try container.encode(applications, forKey: .applications)
         try container.encode(sourceLevels, forKey: .sourceLevels)
+        try container.encode(hiddenDeviceUIDs, forKey: .hiddenDeviceUIDs)
     }
 
     public func deviceDisplayName(for uid: DeviceUID) -> String {

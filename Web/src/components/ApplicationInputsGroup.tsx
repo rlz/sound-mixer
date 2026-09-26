@@ -1,5 +1,5 @@
-import { memo, useState } from "react";
-import { faCheck, faPlus } from "@fortawesome/free-solid-svg-icons";
+import { memo } from "react";
+import { faCheck, faPlus, faTrashCan } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useMixerStore } from "../store";
 import { useMixerCommand } from "../useMixerCommand";
@@ -7,7 +7,6 @@ import type { MixState } from "../types";
 import { ItemGroup } from "./ItemGroup";
 import { ItemCard } from "./ItemCard";
 import { LevelControl } from "./LevelControl";
-import { ApplicationCatalogDialog } from "./DestinationDialogs";
 
 export const ApplicationInputsGroup = memo(function ApplicationInputsGroup() {
     const applications =
@@ -18,7 +17,6 @@ export const ApplicationInputsGroup = memo(function ApplicationInputsGroup() {
     const mixes = useMixerStore((state) => state.mixerState?.mixes) ?? [];
     const pending = useMixerStore((state) => state.pending);
     const send = useMixerCommand();
-    const [applicationCatalogOpen, setApplicationCatalogOpen] = useState(false);
     const selectedOutput = outputs.find(
         (output) => selectedItem === `output:${output.uid}`,
     );
@@ -52,19 +50,18 @@ export const ApplicationInputsGroup = memo(function ApplicationInputsGroup() {
             sourceID,
         });
     };
+    const removeApplication = async (id: string, name: string) => {
+        if (!window.confirm(`Remove “${name}” and delete it from all mixes?`)) {
+            return;
+        }
+        await send(`app-remove:${id}`, {
+            command: "removeApplicationInput",
+            applicationID: id,
+        });
+    };
     return (
         <>
             <ItemGroup title="Applications">
-                <button
-                    type="button"
-                    disabled={pending !== null}
-                    className="mx-3 mb-2 rounded-lg bg-slate-800 px-3 py-2 text-sm text-sky-300 hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
-                    onClick={() => {
-                        setApplicationCatalogOpen(true);
-                    }}
-                >
-                    Add application
-                </button>
                 {sourceApplications.length === 0 && (
                     <p className="px-3 text-sm text-slate-500">
                         No applications have been added.
@@ -130,6 +127,26 @@ export const ApplicationInputsGroup = memo(function ApplicationInputsGroup() {
                                                 ? faCheck
                                                 : faPlus
                                         }
+                                        aria-hidden="true"
+                                    />
+                                </button>
+                            }
+                            trailingAction={
+                                <button
+                                    type="button"
+                                    disabled={pending !== null}
+                                    aria-label={`Remove ${application.name}`}
+                                    title="Remove application"
+                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-rose-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-300 disabled:opacity-50"
+                                    onClick={() =>
+                                        void removeApplication(
+                                            application.id,
+                                            application.name,
+                                        )
+                                    }
+                                >
+                                    <FontAwesomeIcon
+                                        icon={faTrashCan}
                                         aria-hidden="true"
                                     />
                                 </button>
@@ -204,12 +221,6 @@ export const ApplicationInputsGroup = memo(function ApplicationInputsGroup() {
                     );
                 })}
             </ItemGroup>
-            {applicationCatalogOpen && (
-                <ApplicationCatalogDialog
-                    send={send}
-                    onClose={() => setApplicationCatalogOpen(false)}
-                />
-            )}
         </>
     );
 });

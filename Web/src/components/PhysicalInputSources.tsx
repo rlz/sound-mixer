@@ -20,7 +20,8 @@ export const PhysicalInputSources = memo(function PhysicalInputSources() {
     );
     const sourceDevices = (mixerState?.devices ?? []).filter(
         (device) =>
-            device.inputChannels > 0 || configuredInputIDs.has(device.uid),
+            !device.hidden &&
+            (device.inputChannels > 0 || configuredInputIDs.has(device.uid)),
     );
     const selectedOutput = mixerState?.outputs.find(
         (output) => selectedItem === `output:${output.uid}`,

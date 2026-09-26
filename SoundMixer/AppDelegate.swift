@@ -283,6 +283,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         guard let store = configurationStore else { throw BridgeError.storageUnavailable }
         switch command {
         case "setMasterEnabled": return try updateMixingEnabled(body: body, store: store)
+        case "setDeviceHidden": return try setDeviceHidden(body: body, store: store)
         case "setVirtualMixLevel": return try setVirtualMixLevel(body: body, store: store)
         case "deleteOutputMix": return try deleteOutputMix(body: body, store: store)
         case "resetMix": return try resetMix(body: body, store: store)
@@ -294,6 +295,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case "deleteBus": return try deleteBus(body: body, store: store)
         case "addMixInput": return try editMixInput(body: body, store: store, operation: .add)
         case "addApplicationInput": return try addApplicationInput(body: body, store: store)
+        case "removeApplicationInput": return try removeApplicationInput(body: body, store: store)
         case "removeMixInput": return try editMixInput(body: body, store: store, operation: .remove)
         case "setMixInputLevel": return try editMixInput(body: body, store: store, operation: .level)
         case "setMixInputMuted": return try editMixInput(body: body, store: store, operation: .muted)
@@ -314,6 +316,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             if !config.applications.contains(applicationID) {
                 config.applications.append(applicationID)
             }
+        }
+    }
+
+    private func removeApplicationInput(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "applicationID"],
+              let id = body["applicationID"] as? String, !id.isEmpty
+        else { throw BridgeError.invalidPayload }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { config in
+            let applicationID = ApplicationID(rawValue: id)
+            guard config.applications.contains(applicationID) else { throw BridgeError.invalidPayload }
+            let source = SourceReference.application(applicationID)
+            config.applications.removeAll { $0 == applicationID }
+            config.outputMixes = config.outputMixes.map { output in
+                var updated = output
+                updated.mix.inputs.removeAll { $0.source == source }
+                return updated
+            }.filter { !$0.mix.inputs.isEmpty }
+            config.buses = config.buses.map { bus in
+                var updated = bus
+                updated.mix.inputs.removeAll { $0.source == source }
+                return updated
+            }
+            config.mutedSources.removeAll { $0 == source }
+            config.sourceLevels.removeAll { $0.source == source }
+        }
+    }
+
+    private func setDeviceHidden(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "uid", "hidden"],
+              let uid = body["uid"] as? String, !uid.isEmpty,
+              let hidden = body["hidden"] as? Bool
+        else { throw BridgeError.invalidPayload }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { config in
+            let deviceUID = DeviceUID(rawValue: uid)
+            config.hiddenDeviceUIDs.removeAll { $0 == deviceUID }
+            if hidden { config.hiddenDeviceUIDs.append(deviceUID) }
         }
     }
 
@@ -854,7 +892,8 @@ extension AppDelegate {
 
     func bridgeDevices(configuration: MixerConfiguration, discovered: [String: AudioDeviceSnapshot]) -> [BridgeDevice] {
         let savedUIDs = configuration.knownDevices.map(\.uid.rawValue)
-        let deviceUIDs = Set(discovered.keys).union(savedUIDs).sorted()
+        let hiddenUIDs = configuration.hiddenDeviceUIDs.map(\.rawValue)
+        let deviceUIDs = Set(discovered.keys).union(savedUIDs).union(hiddenUIDs).sorted()
         return deviceUIDs.map { uid -> BridgeDevice in
             let live = discovered[uid]
             let deviceUID = DeviceUID(rawValue: uid)
@@ -883,7 +922,8 @@ extension AppDelegate {
                 outputChannels: live?.outputChannels ?? 0,
                 savedAs: savedAs,
                 muted: configuration.mutedSources.contains(.inputDevice(deviceUID)),
-                sourceLevel: configuration.sourceLevels.first(where: { $0.source == .inputDevice(deviceUID) })?.level ?? 1
+                sourceLevel: configuration.sourceLevels.first(where: { $0.source == .inputDevice(deviceUID) })?.level ?? 1,
+                hidden: configuration.hiddenDeviceUIDs.contains(deviceUID)
             )
         }
     }

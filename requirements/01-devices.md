@@ -5,6 +5,7 @@
 - The left panel lists every available Core Audio device with output channels, regardless of whether it is the system output.
 - Each item shows its current or last-known name (or UID if no name is known), type, availability, and live device volume where Core Audio exposes a writable main control. The volume slider remains available without a saved mix; disconnected or unsupported devices show why it cannot be changed.
 - The list updates on device connection, disconnection, and property changes without restarting the app.
+- Device settings are opened from the top toolbar. The dialog lists discovered physical devices and lets the user hide or show each by Core Audio UID. Devices are visible by default, including newly discovered or otherwise unrecognized devices; hiding one only removes it from the main input and output panels and does not delete routes, stop capture, or change Core Audio settings. Hidden UIDs are saved in the local configuration and remain hidden if that device disconnects and reconnects.
 - The native state snapshot contains the union of currently discovered devices and UIDs referenced by saved input or output settings. Each entry distinguishes live discovery from saved roles, reports channel counts when discovered, and uses the live name or last-known name for display. A configured UID with no discovered device is reported unavailable; this state alone does not start or stop audio.
 - A device is identified by its Core Audio UID. The output list combines discovered devices and output-mix UIDs from saved configuration. If a configured output disappears, including before app launch, it remains listed as “Unavailable,” with its mix and an action to remove the saved setting. Removal does not affect the Core Audio device.
 - For configured input and output devices, save the last-known name for display only; show the UID if no name is known. A saved name does not imply that the device is connected. When a device with the same UID is discovered, update its name and properties, check compatibility, and resume it without recreating its mix. A different UID is a different device.
@@ -13,6 +14,8 @@
 
 ## Internal virtual buses
 
+- Create virtual buses from the Device settings dialog. The dialog stays open and the current destination selection does not change after creation. The dialog also shows existing buses; creating one does not make it a macOS system device.
+- A virtual bus can be deleted from its card or Device settings. Deletion is rejected while another mix references the bus; remove those source rows first.
 - The user can create, rename, and delete a bus. Creation assigns the first unused sequential name in the form `Virtual Bus 1`, `Virtual Bus 2`, and so on; the user can rename it later. Custom names must not be empty after trimming whitespace and are limited to 64 characters. Duplicate custom names are allowed because the UUID is the identifier.
 - A bus has its own mix and saved software Mix gain and can be a source in another mix.
 - A bus does not appear in macOS Sound settings and cannot be selected as an output device by another app. The creation interface states this clearly.
