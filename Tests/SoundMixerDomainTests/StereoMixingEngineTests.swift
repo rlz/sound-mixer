@@ -39,7 +39,7 @@ final class StereoMixingEngineTests: XCTestCase {
             var outputLeft = [Float](repeating: 0, count: source.count)
             var outputRight = [Float](repeating: 0, count: source.count)
 
-            source.withUnsafeBufferPointer { input in
+            _ = source.withUnsafeBufferPointer { input in
                 outputLeft.withUnsafeMutableBufferPointer { left in
                     outputRight.withUnsafeMutableBufferPointer { right in
                         engine.mix(mono: input, placement: placement, into: left, outputRight: right, frameCount: source.count)

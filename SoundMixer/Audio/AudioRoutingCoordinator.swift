@@ -2,7 +2,10 @@ import AudioToolbox
 import CoreAudio
 import Foundation
 
-/// Applies a validated graph by replacing only changed source and endpoint resources.
+// Applies a validated graph by replacing only changed source and endpoint resources.
+// Routing lifecycle and callback ownership are intentionally kept in one coordinator.
+// swiftlint:disable file_length
+// swiftlint:disable:next type_body_length
 final class AudioRoutingCoordinator {
     var onRouteError: ((String, String) -> Void)?
     var onRoutingReset: (() -> Void)?
@@ -36,6 +39,8 @@ final class AudioRoutingCoordinator {
     }
 
     @discardableResult
+    // The transition stages share prepared route and capture state.
+    // swiftlint:disable cyclomatic_complexity function_body_length
     func update(graph: MixGraphSnapshot, devices: [AudioDeviceSnapshot], processes: [AudioProcessSnapshot]) -> Bool {
         let orderedDevices = devices.sorted { $0.uid < $1.uid }
         let applicationKeys = Set(makeRoutes(graph.configuration, devices: orderedDevices).flatMap {
@@ -243,6 +248,8 @@ final class AudioRoutingCoordinator {
         return true
     }
 
+    // swiftlint:enable cyclomatic_complexity function_body_length
+
     private func republishGains(from graph: MixGraphSnapshot) {
         for renderer in renderers.values {
             renderer.updateGains(from: graph)
@@ -313,13 +320,12 @@ final class AudioRoutingCoordinator {
     }
 
     private func captureSourcesNeedingRestart(
-        graph: MixGraphSnapshot,
+        graph _: MixGraphSnapshot,
         devices: [AudioDeviceSnapshot],
         processes: [AudioProcessSnapshot]
     ) -> Set<String> {
         var result = Set<String>()
         let previousDevices = Dictionary(lastDevices.map { ($0.uid, $0) }, uniquingKeysWith: { _, latest in latest })
-        let currentDevices = Dictionary(devices.map { ($0.uid, $0) }, uniquingKeysWith: { _, latest in latest })
         for device in devices {
             if previousDevices[device.uid]?.hasSameInputRouting(as: device) == true {
                 continue
@@ -417,6 +423,8 @@ final class AudioRoutingCoordinator {
         fanout.publish(nil)
     }
 
+    // The queue and source collections are populated together for a single fanout snapshot.
+    // swiftlint:disable:next function_parameter_count
     private func reconcileBusMeters(
         graph: MixGraphSnapshot,
         shape: RuntimeGraphShape,
@@ -614,7 +622,7 @@ final class AudioRoutingCoordinator {
 
     private func startCapture(
         sources: Set<String>,
-        graph: MixGraphSnapshot,
+        graph _: MixGraphSnapshot,
         devices: [String: AudioDeviceSnapshot],
         processes: [String: AudioProcessSnapshot]
     ) {
@@ -780,7 +788,7 @@ extension AudioRoutingCoordinator {
     }
 
     private func makeRoutes(_ configuration: MixerConfiguration, devices: [AudioDeviceSnapshot]) -> [RenderRoute] {
-        var routes = configuration.outputMixes.map { output in
+        configuration.outputMixes.map { output in
             var mix = output.mix
             mix.level = 1
             return RenderRoute(
@@ -791,7 +799,6 @@ extension AudioRoutingCoordinator {
                 targetKey: "output:\(output.deviceUID.rawValue)"
             )
         }
-        return routes
     }
 
     private static func sourceKeys(in mix: Mix, buses: [VirtualBus]) -> [String] {

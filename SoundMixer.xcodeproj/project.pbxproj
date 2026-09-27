@@ -10,6 +10,7 @@
         A10000000000000000000002 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* main.swift */; };
         A10000000000000000000003 /* dist in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* dist */; };
         A10000000000000000000042 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000043 /* Assets.xcassets */; };
+        A10000000000000000000044 /* SourceIdentifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000045 /* SourceIdentifiers.swift */; };
         A10000000000000000000004 /* MixerConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000015 /* MixerConfiguration.swift */; };
         A10000000000000000000005 /* GraphValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000016 /* GraphValidator.swift */; };
         A10000000000000000000034 /* RuntimeGraphShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000035 /* RuntimeGraphShape.swift */; };
@@ -36,6 +37,7 @@
         A10000000000000000000012 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
         A10000000000000000000013 /* dist */ = {isa = PBXFileReference; lastKnownFileType = folder; path = dist; sourceTree = "<group>"; };
         A10000000000000000000014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+        A10000000000000000000045 /* SourceIdentifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceIdentifiers.swift; sourceTree = "<group>"; };
         A10000000000000000000015 /* MixerConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MixerConfiguration.swift; sourceTree = "<group>"; };
         A10000000000000000000016 /* GraphValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphValidator.swift; sourceTree = "<group>"; };
         A10000000000000000000035 /* RuntimeGraphShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeGraphShape.swift; sourceTree = "<group>"; };
@@ -101,6 +103,7 @@
         A10000000000000000000024 /* Domain */ = {
             isa = PBXGroup;
             children = (
+                A10000000000000000000045 /* SourceIdentifiers.swift */,
                 A10000000000000000000015 /* MixerConfiguration.swift */,
                 A10000000000000000000016 /* GraphValidator.swift */,
                 A10000000000000000000035 /* RuntimeGraphShape.swift */,
@@ -182,6 +185,7 @@
                 A10000000000000000000001 /* AppDelegate.swift in Sources */,
                 A10000000000000000000028 /* BridgeState.swift in Sources */,
                 A10000000000000000000002 /* main.swift in Sources */,
+                A10000000000000000000044 /* SourceIdentifiers.swift in Sources */,
                 A10000000000000000000004 /* MixerConfiguration.swift in Sources */,
                 A10000000000000000000005 /* GraphValidator.swift in Sources */,
                 A10000000000000000000034 /* RuntimeGraphShape.swift in Sources */,

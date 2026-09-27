@@ -3,6 +3,9 @@ included:
     - Tests
 excluded:
     - DerivedData
+# SwiftFormat places braces after long multiline conditions on a new line.
+disabled_rules:
+    - opening_brace
 opt_in_rules:
     - indentation_width
 indentation_width:

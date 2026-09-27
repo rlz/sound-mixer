@@ -1,49 +1,5 @@
 import Foundation
 
-/// A persisted Core Audio UID. Names and live AudioObjectIDs belong to discovery.
-public struct DeviceUID: RawRepresentable, Hashable, Codable, Sendable {
-    public let rawValue: String
-
-    public init(rawValue: String) {
-        self.rawValue = rawValue
-    }
-}
-
-public struct ApplicationID: RawRepresentable, Hashable, Codable, Sendable {
-    public let rawValue: String
-
-    public init(rawValue: String) {
-        self.rawValue = rawValue
-    }
-}
-
-public struct AudioDeviceDescriptor: Equatable, Sendable {
-    public let uid: DeviceUID
-    public let name: String
-    public let inputChannels: Int
-    public let outputChannels: Int
-    public let sampleRate: Double
-    public init(uid: DeviceUID, name: String, inputChannels: Int, outputChannels: Int, sampleRate: Double) {
-        self.uid = uid
-        self.name = name
-        self.inputChannels = inputChannels
-        self.outputChannels = outputChannels
-        self.sampleRate = sampleRate
-    }
-}
-
-public struct ApplicationDescriptor: Equatable, Sendable {
-    public let id: ApplicationID
-    public let name: String
-    public let isAvailable: Bool
-
-    public init(id: ApplicationID, name: String, isAvailable: Bool) {
-        self.id = id
-        self.name = name
-        self.isAvailable = isAvailable
-    }
-}
-
 public enum SourceReference: Hashable, Sendable {
     case inputDevice(DeviceUID)
     case application(ApplicationID)
@@ -319,16 +275,24 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         knownDevices = try container.decode([KnownDevice].self, forKey: .knownDevices)
         mutedSources = try container.decode([SourceReference].self, forKey: .mutedSources)
         mutedBuses = try container.decode([UUID].self, forKey: .mutedBuses)
-        guard Set(mutedBuses).count == mutedBuses.count else {
-            throw DecodingError.dataCorruptedError(forKey: .mutedBuses, in: container, debugDescription: "Muted buses must be unique")
-        }
         applications = try container.decode([ApplicationID].self, forKey: .applications)
         sourceLevels = try container.decode([SourceLevel].self, forKey: .sourceLevels)
         hiddenDeviceUIDs = try container.decodeIfPresent([DeviceUID].self, forKey: .hiddenDeviceUIDs) ?? []
+        try validateDecoded(in: container)
+        reconcileKnownDevices(with: [])
+    }
+
+    private func validateDecoded(in container: KeyedDecodingContainer<CodingKeys>) throws {
+        guard Set(mutedBuses).count == mutedBuses.count else {
+            throw DecodingError.dataCorruptedError(forKey: .mutedBuses, in: container, debugDescription: "Muted buses must be unique")
+        }
         guard Set(hiddenDeviceUIDs).count == hiddenDeviceUIDs.count,
               hiddenDeviceUIDs.allSatisfy({ !$0.rawValue.isEmpty })
         else {
-            throw DecodingError.dataCorruptedError(forKey: .hiddenDeviceUIDs, in: container, debugDescription: "Hidden device UIDs must be non-empty and unique")
+            throw DecodingError.dataCorruptedError(
+                forKey: .hiddenDeviceUIDs, in: container,
+                debugDescription: "Hidden device UIDs must be non-empty and unique"
+            )
         }
         guard sourceLevels.allSatisfy({
             let maximum = if case .application = $0.source {
@@ -340,22 +304,18 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
         }),
             Set(sourceLevels.map(\.source)).count == sourceLevels.count
         else {
-            throw DecodingError.dataCorruptedError(forKey: .sourceLevels, in: container, debugDescription: "Source levels must be unique and in range")
+            throw DecodingError.dataCorruptedError(
+                forKey: .sourceLevels, in: container,
+                debugDescription: "Source levels must be unique and in range"
+            )
         }
         guard Set(applications).count == applications.count else {
-            throw DecodingError.dataCorruptedError(forKey: .applications, in: container, debugDescription: "Registered applications must be unique")
+            throw DecodingError.dataCorruptedError(
+                forKey: .applications, in: container,
+                debugDescription: "Registered applications must be unique"
+            )
         }
-        guard mutedSources.allSatisfy({
-            if case .bus = $0 {
-                false
-            } else {
-                true
-            }
-        }),
-            Set(mutedSources).count == mutedSources.count
-        else {
-            throw DecodingError.dataCorruptedError(forKey: .mutedSources, in: container, debugDescription: "Muted sources must be unique input or application sources")
-        }
+        try validateMutedSources(in: container)
         let uids = knownDevices.map(\.uid)
         guard Set(uids).count == uids.count else {
             throw DecodingError.dataCorruptedError(
@@ -364,7 +324,20 @@ public struct MixerConfiguration: Codable, Equatable, Sendable {
                 debugDescription: "Duplicate device UID metadata"
             )
         }
-        reconcileKnownDevices(with: [])
+    }
+
+    private func validateMutedSources(in container: KeyedDecodingContainer<CodingKeys>) throws {
+        guard mutedSources.allSatisfy({
+            if case .bus = $0 {
+                return false
+            }
+            return true
+        }), Set(mutedSources).count == mutedSources.count else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .mutedSources, in: container,
+                debugDescription: "Muted sources must be unique input or application sources"
+            )
+        }
     }
 
     public func encode(to encoder: Encoder) throws {

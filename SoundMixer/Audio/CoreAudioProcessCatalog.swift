@@ -71,10 +71,10 @@ final class CoreAudioProcessCatalog {
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        var bundle: CFString?
-        var bundleSize = UInt32(MemoryLayout<CFString?>.size)
+        var bundle: Unmanaged<CFString>?
+        var bundleSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
         guard AudioObjectGetPropertyData(object, &bundleAddress, 0, nil, &bundleSize, &bundle) == noErr,
-              let applicationID = bundle as String?
+              let applicationID = bundle?.takeRetainedValue() as String?
         else { return nil }
 
         var runningAddress = AudioObjectPropertyAddress(

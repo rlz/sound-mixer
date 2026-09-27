@@ -90,7 +90,6 @@ public enum GraphValidator {
             }
         }
 
-
         return issues
     }
 
@@ -118,29 +117,37 @@ public enum GraphValidator {
             try validateLevel(mix.level)
             var sources = Set<SourceKey>()
             for input in mix.inputs {
-                try validateLevel(input.level)
-                guard (1 ... 64).contains(input.channelRouting.count),
-                      input.channelRouting.count == input.channelLevels.count,
-                      input.channelRouting.allSatisfy({ row in
-                          Set(row).count == row.count && row.allSatisfy { $0 > 0 }
-                      })
-                else {
-                    throw GraphValidationError.invalidChannelSettings
-                }
-                for channelLevel in input.channelLevels {
-                    try validateLevel(channelLevel)
-                }
+                try validateInputSettings(input)
                 let key = SourceKey(input.source)
                 guard sources.insert(key).inserted else { throw GraphValidationError.duplicateSource }
-                switch input.source {
-                case let .bus(id):
-                    guard busIDs.contains(id) else { throw GraphValidationError.missingBus(id) }
-                case let .inputDevice(uid):
-                    guard !uid.rawValue.isEmpty else { throw GraphValidationError.emptyIdentifier }
-                case let .application(id):
-                    guard !id.rawValue.isEmpty else { throw GraphValidationError.emptyIdentifier }
-                }
+                try validateSource(input.source, busIDs: busIDs)
             }
+        }
+    }
+
+    private static func validateInputSettings(_ input: MixInput) throws {
+        try validateLevel(input.level)
+        guard (1 ... 64).contains(input.channelRouting.count),
+              input.channelRouting.count == input.channelLevels.count,
+              input.channelRouting.allSatisfy({ row in
+                  Set(row).count == row.count && row.allSatisfy { $0 > 0 }
+              })
+        else {
+            throw GraphValidationError.invalidChannelSettings
+        }
+        for channelLevel in input.channelLevels {
+            try validateLevel(channelLevel)
+        }
+    }
+
+    private static func validateSource(_ source: SourceReference, busIDs: Set<UUID>) throws {
+        switch source {
+        case let .bus(id):
+            guard busIDs.contains(id) else { throw GraphValidationError.missingBus(id) }
+        case let .inputDevice(uid):
+            guard !uid.rawValue.isEmpty else { throw GraphValidationError.emptyIdentifier }
+        case let .application(id):
+            guard !id.rawValue.isEmpty else { throw GraphValidationError.emptyIdentifier }
         }
     }
 
@@ -152,17 +159,17 @@ public enum GraphValidator {
         let nodes = configuration.buses.map { MixNode.bus($0.id, $0.mix) }
         let nodeIDs = Set(nodes.map(\.id))
         let dependencies = Dictionary(uniqueKeysWithValues: nodes.map { node in
-            (node.id, node.mix.inputs.compactMap { input -> MixNode.ID? in
+            (node.id, node.mix.inputs.compactMap { input -> MixNode.NodeID? in
                 switch input.source {
-                case let .bus(id): MixNode.ID.bus(id)
+                case let .bus(id): MixNode.NodeID.bus(id)
                 case .inputDevice, .application: nil
                 }
             })
         })
-        var visited = Set<MixNode.ID>()
-        var visiting = Set<MixNode.ID>()
+        var visited = Set<MixNode.NodeID>()
+        var visiting = Set<MixNode.NodeID>()
 
-        func visit(_ id: MixNode.ID) throws {
+        func visit(_ id: MixNode.NodeID) throws {
             if visiting.contains(id) {
                 throw GraphValidationError.busCycle
             }
@@ -252,10 +259,10 @@ private enum SourceKey: Hashable {
 }
 
 private enum MixNode {
-    enum ID: Hashable { case bus(UUID) }
+    enum NodeID: Hashable { case bus(UUID) }
     case bus(UUID, Mix)
 
-    var id: ID {
+    var id: NodeID {
         switch self {
         case let .bus(id, _): .bus(id)
         }

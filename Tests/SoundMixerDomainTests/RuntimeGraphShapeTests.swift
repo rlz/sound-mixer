@@ -113,5 +113,4 @@ final class RuntimeGraphShapeTests: XCTestCase {
         XCTAssertEqual(after.changedRouteKeys(from: before), [])
         XCTAssertEqual(after.changedBusIDs(from: before), [])
     }
-
 }

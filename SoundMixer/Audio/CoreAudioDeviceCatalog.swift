@@ -248,10 +248,10 @@ final class CoreAudioDeviceCatalog {
 
     private func stringProperty(_ id: AudioObjectID, _ selector: AudioObjectPropertySelector) -> String? {
         var address = Self.address(selector)
-        var value: CFString?
-        var size = UInt32(MemoryLayout<CFString?>.size)
+        var value: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
         guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr else { return nil }
-        return value as String?
+        return value?.takeRetainedValue() as String?
     }
 
     private func doubleProperty(_ id: AudioObjectID, _ selector: AudioObjectPropertySelector) -> Double? {

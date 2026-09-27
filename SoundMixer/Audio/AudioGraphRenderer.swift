@@ -34,18 +34,7 @@ final class AudioGraphRenderer {
         self.targetKey = targetKey
         mutedSources = Set(graph.configuration.mutedSources)
         let allBusesByID = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map { ($0.id, $0) })
-        var pendingBusIDs = output.mix.inputs.compactMap { input -> UUID? in
-            guard case let .bus(id) = input.source else { return nil }
-            return id
-        }
-        var relevantBusIDs = Set<UUID>()
-        while let id = pendingBusIDs.popLast() {
-            guard relevantBusIDs.insert(id).inserted, let bus = allBusesByID[id] else { continue }
-            pendingBusIDs += bus.mix.inputs.compactMap { input -> UUID? in
-                guard case let .bus(dependencyID) = input.source else { return nil }
-                return dependencyID
-            }
-        }
+        let relevantBusIDs = busDependencies(for: output.mix, in: allBusesByID)
         let relevantBuses = graph.configuration.buses.filter { relevantBusIDs.contains($0.id) }
         let relevantBusOrder = graph.busRenderOrder.filter { relevantBusIDs.contains($0) }
         busMuteStates = Dictionary(uniqueKeysWithValues: relevantBuses.map {
@@ -63,12 +52,7 @@ final class AudioGraphRenderer {
         self.sourceRings = sourceRings
 
         let mixes = relevantBuses.map(\.mix) + [output.mix]
-        sourceReferences = Set(mixes.flatMap(\.inputs).map(\.source).filter {
-            if case .bus = $0 {
-                return false
-            }
-            return true
-        })
+        sourceReferences = nonBusSources(in: mixes)
         let sources = Set(mixes.flatMap(\.inputs).compactMap { input -> String? in
             guard case .bus = input.source else { return Self.sourceKey(input.source) }
             return nil
@@ -143,13 +127,15 @@ final class AudioGraphRenderer {
             state.value.store(mutedBusIDs.contains(id), ordering: .relaxed)
         }
         let busMixes = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map { ($0.id, $0.mix) })
+        let mutedSources = Set(graph.configuration.mutedSources)
+        let sourceLevels = graph.configuration.sourceLevels
         for (id, states) in mixStates {
             guard let mix = busMixes[id] else { continue }
-            Self.update(states: states, mix: mix, mutedSources: Set(graph.configuration.mutedSources), sourceLevels: graph.configuration.sourceLevels)
+            Self.update(states: states, mix: mix, mutedSources: mutedSources, sourceLevels: sourceLevels)
         }
         let mix = graph.configuration.outputMixes.first(where: { targetKey == "output:\($0.deviceUID.rawValue)" })?.mix
         if let mix {
-            Self.update(states: outputState, mix: mix, mutedSources: Set(graph.configuration.mutedSources), sourceLevels: graph.configuration.sourceLevels)
+            Self.update(states: outputState, mix: mix, mutedSources: mutedSources, sourceLevels: sourceLevels)
         }
     }
 
@@ -282,6 +268,31 @@ final class AudioGraphRenderer {
     private static func sourceKey(_ reference: SourceReference) -> String {
         sourceMeterKey(reference)
     }
+}
+
+private func busDependencies(for mix: Mix, in buses: [UUID: VirtualBus]) -> Set<UUID> {
+    var pending = mix.inputs.compactMap { input -> UUID? in
+        guard case let .bus(id) = input.source else { return nil }
+        return id
+    }
+    var relevant = Set<UUID>()
+    while let id = pending.popLast() {
+        guard relevant.insert(id).inserted, let bus = buses[id] else { continue }
+        pending += bus.mix.inputs.compactMap { input -> UUID? in
+            guard case let .bus(dependencyID) = input.source else { return nil }
+            return dependencyID
+        }
+    }
+    return relevant
+}
+
+private func nonBusSources(in mixes: [Mix]) -> Set<SourceReference> {
+    Set(mixes.flatMap(\.inputs).map(\.source).filter {
+        if case .bus = $0 {
+            return false
+        }
+        return true
+    })
 }
 
 private final class BusMuteState {

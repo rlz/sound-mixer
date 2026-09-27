@@ -1,6 +1,9 @@
 import AppKit
 import WebKit
 
+// The bridge command handlers remain together until they can be split without changing validation behavior.
+// swiftlint:disable file_length
+// swiftlint:disable:next type_body_length
 final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     private var window: NSWindow?
     private var webView: WKWebView?
@@ -101,6 +104,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
         self.captureCoordinator = captureCoordinator
         let audioRoutingCoordinator = AudioRoutingCoordinator(capture: captureCoordinator)
+        configureRoutingCallbacks(audioRoutingCoordinator)
+        self.audioRoutingCoordinator = audioRoutingCoordinator
+        updateAudioRouting()
+        startMeterTimer()
+    }
+
+    private func configureRoutingCallbacks(_ audioRoutingCoordinator: AudioRoutingCoordinator) {
         audioRoutingCoordinator.onRoutingReset = { [weak self] in
             DispatchQueue.main.async {
                 self?.outputRouteErrors.removeAll()
@@ -121,9 +131,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 self.publishState()
             }
         }
-        self.audioRoutingCoordinator = audioRoutingCoordinator
-        updateAudioRouting()
-        startMeterTimer()
     }
 
     private func startMeterTimer() {
@@ -279,6 +286,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         publishState()
     }
 
+    // This switch is an exhaustive command dispatch table.
+    // swiftlint:disable:next cyclomatic_complexity
     private func executeCommand(_ command: String, body: [String: Any]) throws -> MixerConfiguration {
         guard let store = configurationStore else { throw BridgeError.storageUnavailable }
         switch command {
@@ -352,7 +361,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         return try store.update(discoveredDevices: discoveredDescriptors()) { config in
             let deviceUID = DeviceUID(rawValue: uid)
             config.hiddenDeviceUIDs.removeAll { $0 == deviceUID }
-            if hidden { config.hiddenDeviceUIDs.append(deviceUID) }
+            if hidden {
+                config.hiddenDeviceUIDs.append(deviceUID)
+            }
         }
     }
 
@@ -423,7 +434,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 guard config.outputMixes.contains(where: { $0.deviceUID.rawValue == id }) else { throw BridgeError.unknownOutput }
                 config.outputMixes.removeAll { $0.deviceUID.rawValue == id }
             case "bus":
-                guard let uuid = UUID(uuidString: id), let index = config.buses.firstIndex(where: { $0.id == uuid }) else { throw BridgeError.unknownBus }
+                guard let uuid = UUID(uuidString: id),
+                      let index = config.buses.firstIndex(where: { $0.id == uuid })
+                else { throw BridgeError.unknownBus }
                 config.buses[index].mix = Mix()
             default:
                 throw BridgeError.invalidPayload
@@ -589,6 +602,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     private enum MixInputOperation: Equatable { case add, remove, level, muted }
 
+    // Keep payload validation and the atomic configuration update in one operation.
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     private func editMixInput(body: [String: Any], store: ConfigurationStore, operation: MixInputOperation) throws -> MixerConfiguration {
         let common: Set = ["requestId", "command", "target", "id", "kind", "sourceID"]
         let expected = common.union(operation == .level ? ["level"] : (operation == .muted ? ["muted"] : []))
@@ -641,15 +656,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                     index = config.outputMixes.count - 1
                 }
                 var value = config.outputMixes[index].mix
-                try applyInput(operation, reference: reference, level: level, muted: muted, outputChannels: outputChannels, to: &value)
+                try applyInput(
+                    operation, reference: reference, level: level, muted: muted,
+                    outputChannels: outputChannels, to: &value
+                )
                 config.outputMixes[index].mix = value
                 if operation == .remove, value.inputs.isEmpty {
                     config.outputMixes.remove(at: index)
                 }
             case "bus":
-                guard let uuid = UUID(uuidString: id), let index = config.buses.firstIndex(where: { $0.id == uuid }) else { throw BridgeError.unknownBus }
+                guard let uuid = UUID(uuidString: id),
+                      let index = config.buses.firstIndex(where: { $0.id == uuid })
+                else { throw BridgeError.unknownBus }
                 var value = config.buses[index].mix
-                try applyInput(operation, reference: reference, level: level, muted: muted, outputChannels: outputChannels, to: &value)
+                try applyInput(
+                    operation, reference: reference, level: level, muted: muted,
+                    outputChannels: outputChannels, to: &value
+                )
                 config.buses[index].mix = value
             default:
                 throw BridgeError.invalidPayload
@@ -657,6 +680,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
     }
 
+    // Each argument is a separately validated input to the mix edit.
+    // swiftlint:disable:next function_parameter_count
     private func applyInput(
         _ operation: MixInputOperation,
         reference: SourceReference,
@@ -673,11 +698,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 let defaults = MixInput.physicalInputDefaults(channelCount: channels, outputChannels: outputChannels)
                 mix.inputs.append(MixInput(source: reference, channelRouting: defaults.routing, channelLevels: defaults.levels))
             } else {
-                let sourceChannels: Int
-                if case let .bus(id) = reference {
-                    sourceChannels = configurationStore?.configuration.buses.first(where: { $0.id == id })?.channelCount ?? 2
+                let sourceChannels: Int = if case let .bus(id) = reference {
+                    configurationStore?.configuration.buses.first(where: { $0.id == id })?.channelCount ?? 2
                 } else {
-                    sourceChannels = 2
+                    2
                 }
                 let routing = MixInput.defaultRouting(channelCount: sourceChannels, outputChannels: outputChannels)
                 mix.inputs.append(MixInput(
@@ -698,6 +722,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
     }
 
+    // Parsing and validating a channel matrix must precede the atomic update.
+    // swiftlint:disable:next cyclomatic_complexity
     private func setMixInputRouting(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
         let expected: Set = ["requestId", "command", "target", "id", "kind", "sourceID", "channelRouting"]
         guard Set(body.keys) == expected,
@@ -729,7 +755,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             switch input.source {
             case let .inputDevice(uid):
                 guard kind == "inputDevice", uid.rawValue == sourceID else { throw BridgeError.invalidPayload }
-                expectedChannels = max(input.channelRouting.count, audioDevices.first(where: { $0.uid == uid.rawValue })?.inputChannels ?? 0)
+                let discoveredChannels = audioDevices.first(where: { $0.uid == uid.rawValue })?.inputChannels ?? 0
+                expectedChannels = max(input.channelRouting.count, discoveredChannels)
             case let .application(id):
                 guard kind == "app" || kind == "application" else { throw BridgeError.invalidPayload }
                 expectedChannels = 2
@@ -780,6 +807,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
     }
 
+    // Resolve the target and source together before accepting the edit.
+    // swiftlint:disable:next cyclomatic_complexity
     private func updateMixChannels(
         body: [String: Any], store: ConfigurationStore, edit: (inout MixInput) throws -> Void
     ) throws -> MixerConfiguration {
@@ -804,10 +833,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             }
             switch target {
             case "output":
-                guard let index = config.outputMixes.firstIndex(where: { $0.deviceUID.rawValue == id }) else { throw BridgeError.unknownOutput }
+                guard let index = config.outputMixes.firstIndex(where: { $0.deviceUID.rawValue == id })
+                else { throw BridgeError.unknownOutput }
                 try update(&config.outputMixes[index].mix)
             case "bus":
-                guard let uuid = UUID(uuidString: id), let index = config.buses.firstIndex(where: { $0.id == uuid }) else { throw BridgeError.unknownBus }
+                guard let uuid = UUID(uuidString: id),
+                      let index = config.buses.firstIndex(where: { $0.id == uuid })
+                else { throw BridgeError.unknownBus }
                 try update(&config.buses[index].mix)
             default:
                 throw BridgeError.invalidPayload
@@ -910,12 +942,12 @@ extension AppDelegate {
                 case let .application(app): kind = "app"; sourceID = app.rawValue
                 case let .bus(bus): kind = "bus"; sourceID = bus.uuidString
                 }
-                let channelMeters: [Double?]
-                if case let .bus(busID) = input.source,
-                   let bus = configuration.buses.first(where: { $0.id == busID }) {
-                    channelMeters = (1 ... bus.channelCount).map { renderLevels["bus:\(busID.uuidString)/channel/\($0)"] }
+                let channelMeters: [Double?] = if case let .bus(busID) = input.source,
+                                                  let bus = configuration.buses.first(where: { $0.id == busID })
+                {
+                    (1 ... bus.channelCount).map { renderLevels["bus:\(busID.uuidString)/channel/\($0)"] }
                 } else {
-                    channelMeters = []
+                    []
                 }
                 return BridgeMixInput(
                     kind: kind,
@@ -975,7 +1007,9 @@ extension AppDelegate {
                 muted: configuration.mutedSources.contains(.application(ApplicationID(rawValue: id))),
                 level: sourceLevels["application:\(id)"],
                 registered: configuration.applications.contains(ApplicationID(rawValue: id)),
-                sourceLevel: configuration.sourceLevels.first(where: { $0.source == .application(ApplicationID(rawValue: id)) })?.level ?? 1,
+                sourceLevel: configuration.sourceLevels.first(where: {
+                    $0.source == .application(ApplicationID(rawValue: id))
+                })?.level ?? 1,
                 channelLevels: inputChannelLevels["application:\(id)"] ?? []
             )
         }
