@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
-    faEye,
-    faEyeSlash,
+    faPowerOff,
     faPlus,
     faTrashCan,
     faMinus,
@@ -68,8 +67,9 @@ export function DeviceSettingsDialog({ onClose }: { onClose: () => void }) {
                     System devices
                 </h3>
                 <p className="mt-1 text-xs text-slate-400">
-                    New devices are shown automatically. Hide devices you do not
-                    want in the mixer.
+                    New devices are active automatically. Disabling a device
+                    stops its Sound Mixer input, output, and meter until you
+                    enable it again.
                 </p>
                 <ul className="mt-2 divide-y divide-slate-800">
                     {[...devices]
@@ -104,17 +104,23 @@ export function DeviceSettingsDialog({ onClose }: { onClose: () => void }) {
                                                 "Output",
                                         ]
                                             .filter(Boolean)
-                                            .join(" · ")}
+                                            .join(" · ")}{" "}
+                                        ·{" "}
+                                        {device.hidden
+                                            ? "Inactive"
+                                            : device.available
+                                              ? "Active"
+                                              : "Disconnected"}
                                     </span>
                                 </span>
                                 <button
                                     type="button"
                                     disabled={pending !== null}
-                                    aria-label={`${device.hidden ? "Show" : "Hide"} ${device.name}`}
+                                    aria-label={`${device.hidden ? "Enable" : "Disable"} ${device.name}`}
                                     title={
                                         device.hidden
-                                            ? "Show device"
-                                            : "Hide device"
+                                            ? "Enable device"
+                                            : "Disable device"
                                     }
                                     className={`flex size-8 shrink-0 items-center justify-center rounded hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50 ${device.hidden ? "text-slate-500" : "text-emerald-300"}`}
                                     onClick={() =>
@@ -129,9 +135,7 @@ export function DeviceSettingsDialog({ onClose }: { onClose: () => void }) {
                                     }
                                 >
                                     <FontAwesomeIcon
-                                        icon={
-                                            device.hidden ? faEyeSlash : faEye
-                                        }
+                                        icon={faPowerOff}
                                         aria-hidden="true"
                                     />
                                 </button>

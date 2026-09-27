@@ -13,12 +13,12 @@ let package = Package(
             exclude: [
                 "AppDelegate.swift", "BridgeState.swift", "Info.plist", "Storage", "main.swift",
                 "Audio/AudioCaptureCoordinator.swift", "Audio/AudioCaptureSessions.swift",
-                "Audio/AudioGraphRenderer.swift", "Audio/AudioRoutingCoordinator.swift",
+                "Audio/AudioRoutingCoordinator.swift",
                 "Audio/AudioSourceFanout.swift", "Audio/CoreAudioDeviceCatalog.swift",
                 "Audio/CoreAudioOutputCoordinator.swift", "Audio/CoreAudioOutputMute.swift",
                 "Audio/CoreAudioProcessCatalog.swift", "Audio/RealtimePublication.swift",
             ],
-            sources: ["Domain", "Audio/RealtimePeakMeter.swift", "Audio/RealtimeAudioRingBuffer.swift"]
+            sources: ["Domain", "Audio/AudioGraphRenderer.swift", "Audio/RealtimePeakMeter.swift", "Audio/RealtimeAudioRingBuffer.swift"]
         ),
         .target(name: "SoundMixerStorage", dependencies: ["SoundMixerDomain"], path: "SoundMixer/Storage"),
         .testTarget(name: "SoundMixerDomainTests", dependencies: ["SoundMixerDomain"], path: "Tests/SoundMixerDomainTests"),

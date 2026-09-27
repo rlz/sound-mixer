@@ -1067,7 +1067,7 @@ extension AppDelegate {
                 name: name,
                 category: "system",
                 discovered: live != nil,
-                available: live.map(\.isAlive) ?? false,
+                available: live.map { $0.isAlive && !configuration.hiddenDeviceUIDs.contains(deviceUID) } ?? false,
                 inputChannels: live?.inputChannels ?? 0,
                 outputChannels: live?.outputChannels ?? 0,
                 savedAs: savedAs,
@@ -1092,7 +1092,10 @@ extension AppDelegate {
                 uid: uid,
                 name: name,
                 category: "system",
-                available: live.map { $0.isAlive && $0.outputChannels > 0 } ?? false,
+                available: live.map {
+                    $0.isAlive && $0.outputChannels > 0 &&
+                        !configuration.hiddenDeviceUIDs.contains(DeviceUID(rawValue: uid))
+                } ?? false,
                 outputChannels: live?.outputChannels ?? 0,
                 volume: live?.outputVolume,
                 volumeWritable: live?.canSetOutputVolume ?? false,
@@ -1100,7 +1103,8 @@ extension AppDelegate {
                 muteWritable: live?.canSetOutputMute ?? false,
                 configured: saved[uid] != nil,
                 routeError: outputRouteErrors[uid],
-                levelReading: live?.outputMuted == true || live?.outputVolume == 0 ? 0 : deviceLevels[uid],
+                levelReading: configuration.hiddenDeviceUIDs.contains(DeviceUID(rawValue: uid)) ? nil :
+                    (live?.outputMuted == true || live?.outputVolume == 0 ? 0 : deviceLevels[uid]),
                 meterState: captureStates["device:\(uid)"]
             )
         }

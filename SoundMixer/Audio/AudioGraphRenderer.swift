@@ -127,7 +127,9 @@ final class AudioGraphRenderer {
             state.value.store(mutedBusIDs.contains(id), ordering: .relaxed)
         }
         let busMixes = Dictionary(uniqueKeysWithValues: graph.configuration.buses.map { ($0.id, $0.mix) })
-        let mutedSources = Set(graph.configuration.mutedSources)
+        let mutedSources = Set(graph.configuration.mutedSources).union(
+            graph.configuration.hiddenDeviceUIDs.map(SourceReference.inputDevice)
+        )
         let sourceLevels = graph.configuration.sourceLevels
         for (id, states) in mixStates {
             guard let mix = busMixes[id] else { continue }

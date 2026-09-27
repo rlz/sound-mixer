@@ -56,6 +56,7 @@ final class AudioRoutingCoordinator {
             return $0.processID < $1.processID
         }
         let enabled = graph.configuration.isEnabled
+        let hiddenDeviceUIDs = Set(graph.configuration.hiddenDeviceUIDs.map(\.rawValue))
         let deviceRoutingChanged = lastDevices.count != orderedDevices.count ||
             !zip(lastDevices, orderedDevices).allSatisfy { $0.hasSameRouting(as: $1) }
         guard needsUpdate(graph: graph, devices: orderedDevices, processes: orderedProcesses, enabled: enabled) else { return false }
@@ -112,6 +113,9 @@ final class AudioRoutingCoordinator {
         } ?? Set(desiredRoutes.keys)
         let changedMutedSources = Set(previousConfiguration?.mutedSources ?? [])
             .symmetricDifference(graph.configuration.mutedSources)
+            .union(Set(previousConfiguration?.hiddenDeviceUIDs ?? [])
+                .symmetricDifference(graph.configuration.hiddenDeviceUIDs)
+                .map(SourceReference.inputDevice))
         let changedMutedBuses = Set(previousConfiguration?.mutedBuses ?? [])
             .symmetricDifference(graph.configuration.mutedBuses)
         let changedRouteKeys = Set(desiredRoutes.compactMap { key, route in
@@ -133,7 +137,9 @@ final class AudioRoutingCoordinator {
         var retiringRings: [(String, RealtimeAudioRingBuffer)] = []
         var previousRingsByChangedRoute: [String: [String: RealtimeAudioRingBuffer]] = [:]
         for key in routeWork {
-            if removedRouteKeys.contains(key) {
+            if removedRouteKeys.contains(key) ||
+                desiredRoutes[key].flatMap({ deviceByUID[$0.uid] })?.isAlive != true
+            {
                 output.stop(key: key)
             }
             activeRouteKeys.remove(key)
@@ -146,7 +152,7 @@ final class AudioRoutingCoordinator {
         var queuesBySource: [String: [RealtimeAudioRingBuffer]] = [:]
         var captureSources = Set<String>()
         retainRenderMeters(for: graph.configuration)
-        for device in orderedDevices where device.inputChannels > 0 {
+        for device in orderedDevices where device.inputChannels > 0 && !hiddenDeviceUIDs.contains(device.uid) {
             let key = "input:\(device.uid)"
             queuesBySource[key] = []
             captureSources.insert(key)
@@ -229,17 +235,19 @@ final class AudioRoutingCoordinator {
             graph: graph,
             devices: orderedDevices,
             processes: orderedProcesses
-        ).intersection(captureSources)
+        )
         for source in obsoleteSources {
             capture.stop(id: source)
         }
         for source in restartedSources {
             capture.stop(id: source)
         }
-        let sourcesToStart = captureSources.subtracting(previousSources).union(restartedSources)
+        let sourcesToStart = captureSources.subtracting(previousSources).union(restartedSources.intersection(captureSources))
         startCapture(sources: sourcesToStart, graph: graph, devices: deviceByUID, processes: processByID)
-        if deviceRoutingChanged || lastEnabled != true {
-            updateDeviceMeters(devices: orderedDevices)
+        if deviceRoutingChanged || lastEnabled != true ||
+            lastGraph?.configuration.hiddenDeviceUIDs != graph.configuration.hiddenDeviceUIDs
+        {
+            updateDeviceMeters(devices: orderedDevices, hiddenUIDs: hiddenDeviceUIDs)
         }
         // Device and process changes can bypass the gain-only fast path. Make
         // sure surviving renderers still receive the newest global gains.
@@ -259,9 +267,9 @@ final class AudioRoutingCoordinator {
         }
     }
 
-    private func updateDeviceMeters(devices: [AudioDeviceSnapshot]) {
+    private func updateDeviceMeters(devices: [AudioDeviceSnapshot], hiddenUIDs: Set<String>) {
         let currentDevices = Dictionary(uniqueKeysWithValues: devices.filter { device in
-            device.isAlive && device.outputChannels > 0
+            device.isAlive && device.outputChannels > 0 && !hiddenUIDs.contains(device.uid)
         }.map { ($0.uid, $0) })
         var nextMeters: [String: RealtimePeakMeter] = [:]
         for (uid, device) in currentDevices {
@@ -320,18 +328,25 @@ final class AudioRoutingCoordinator {
     }
 
     private func captureSourcesNeedingRestart(
-        graph _: MixGraphSnapshot,
+        graph: MixGraphSnapshot,
         devices: [AudioDeviceSnapshot],
         processes: [AudioProcessSnapshot]
     ) -> Set<String> {
         var result = Set<String>()
         let previousDevices = Dictionary(lastDevices.map { ($0.uid, $0) }, uniquingKeysWith: { _, latest in latest })
-        for device in devices {
-            if previousDevices[device.uid]?.hasSameInputRouting(as: device) == true {
-                continue
+        let currentDevices = Dictionary(devices.map { ($0.uid, $0) }, uniquingKeysWith: { _, latest in latest })
+        let previousHidden = Set(lastGraph?.configuration.hiddenDeviceUIDs.map(\.rawValue) ?? [])
+        let currentHidden = Set(graph.configuration.hiddenDeviceUIDs.map(\.rawValue))
+        for uid in Set(previousDevices.keys).union(currentDevices.keys) {
+            let previous = previousDevices[uid]
+            let current = currentDevices[uid]
+            let inputChanged = if let previous, let current {
+                !previous.hasSameInputRouting(as: current)
+            } else {
+                true
             }
-            if device.inputChannels > 0 {
-                result.insert("input:\(device.uid)")
+            if inputChanged || previousHidden.contains(uid) != currentHidden.contains(uid) {
+                result.insert("input:\(uid)")
             }
         }
         let previousProcesses = Dictionary(lastProcesses.map { ($0.applicationID, $0) }, uniquingKeysWith: { _, latest in latest })
@@ -559,6 +574,7 @@ final class AudioRoutingCoordinator {
             try output.start(
                 route: CoreAudioOutputCoordinator.Route(
                     key: route.key,
+                    deviceUID: device.uid,
                     deviceID: device.deviceID,
                     deviceChannelCount: device.outputChannels,
                     selectedChannels: route.channels,
@@ -622,22 +638,23 @@ final class AudioRoutingCoordinator {
 
     private func startCapture(
         sources: Set<String>,
-        graph _: MixGraphSnapshot,
+        graph: MixGraphSnapshot,
         devices: [String: AudioDeviceSnapshot],
         processes: [String: AudioProcessSnapshot]
     ) {
+        let hiddenUIDs = Set(graph.configuration.hiddenDeviceUIDs.map(\.rawValue))
         for source in sources {
             if source.hasPrefix("input:") {
-                startInput(source: source, devices: devices)
+                startInput(source: source, devices: devices, hiddenUIDs: hiddenUIDs)
             } else if source.hasPrefix("application:") {
                 startApplication(source: source, processes: processes)
             }
         }
     }
 
-    private func startInput(source: String, devices: [String: AudioDeviceSnapshot]) {
+    private func startInput(source: String, devices: [String: AudioDeviceSnapshot], hiddenUIDs: Set<String>) {
         let uid = String(source.dropFirst("input:".count))
-        guard let device = devices[uid], device.isAlive, device.inputChannels > 0 else { return }
+        guard !hiddenUIDs.contains(uid), let device = devices[uid], device.isAlive, device.inputChannels > 0 else { return }
         capture.startInput(uid: uid, deviceID: device.deviceID)
     }
 
@@ -776,7 +793,8 @@ extension AudioRoutingCoordinator {
         devices: [AudioDeviceSnapshot]
     ) -> Set<String> {
         guard let configuration, configuration.isEnabled else { return [] }
-        var sources = Set(devices.filter { $0.inputChannels > 0 }.map { "input:\($0.uid)" })
+        let hiddenUIDs = Set(configuration.hiddenDeviceUIDs.map(\.rawValue))
+        var sources = Set(devices.filter { $0.inputChannels > 0 && !hiddenUIDs.contains($0.uid) }.map { "input:\($0.uid)" })
         sources.formUnion(configuration.applications.map { "application:\($0.rawValue)" })
         for route in makeRoutes(configuration, devices: devices) {
             sources.formUnion(Self.sourceKeys(in: route.mix, buses: configuration.buses))
@@ -788,7 +806,8 @@ extension AudioRoutingCoordinator {
     }
 
     private func makeRoutes(_ configuration: MixerConfiguration, devices: [AudioDeviceSnapshot]) -> [RenderRoute] {
-        configuration.outputMixes.map { output in
+        let hiddenUIDs = Set(configuration.hiddenDeviceUIDs.map(\.rawValue))
+        return configuration.outputMixes.filter { !hiddenUIDs.contains($0.deviceUID.rawValue) }.map { output in
             var mix = output.mix
             mix.level = 1
             return RenderRoute(
