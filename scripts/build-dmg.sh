@@ -24,7 +24,7 @@ trap cleanup EXIT
 
 check_prerequisites() {
     local missing=0
-    for command_name in git xcodebuild xcode-select hdiutil diskutil npm node osascript ditto; do
+    for command_name in git xcodebuild xcode-select hdiutil diskutil npm node osascript ditto sips; do
         if ! command -v "$command_name" >/dev/null 2>&1; then
             echo "Required command '$command_name' is missing." >&2
             missing=1
@@ -107,6 +107,14 @@ build_tagged_dmg() {
     mkdir -p "$source_dir"
     git -C "$root" archive "$tag" | tar -x -C "$source_dir"
 
+    local background_width background_height
+    background_width="$(sips -g pixelWidth "$source_dir/packaging/dmg-background.png" | awk '/pixelWidth/ { print $2 }')"
+    background_height="$(sips -g pixelHeight "$source_dir/packaging/dmg-background.png" | awk '/pixelHeight/ { print $2 }')"
+    if [[ "$background_width" != "800" || "$background_height" != "488" ]]; then
+        echo "DMG background must be 800×488 pixels to fit the Finder icon canvas; found ${background_width}×${background_height}." >&2
+        exit 1
+    fi
+
     DERIVED_DATA_PATH="$temporary_dir/DerivedData" \
         "$source_dir/scripts/build-all.sh" Release
     app_path="$temporary_dir/DerivedData/Build/Products/Release/Rlz Sound Mixer.app"
@@ -145,8 +153,8 @@ tell application "Finder"
             set bounds of container window to {100, 100, 900, 620}
             set icon size of icon view options of container window to 96
             set background picture of icon view options of container window to file ".background:background.png"
-            set position of item "Rlz Sound Mixer.app" of container window to {683, 325}
-            set position of item "Applications" of container window to {509, 325}
+            set position of item "Rlz Sound Mixer.app" of container window to {718, 226}
+            set position of item "Applications" of container window to {386, 226}
             update without registering applications
             close
         end tell
