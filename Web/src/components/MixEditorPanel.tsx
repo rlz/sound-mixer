@@ -67,31 +67,34 @@ export const MixEditorPanel = memo(function MixEditorPanel() {
                         </div>
                         {selectedTarget && selectedMix && (
                             <div className="flex shrink-0 items-center gap-1">
-                                <button
-                                    type="button"
-                                    disabled={
-                                        pending !== null ||
-                                        (selectedMix.inputs.length === 0 &&
-                                            selectedMix.level === 1)
-                                    }
-                                    aria-label="Reset mix settings"
-                                    title="Reset mix settings"
-                                    className="flex h-8 w-8 items-center justify-center rounded-md text-slate-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-40"
-                                    onClick={() =>
-                                        void send(
-                                            `mix-reset:${selectedTarget.id}`,
-                                            {
-                                                command: "resetMix",
-                                                ...selectedTarget,
-                                            },
-                                        )
-                                    }
-                                >
-                                    <FontAwesomeIcon
-                                        icon={faArrowRotateLeft}
-                                        aria-hidden="true"
-                                    />
-                                </button>
+                                {(!selectedOutput ||
+                                    selectedOutput.available) && (
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            pending !== null ||
+                                            (selectedMix.inputs.length === 0 &&
+                                                selectedMix.level === 1)
+                                        }
+                                        aria-label="Reset mix settings"
+                                        title="Reset mix settings"
+                                        className="flex h-8 w-8 items-center justify-center rounded-md text-slate-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-40"
+                                        onClick={() =>
+                                            void send(
+                                                `mix-reset:${selectedTarget.id}`,
+                                                {
+                                                    command: "resetMix",
+                                                    ...selectedTarget,
+                                                },
+                                            )
+                                        }
+                                    >
+                                        <FontAwesomeIcon
+                                            icon={faArrowRotateLeft}
+                                            aria-hidden="true"
+                                        />
+                                    </button>
+                                )}
                                 {selectedBus && (
                                     <>
                                         <button
@@ -140,6 +143,40 @@ export const MixEditorPanel = memo(function MixEditorPanel() {
                                         </button>
                                     </>
                                 )}
+                                {selectedOutput &&
+                                    !selectedOutput.available && (
+                                        <button
+                                            type="button"
+                                            disabled={pending !== null}
+                                            aria-label={`Delete ${selectedOutput.name} mix`}
+                                            title="Delete mix"
+                                            className="flex h-8 w-8 items-center justify-center rounded-md text-rose-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-300 disabled:opacity-50"
+                                            onClick={() => {
+                                                const approved = window.confirm(
+                                                    `Delete the saved mix for “${selectedOutput.name}”?`,
+                                                );
+                                                if (!approved) return;
+                                                void send(
+                                                    `output-mix-delete:${selectedOutput.uid}`,
+                                                    {
+                                                        command:
+                                                            "deleteOutputMix",
+                                                        uid: selectedOutput.uid,
+                                                    },
+                                                ).then((accepted) => {
+                                                    if (accepted) {
+                                                        setSelectedItem(null);
+                                                        setBusNameDraft(null);
+                                                    }
+                                                });
+                                            }}
+                                        >
+                                            <FontAwesomeIcon
+                                                icon={faTrashCan}
+                                                aria-hidden="true"
+                                            />
+                                        </button>
+                                    )}
                             </div>
                         )}
                     </div>

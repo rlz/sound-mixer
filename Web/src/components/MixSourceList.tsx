@@ -146,19 +146,23 @@ export const MixSourceList = memo(function MixSourceList() {
                                         input.channelLevels[index] ?? 1,
                                 );
                                 const editorKey = `${selectedTarget.target}:${selectedTarget.id}:${input.id}`;
-                                const unavailableReason = !available
-                                    ? input.kind === "inputDevice"
-                                        ? "Device disconnected."
-                                        : input.kind === "app"
+                                const disconnected =
+                                    input.kind === "inputDevice" && !available;
+                                const unavailableReason = disconnected
+                                    ? null
+                                    : !available
+                                      ? input.kind === "app"
                                           ? "Application is not producing audio."
                                           : "Source unavailable."
-                                    : captureState === "permissionDenied"
-                                      ? "Permission denied. Allow access in System Settings."
-                                      : captureState.startsWith("unavailable:")
-                                        ? captureState
-                                              .slice("unavailable:".length)
-                                              .trim()
-                                        : null;
+                                      : captureState === "permissionDenied"
+                                        ? "Permission denied. Allow access in System Settings."
+                                        : captureState.startsWith(
+                                                "unavailable:",
+                                            )
+                                          ? captureState
+                                                .slice("unavailable:".length)
+                                                .trim()
+                                          : null;
                                 return (
                                     <li key={`${input.kind}:${input.id}`}>
                                         <ItemCard
@@ -170,33 +174,76 @@ export const MixSourceList = memo(function MixSourceList() {
                                                       ? "Virtual"
                                                       : "Application"
                                             }
-                                            level={input.levelReading}
+                                            level={
+                                                disconnected
+                                                    ? null
+                                                    : input.levelReading
+                                            }
                                             levelLabel={`${name} mix source`}
                                             available={available}
+                                            dimmed={disconnected}
+                                            statusLabel={
+                                                disconnected
+                                                    ? "Disconnected"
+                                                    : undefined
+                                            }
                                             status={
-                                                !available ||
-                                                captureState ===
-                                                    "permissionDenied" ||
-                                                captureState.startsWith(
-                                                    "unavailable:",
-                                                )
-                                                    ? "problem"
-                                                    : captureState ===
-                                                        "capturing"
-                                                      ? "active"
-                                                      : "inactive"
+                                                disconnected
+                                                    ? "inactive"
+                                                    : !available ||
+                                                        captureState ===
+                                                            "permissionDenied" ||
+                                                        captureState.startsWith(
+                                                            "unavailable:",
+                                                        )
+                                                      ? "problem"
+                                                      : captureState ===
+                                                          "capturing"
+                                                        ? "active"
+                                                        : "inactive"
                                             }
                                             channelCount={inputChannels}
-                                            onChannelClick={() =>
-                                                setOpenChannelEditor(editorKey)
+                                            onChannelClick={
+                                                disconnected
+                                                    ? undefined
+                                                    : () =>
+                                                          setOpenChannelEditor(
+                                                              editorKey,
+                                                          )
                                             }
                                             trailingAction={
                                                 <button
                                                     type="button"
-                                                    aria-label={`Remove ${name} from mix`}
-                                                    title="Remove from mix"
+                                                    disabled={pending !== null}
+                                                    aria-label={
+                                                        disconnected
+                                                            ? `Remove ${name} from all mixes`
+                                                            : `Remove ${name} from mix`
+                                                    }
+                                                    title={
+                                                        disconnected
+                                                            ? "Remove from all mixes"
+                                                            : "Remove from mix"
+                                                    }
                                                     className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-rose-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-300"
-                                                    onClick={() =>
+                                                    onClick={() => {
+                                                        if (disconnected) {
+                                                            const approved =
+                                                                window.confirm(
+                                                                    `Remove “${name}” from all mixes?`,
+                                                                );
+                                                            if (!approved)
+                                                                return;
+                                                            void send(
+                                                                `input-device-delete:${input.id}`,
+                                                                {
+                                                                    command:
+                                                                        "removeInputDevice",
+                                                                    uid: input.id,
+                                                                },
+                                                            );
+                                                            return;
+                                                        }
                                                         void send(
                                                             `mix-remove:${input.id}`,
                                                             {
@@ -211,8 +258,8 @@ export const MixSourceList = memo(function MixSourceList() {
                                                                 sourceID:
                                                                     input.id,
                                                             },
-                                                        )
-                                                    }
+                                                        );
+                                                    }}
                                                 >
                                                     <FontAwesomeIcon
                                                         icon={faTrashCan}
@@ -252,6 +299,8 @@ export const MixSourceList = memo(function MixSourceList() {
                                                 name={name}
                                                 value={input.level}
                                                 muted={input.muted}
+                                                disabled={disconnected}
+                                                muteDisabled={disconnected}
                                                 onMuteChange={(muted) => {
                                                     void send(
                                                         `mix-input-mute:${selectedMix.target}:${selectedMix.id}:${input.kind}:${input.id}`,
@@ -288,73 +337,83 @@ export const MixSourceList = memo(function MixSourceList() {
                                                 }
                                             />
                                         </ItemCard>
-                                        {openChannelEditor === editorKey && (
-                                            <ChannelMatrixDialog
-                                                name={name}
-                                                inputChannels={inputChannels}
-                                                outputChannels={
-                                                    targetChannelCount
-                                                }
-                                                routing={routing}
-                                                channelLevels={levels}
-                                                meters={
-                                                    input.kind === "inputDevice"
-                                                        ? mixerState?.inputCaptureStates.find(
-                                                              (state) =>
-                                                                  state.uid ===
-                                                                  input.id,
-                                                          )?.channelLevels
-                                                        : input.kind === "app"
-                                                          ? mixerState?.applications.find(
-                                                                (app) =>
-                                                                    app.id ===
-                                                                    input.id,
-                                                            )?.channelLevels
-                                                          : input.channelMeters
-                                                }
-                                                disabled={pending !== null}
-                                                gainDisabled={false}
-                                                onClose={() =>
-                                                    setOpenChannelEditor(null)
-                                                }
-                                                onRoutingChange={(next) =>
-                                                    void send(
-                                                        `routing:${input.id}`,
-                                                        {
-                                                            command:
-                                                                "setMixInputRouting",
-                                                            ...selectedTarget,
-                                                            kind: input.kind,
-                                                            sourceID: input.id,
-                                                            channelRouting:
-                                                                next,
-                                                        },
-                                                    )
-                                                }
-                                                onGainChange={(next) =>
-                                                    send(
-                                                        `channels:${input.id}`,
-                                                        {
-                                                            command:
-                                                                "setMixInputChannels",
-                                                            ...selectedTarget,
-                                                            kind:
-                                                                input.kind ===
+                                        {openChannelEditor === editorKey &&
+                                            !disconnected && (
+                                                <ChannelMatrixDialog
+                                                    name={name}
+                                                    inputChannels={
+                                                        inputChannels
+                                                    }
+                                                    outputChannels={
+                                                        targetChannelCount
+                                                    }
+                                                    routing={routing}
+                                                    channelLevels={levels}
+                                                    meters={
+                                                        input.kind ===
+                                                        "inputDevice"
+                                                            ? mixerState?.inputCaptureStates.find(
+                                                                  (state) =>
+                                                                      state.uid ===
+                                                                      input.id,
+                                                              )?.channelLevels
+                                                            : input.kind ===
                                                                 "app"
-                                                                    ? "app"
-                                                                    : input.kind ===
-                                                                        "bus"
-                                                                      ? "bus"
-                                                                      : "inputDevice",
-                                                            sourceID: input.id,
-                                                            channelLevels: next,
-                                                        },
-                                                        undefined,
-                                                        true,
-                                                    )
-                                                }
-                                            />
-                                        )}
+                                                              ? mixerState?.applications.find(
+                                                                    (app) =>
+                                                                        app.id ===
+                                                                        input.id,
+                                                                )?.channelLevels
+                                                              : input.channelMeters
+                                                    }
+                                                    disabled={pending !== null}
+                                                    gainDisabled={false}
+                                                    onClose={() =>
+                                                        setOpenChannelEditor(
+                                                            null,
+                                                        )
+                                                    }
+                                                    onRoutingChange={(next) =>
+                                                        void send(
+                                                            `routing:${input.id}`,
+                                                            {
+                                                                command:
+                                                                    "setMixInputRouting",
+                                                                ...selectedTarget,
+                                                                kind: input.kind,
+                                                                sourceID:
+                                                                    input.id,
+                                                                channelRouting:
+                                                                    next,
+                                                            },
+                                                        )
+                                                    }
+                                                    onGainChange={(next) =>
+                                                        send(
+                                                            `channels:${input.id}`,
+                                                            {
+                                                                command:
+                                                                    "setMixInputChannels",
+                                                                ...selectedTarget,
+                                                                kind:
+                                                                    input.kind ===
+                                                                    "app"
+                                                                        ? "app"
+                                                                        : input.kind ===
+                                                                            "bus"
+                                                                          ? "bus"
+                                                                          : "inputDevice",
+                                                                sourceID:
+                                                                    input.id,
+                                                                channelLevels:
+                                                                    next,
+                                                            },
+                                                            undefined,
+                                                            true,
+                                                        )
+                                                    }
+                                                />
+                                            )}
                                     </li>
                                 );
                             })}

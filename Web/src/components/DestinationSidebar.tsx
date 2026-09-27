@@ -43,6 +43,19 @@ export const DestinationSidebar = memo(function DestinationSidebar() {
         }
     };
 
+    const deleteDisconnectedOutputMix = async (uid: string, name: string) => {
+        const approved = window.confirm(`Delete the saved mix for “${name}”?`);
+        if (!approved) return;
+        const accepted = await send(`output-mix-delete:${uid}`, {
+            command: "deleteOutputMix",
+            uid,
+        });
+        if (accepted && selectedItem === `output:${uid}`) {
+            setSelectedItem(null);
+            setBusNameDraft(null);
+        }
+    };
+
     return (
         <nav
             aria-label="Mixer items"
@@ -85,6 +98,12 @@ export const DestinationSidebar = memo(function DestinationSidebar() {
                             void send(`privacy-output:${output.uid}`, {
                                 command: "openPrivacySettings",
                             })
+                        }
+                        onDelete={() =>
+                            void deleteDisconnectedOutputMix(
+                                output.uid,
+                                output.name,
+                            )
                         }
                     />
                 ))}

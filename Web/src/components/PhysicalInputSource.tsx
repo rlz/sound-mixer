@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { faCheck, faPlus } from "@fortawesome/free-solid-svg-icons";
+import { faCheck, faPlus, faTrashCan } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useMixerStore } from "../store";
 import { useMixerCommand } from "../useMixerCommand";
@@ -63,6 +63,7 @@ export const PhysicalInputSource = memo(function PhysicalInputSource({
     return (
         <>
             {sourceDevices.map((device) => {
+                const disconnected = !device.available;
                 const inputState = mixerState?.inputCaptureStates.find(
                     (state) => state.uid === device.uid,
                 );
@@ -73,72 +74,111 @@ export const PhysicalInputSource = memo(function PhysicalInputSource({
                             input.kind === "inputDevice" &&
                             input.id === device.uid,
                     ) ?? false;
+                const removeDevice = async () => {
+                    const approved = window.confirm(
+                        `Remove “${device.name}” from all mixes?`,
+                    );
+                    if (!approved) return;
+                    await send(`input-device-delete:${device.uid}`, {
+                        command: "removeInputDevice",
+                        uid: device.uid,
+                    });
+                };
                 return (
                     <ItemCard
                         key={device.uid}
                         name={device.name}
                         type="System"
-                        level={inputState?.level}
+                        level={disconnected ? null : inputState?.level}
                         levelLabel={`${device.name} input`}
                         available={device.available}
+                        dimmed={disconnected}
+                        statusLabel={disconnected ? "Disconnected" : undefined}
                         status={
-                            !device.available ||
-                            captureState === "permissionDenied" ||
-                            captureState.startsWith("unavailable:")
-                                ? "problem"
-                                : captureState === "capturing"
-                                  ? "active"
-                                  : "inactive"
+                            disconnected
+                                ? "inactive"
+                                : captureState === "permissionDenied" ||
+                                    captureState.startsWith("unavailable:")
+                                  ? "problem"
+                                  : captureState === "capturing"
+                                    ? "active"
+                                    : "inactive"
                         }
                         channelCount={device.inputChannels}
                         leadingAction={
-                            <button
-                                type="button"
-                                disabled={
-                                    !selectedTarget ||
-                                    alreadyInSelectedMix ||
-                                    pending !== null
-                                }
-                                aria-label={
-                                    alreadyInSelectedMix
-                                        ? `${device.name} is already in the selected mix`
-                                        : `Add ${device.name} to the selected mix`
-                                }
-                                title={
-                                    alreadyInSelectedMix
-                                        ? "Already in mix"
-                                        : `Add ${device.name} to mix`
-                                }
-                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
-                                onClick={() =>
-                                    addSourceToSelectedMix(
-                                        "inputDevice",
-                                        device.uid,
-                                    )
-                                }
-                            >
-                                <FontAwesomeIcon
-                                    icon={
-                                        alreadyInSelectedMix ? faCheck : faPlus
+                            disconnected ? undefined : (
+                                <button
+                                    type="button"
+                                    disabled={
+                                        disconnected ||
+                                        !selectedTarget ||
+                                        alreadyInSelectedMix ||
+                                        pending !== null
                                     }
-                                    aria-hidden="true"
-                                />
-                            </button>
+                                    aria-label={
+                                        alreadyInSelectedMix
+                                            ? `${device.name} is already in the selected mix`
+                                            : `Add ${device.name} to the selected mix`
+                                    }
+                                    title={
+                                        alreadyInSelectedMix
+                                            ? "Already in mix"
+                                            : `Add ${device.name} to mix`
+                                    }
+                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-sky-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50"
+                                    onClick={() =>
+                                        addSourceToSelectedMix(
+                                            "inputDevice",
+                                            device.uid,
+                                        )
+                                    }
+                                >
+                                    <FontAwesomeIcon
+                                        icon={
+                                            alreadyInSelectedMix
+                                                ? faCheck
+                                                : faPlus
+                                        }
+                                        aria-hidden="true"
+                                    />
+                                </button>
+                            )
+                        }
+                        trailingAction={
+                            disconnected ? (
+                                <button
+                                    type="button"
+                                    disabled={pending !== null}
+                                    aria-label={`Remove ${device.name} from all mixes`}
+                                    title="Remove from all mixes"
+                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-rose-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-300 disabled:opacity-50"
+                                    onClick={() => void removeDevice()}
+                                >
+                                    <FontAwesomeIcon
+                                        icon={faTrashCan}
+                                        aria-hidden="true"
+                                    />
+                                </button>
+                            ) : undefined
                         }
                     >
-                        {captureState === "permissionDenied" && (
-                            <button
-                                type="button"
-                                className="text-xs text-amber-200 underline"
-                                onClick={() =>
-                                    void send(`privacy-input:${device.uid}`, {
-                                        command: "openPrivacySettings",
-                                    })
-                                }
-                            >
-                                Open System Settings
-                            </button>
-                        )}
+                        {!disconnected &&
+                            captureState === "permissionDenied" && (
+                                <button
+                                    type="button"
+                                    className="text-xs text-amber-200 underline"
+                                    onClick={() =>
+                                        void send(
+                                            `privacy-input:${device.uid}`,
+                                            {
+                                                command: "openPrivacySettings",
+                                            },
+                                        )
+                                    }
+                                >
+                                    Open System Settings
+                                </button>
+                            )}
                         <LevelControl
                             name={device.name}
                             value={device.sourceLevel}
@@ -165,7 +205,8 @@ export const PhysicalInputSource = memo(function PhysicalInputSource({
                                 )
                             }
                             levelLabel={`${device.name} input volume`}
-                            muteDisabled={pending !== null}
+                            disabled={disconnected}
+                            muteDisabled={disconnected || pending !== null}
                         />
                     </ItemCard>
                 );

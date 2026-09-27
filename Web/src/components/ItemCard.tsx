@@ -12,6 +12,8 @@ type ItemCardProps = {
     channelCount?: number;
     onChannelClick?: () => void;
     status?: "inactive" | "active" | "problem";
+    statusLabel?: string;
+    dimmed?: boolean;
     selectOnSurface?: boolean;
     onSelect?: () => void;
     leadingAction?: ReactNode;
@@ -29,6 +31,8 @@ export function ItemCard({
     channelCount,
     onChannelClick,
     status,
+    statusLabel,
+    dimmed = false,
     selectOnSurface = false,
     onSelect,
     leadingAction,
@@ -71,25 +75,29 @@ export function ItemCard({
                 }
                 onSelect();
             }}
-            className={`min-w-0 rounded-lg border px-3 py-2 text-sm select-text ${selected ? "border-sky-300 bg-sky-400/15 ring-1 ring-sky-300" : "border-slate-800 bg-slate-900/70"}`}
+            className={`min-w-0 rounded-lg border px-3 py-2 text-sm select-text ${dimmed ? (selected ? "border-slate-500 bg-slate-900/40 ring-1 ring-slate-500" : "border-slate-700 bg-slate-900/40") : selected ? "border-sky-300 bg-sky-400/15 ring-1 ring-sky-300" : "border-slate-800 bg-slate-900/70"}`}
         >
             <div className="mb-1 flex min-w-0 items-center gap-2 text-[10px] text-slate-500">
                 {leadingAction}
-                <span className="min-w-0 flex-1 truncate">{type}</span>
+                <span
+                    className={`min-w-0 flex-1 truncate ${dimmed ? "opacity-40" : ""}`}
+                >
+                    {type}
+                </span>
                 {channelCount !== undefined && onChannelClick && (
                     <button
                         type="button"
                         onClick={onChannelClick}
                         aria-label={`Configure ${name} channel routing, ${channelCount} input channels`}
                         title="Configure channel routing"
-                        className="shrink-0 rounded text-sky-200 underline decoration-dotted hover:text-sky-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
+                        className={`shrink-0 rounded text-sky-200 underline decoration-dotted hover:text-sky-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${dimmed ? "opacity-40" : ""}`}
                     >
                         {channelCount} ch
                     </button>
                 )}
                 {channelCount !== undefined && !onChannelClick && (
                     <span
-                        className="shrink-0"
+                        className={`shrink-0 ${dimmed ? "opacity-40" : ""}`}
                         aria-label={`${channelCount} channels`}
                     >
                         {channelCount} ch
@@ -97,8 +105,11 @@ export function ItemCard({
                 )}
                 {trailingAction}
             </div>
-            <div className="flex min-w-0 items-center gap-2">
+            <div
+                className={`flex min-w-0 items-center gap-2 ${dimmed ? "opacity-40" : ""}`}
+            >
                 <AvailabilityDot
+                    label={statusLabel}
                     status={
                         status ??
                         (available === false
@@ -110,8 +121,10 @@ export function ItemCard({
                 />
                 {title}
             </div>
-            <PeakMeter level={level} label={levelLabel} />
-            {children}
+            <div className={dimmed ? "opacity-40" : undefined}>
+                <PeakMeter level={level} label={levelLabel} />
+                {children}
+            </div>
         </article>
     );
 }

@@ -306,6 +306,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case "addMixInput": return try editMixInput(body: body, store: store, operation: .add)
         case "addApplicationInput": return try addApplicationInput(body: body, store: store)
         case "removeApplicationInput": return try removeApplicationInput(body: body, store: store)
+        case "removeInputDevice": return try removeInputDevice(body: body, store: store)
         case "removeMixInput": return try editMixInput(body: body, store: store, operation: .remove)
         case "setMixInputLevel": return try editMixInput(body: body, store: store, operation: .level)
         case "setMixInputMuted": return try editMixInput(body: body, store: store, operation: .muted)
@@ -338,6 +339,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             guard config.applications.contains(applicationID) else { throw BridgeError.invalidPayload }
             let source = SourceReference.application(applicationID)
             config.applications.removeAll { $0 == applicationID }
+            config.outputMixes = config.outputMixes.map { output in
+                var updated = output
+                updated.mix.inputs.removeAll { $0.source == source }
+                return updated
+            }.filter { !$0.mix.inputs.isEmpty }
+            config.buses = config.buses.map { bus in
+                var updated = bus
+                updated.mix.inputs.removeAll { $0.source == source }
+                return updated
+            }
+            config.mutedSources.removeAll { $0 == source }
+            config.sourceLevels.removeAll { $0.source == source }
+        }
+    }
+
+    private func removeInputDevice(body: [String: Any], store: ConfigurationStore) throws -> MixerConfiguration {
+        guard Set(body.keys) == ["requestId", "command", "uid"],
+              let uid = body["uid"] as? String, !uid.isEmpty
+        else { throw BridgeError.invalidPayload }
+        return try store.update(discoveredDevices: discoveredDescriptors()) { config in
+            let deviceUID = DeviceUID(rawValue: uid)
+            let source = SourceReference.inputDevice(deviceUID)
+            let isConfigured = (config.outputMixes.map(\.mix) + config.buses.map(\.mix))
+                .contains { mix in mix.inputs.contains { $0.source == source } }
+            guard isConfigured else { throw BridgeError.invalidPayload }
             config.outputMixes = config.outputMixes.map { output in
                 var updated = output
                 updated.mix.inputs.removeAll { $0.source == source }

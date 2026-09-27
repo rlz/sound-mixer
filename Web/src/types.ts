@@ -116,6 +116,7 @@ export type BridgeCommand =
     | { command: "deleteBus"; id: string }
     | { command: "addApplicationInput"; applicationID: string }
     | { command: "removeApplicationInput"; applicationID: string }
+    | { command: "removeInputDevice"; uid: string }
     | {
           command: "addMixInput" | "removeMixInput";
           target: "output" | "bus";

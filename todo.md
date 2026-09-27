@@ -4,6 +4,7 @@ Product behavior and acceptance criteria are maintained in `requirements/`. Comp
 
 - [x] Keep the Output, Mix, and Input headings fixed above their scrollable content; sort cards by type, then by name.
 - [x] Add a fixed footer below the independently scrolling work areas and show the installed app version; verify the footer stays visible while panels scroll.
+- [x] Show disconnected physical input and output cards as dimmed, without errors; disable device controls and add deletion actions that remove input sources from all mixes or clear the disconnected output mix. Verify web format, lint, build, and Swift checks.
 - [x] Keep newly added virtual bus channels unassigned in dependent mixes when the bus channel count increases.
 - [x] Clear actionable formatter, linter, and compiler diagnostics; verify Swift tests, web checks, and a clean macOS build.
 - [ ] Split the app bridge and audio routing coordinators into smaller units while preserving atomic command validation and route transitions; remove their scoped SwiftLint size and complexity exceptions after integration verification.
