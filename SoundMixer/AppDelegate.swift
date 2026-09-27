@@ -544,8 +544,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 guard let index = mix.inputs.firstIndex(where: { $0.source == source }) else { return }
                 var row = mix.inputs[index]
                 if count > oldCount {
-                    let extra = MixInput.defaultRouting(channelCount: count - oldCount, outputChannels: 2)
-                    row.channelRouting += extra
+                    row.channelRouting += Array(repeating: [], count: count - oldCount)
                     row.channelLevels += Array(repeating: 1, count: count - oldCount)
                 } else {
                     row.channelRouting = Array(row.channelRouting.prefix(count))
