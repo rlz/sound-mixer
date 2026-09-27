@@ -53,7 +53,7 @@ final class AudioCaptureCoordinator {
         queue.async { [weak self] in
             guard let self else { return }
             let description = CATapDescription(excludingProcesses: [], deviceUID: uid, stream: 0)
-            description.name = "Sound Mixer output meter"
+            description.name = "Rlz Sound Mixer output meter"
             description.isPrivate = true
             description.muteBehavior = .unmuted
             startTap(id: "device:\(uid)", description: description, meter: meter)
@@ -108,7 +108,7 @@ final class AudioCaptureCoordinator {
             try validateCaptureProcess(processID)
             let process = try processObjectID(for: processID)
             let description = CATapDescription(stereoMixdownOfProcesses: [process])
-            description.name = "Sound Mixer source"
+            description.name = "Rlz Sound Mixer source"
             description.isPrivate = true
             description.muteBehavior = .unmuted
             startTap(id: key, description: description, processID: processID)
@@ -138,7 +138,7 @@ final class AudioCaptureCoordinator {
             }
             let aggregateUID = "\(Self.tapAggregateUIDPrefix)\(UUID().uuidString)" as CFString
             let aggregateDescription: CFDictionary = [
-                kAudioAggregateDeviceNameKey: "Sound Mixer source",
+                kAudioAggregateDeviceNameKey: "Rlz Sound Mixer source",
                 kAudioAggregateDeviceUIDKey: aggregateUID as String,
                 kAudioAggregateDeviceIsPrivateKey: true,
                 kAudioAggregateDeviceTapListKey: [[kAudioSubTapUIDKey: tapUID as String]],
@@ -236,7 +236,7 @@ final class AudioCaptureCoordinator {
 
         var errorDescription: String? {
             switch self {
-            case .selfCapture: "Sound Mixer cannot capture itself."
+            case .selfCapture: "Rlz Sound Mixer cannot capture itself."
             case .processUnavailable: "The application no longer has an audio process."
             case .permissionDenied: "System Audio Recording permission was denied."
             case .unsupportedFormat: "The source format is not supported."

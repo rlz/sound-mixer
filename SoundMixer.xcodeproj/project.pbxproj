@@ -32,7 +32,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-        A10000000000000000000010 /* SoundMixer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SoundMixer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+        A10000000000000000000010 /* Rlz Sound Mixer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Rlz Sound Mixer.app"; sourceTree = BUILT_PRODUCTS_DIR; };
         A10000000000000000000011 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
         A10000000000000000000012 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
         A10000000000000000000013 /* dist */ = {isa = PBXFileReference; lastKnownFileType = folder; path = dist; sourceTree = "<group>"; };
@@ -139,7 +139,7 @@
             buildRules = ();
             dependencies = ();
             name = SoundMixer;
-            productName = SoundMixer;
+            productName = "Rlz Sound Mixer";
             productReference = A10000000000000000000010 /* SoundMixer.app */;
             productType = "com.apple.product-type.application";
         };
@@ -221,8 +221,8 @@
                 INFOPLIST_FILE = SoundMixer/Info.plist;
                 MACOSX_DEPLOYMENT_TARGET = 15.0;
                 MARKETING_VERSION = 0.9.0;
-                PRODUCT_BUNDLE_IDENTIFIER = com.rlz.soundmixer;
-                PRODUCT_NAME = "$(TARGET_NAME)";
+                PRODUCT_BUNDLE_IDENTIFIER = ru.maslennikovdm.soundmixer;
+                PRODUCT_NAME = "Rlz Sound Mixer";
                 SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
                 SWIFT_VERSION = 5.0;
             };
@@ -238,8 +238,8 @@
                 INFOPLIST_FILE = SoundMixer/Info.plist;
                 MACOSX_DEPLOYMENT_TARGET = 15.0;
                 MARKETING_VERSION = 0.9.0;
-                PRODUCT_BUNDLE_IDENTIFIER = com.rlz.soundmixer;
-                PRODUCT_NAME = "$(TARGET_NAME)";
+                PRODUCT_BUNDLE_IDENTIFIER = ru.maslennikovdm.soundmixer;
+                PRODUCT_NAME = "Rlz Sound Mixer";
                 SWIFT_VERSION = 5.0;
             };
             name = Release;

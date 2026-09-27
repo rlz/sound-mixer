@@ -41,7 +41,7 @@
 ## Routing graph
 
 - Virtual buses form a directed dependency graph. A bus cannot reference itself or participate in a direct or indirect cycle through other buses. Before accepting an edit, prepare an immutable render snapshot after graph validation. Render buses in dependency-first order. Publish the new snapshot only after the configuration transaction is accepted; a rejected validation or write keeps the prior snapshot active. The audio callback must retain a prepared snapshot for a render block and must not load or replace it through a blocking synchronization primitive.
-- Prevent feedback from Sound Mixer's output into capture of the same application. Verify process-tap behavior with a prototype before adding applications to the source catalog.
+- Prevent feedback from Rlz Sound Mixer's output into capture of the same application. Verify process-tap behavior with a prototype before adding applications to the source catalog.
 - Before changing active configuration, validate graph structure and static channel constraints; assess current device availability separately when starting each pipeline. A failed change does not break an active mix, and a missing device does not prevent editing or deleting a saved mix.
 - Apply accepted graph edits as a diff against the active runtime graph. Keep capture sessions, output units, renderers, source rings, source conversion buffers, and meters alive when their source or endpoint definition is unchanged. Adding or removing a virtual bus or mix input may create or retire only resources in the affected dependency closure; it must not stop or reset unrelated endpoints. A source membership change rebuilds only renderers whose dependency set changed. A source capture session is restarted only when its source identity, device, channel selection, or format changes. Device loss or format changes invalidate only dependent resources. Publish new fanout/renderer snapshots with a lifetime strategy safe for in-flight realtime callbacks; never replace callback-visible storage unsafely or block an audio callback.
 
@@ -80,11 +80,11 @@
 
 ## Master switch and lifecycle
 
-- The switch controls all outputs and virtual buses at once. In the Off state, Sound Mixer stops its capture, mixing, and output; settings remain editable.
+- The switch controls all outputs and virtual buses at once. In the Off state, Rlz Sound Mixer stops its capture, mixing, and output; settings remain editable.
 - When switched back on, the native side checks the saved graph, devices, and permissions, then starts available routes. Unavailable routes remain in configuration with an error state.
 - Connecting a device does not turn on the master switch. When it is off, the item becomes configurable but capture and output do not start.
 - On app exit, its audio pipeline stops and its taps and aggregate devices are released. Other applications must continue normal playback through the system output.
-- Physical output mixes render at unity master gain; existing saved physical-output master levels are normalized to 1 at startup. Their volume control changes the selected device's writable Core Audio main output volume; it is live device state, not saved configuration. Save source and mix settings as before. Restore the device volume observed before Sound Mixer first changed it on normal exit, provided the device still reports the last value written by Sound Mixer. Never change the system default output. If the device lacks a readable and writable main output volume, report the limitation and do not replace it with software mix gain. Virtual buses retain their saved software mix gain from 0 to 1.
+- Physical output mixes render at unity master gain; existing saved physical-output master levels are normalized to 1 at startup. Their volume control changes the selected device's writable Core Audio main output volume; it is live device state, not saved configuration. Save source and mix settings as before. Restore the device volume observed before Rlz Sound Mixer first changed it on normal exit, provided the device still reports the last value written by Rlz Sound Mixer. Never change the system default output. If the device lacks a readable and writable main output volume, report the limitation and do not replace it with software mix gain. Virtual buses retain their saved software mix gain from 0 to 1.
 
 ## Physical input capture format and runtime health
 

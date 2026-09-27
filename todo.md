@@ -10,3 +10,4 @@ Product behavior and acceptance criteria are maintained in `requirements/`. Comp
 - [x] Clear actionable formatter, linter, and compiler diagnostics; verify Swift tests, web checks, and a clean macOS build.
 - [x] Preserve the source kind when removing mix inputs and show command errors and startup notifications in dismissible popups that close after ten seconds; verify web formatting, lint, build, and macOS build.
 - [ ] Split the app bridge and audio routing coordinators into smaller units while preserving atomic command validation and route transitions; remove their scoped SwiftLint size and complexity exceptions after integration verification.
+- [ ] Verify version-tagged DMG creation and Finder layout on macOS; document manual install, first-launch, and permission checks before public distribution.

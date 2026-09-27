@@ -54,7 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     private func loadConfiguration() -> String? {
         do {
-            let identifier = Bundle.main.bundleIdentifier ?? "com.rlz.soundmixer"
+            let identifier = Bundle.main.bundleIdentifier ?? "ru.maslennikovdm.soundmixer"
             let store = try ConfigurationStore(fileURL: ConfigurationStore.defaultFileURL(bundleIdentifier: identifier))
             try store.update { configuration in
                 configuration.outputMixes.removeAll { $0.mix.inputs.isEmpty }
@@ -64,7 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             }
             configurationStore = store
             return store.discardedInvalidConfiguration
-                ? "The invalid saved configuration was deleted. Sound Mixer started with empty settings and mixing off."
+                ? "The invalid saved configuration was deleted. Rlz Sound Mixer started with empty settings and mixing off."
                 : nil
         } catch {
             startupConfigurationWarningIsError = true
@@ -159,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             backing: .buffered,
             defer: false
         )
-        window.title = "Sound Mixer"
+        window.title = "Rlz Sound Mixer"
         window.center()
         window.minSize = NSSize(width: 760, height: 500)
 

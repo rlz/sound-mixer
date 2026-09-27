@@ -68,7 +68,7 @@ export function DeviceSettingsDialog({ onClose }: { onClose: () => void }) {
                 </h3>
                 <p className="mt-1 text-xs text-slate-400">
                     New devices are active automatically. Disabling a device
-                    stops its Sound Mixer input, output, and meter until you
+                    stops its Rlz Sound Mixer input, output, and meter until you
                     enable it again.
                 </p>
                 <ul className="mt-2 divide-y divide-slate-800">

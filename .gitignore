@@ -1,4 +1,5 @@
 .DS_Store
+dist/
 DerivedData/
 .build/
 Web/node_modules/

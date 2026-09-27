@@ -18,4 +18,4 @@ if [[ -z "$built_products_dir" ]]; then
     echo "Could not locate the Xcode Debug app." >&2
     exit 1
 fi
-open "$built_products_dir/SoundMixer.app"
+open "$built_products_dir/Rlz Sound Mixer.app"

@@ -10,7 +10,7 @@ export function AppHeader() {
                 <img alt="" className="h-5 w-5" src={soundMixerMark} />
             </div>
             <span className="text-sm font-semibold tracking-[0.18em] text-sky-300 uppercase">
-                Sound Mixer
+                Rlz Sound Mixer
             </span>
         </header>
     );
