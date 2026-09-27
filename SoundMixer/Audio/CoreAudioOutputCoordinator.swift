@@ -2,12 +2,15 @@ import AudioToolbox
 import CoreAudio
 import Foundation
 
-/// Owns one HAL output unit per Core Audio device and publishes channel snapshots to it.
+// Owns one HAL output unit per Core Audio device and publishes channel snapshots to it.
+// Session ownership and device-disconnect monitoring share one serial queue.
+// swiftlint:disable:next type_body_length
 final class CoreAudioOutputCoordinator {
     typealias RenderHandler = (UnsafeBufferPointer<UnsafeMutablePointer<Float>>, Int) -> Void
 
     struct Route {
         let key: String
+        let deviceUID: String
         let deviceID: AudioDeviceID
         let deviceChannelCount: Int
         let selectedChannels: [Int]
@@ -17,6 +20,7 @@ final class CoreAudioOutputCoordinator {
     private let queue = DispatchQueue(label: "com.rlz.soundmixer.audio-output")
     private var sessions: [AudioDeviceID: OutputSession] = [:]
     private var deviceByRouteKey: [String: AudioDeviceID] = [:]
+    private var deviceListeners: [AudioDeviceID: AudioObjectPropertyListenerBlock] = [:]
 
     func start(route: Route, render: @escaping RenderHandler) throws {
         guard !route.key.isEmpty, route.deviceChannelCount > 0,
@@ -27,6 +31,7 @@ final class CoreAudioOutputCoordinator {
         else { throw OutputError.invalidRoute }
 
         try queue.sync {
+            try Self.validateDevice(route.deviceID, expectedUID: route.deviceUID)
             if let oldDeviceID = deviceByRouteKey[route.key], oldDeviceID != route.deviceID {
                 removeRouteOnQueue(key: route.key)
             }
@@ -40,9 +45,16 @@ final class CoreAudioOutputCoordinator {
                     deviceByRouteKey.removeValue(forKey: key)
                 }
                 obsolete.stop()
+                removeDeviceListener(for: route.deviceID)
             }
             let session = OutputSession(route: route, render: render)
-            try session.start()
+            try installDeviceListener(for: route.deviceID)
+            do {
+                try session.start()
+            } catch {
+                removeDeviceListener(for: route.deviceID)
+                throw error
+            }
             sessions[route.deviceID] = session
             deviceByRouteKey[route.key] = route.deviceID
         }
@@ -59,7 +71,40 @@ final class CoreAudioOutputCoordinator {
         session.remove(key: key)
         if session.routeKeys.isEmpty {
             sessions.removeValue(forKey: deviceID)?.stop()
+            removeDeviceListener(for: deviceID)
         }
+    }
+
+    private func installDeviceListener(for deviceID: AudioDeviceID) throws {
+        guard deviceListeners[deviceID] == nil else { return }
+        var address = Self.deviceAliveAddress
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            guard let self, let session = sessions[deviceID] else { return }
+            do {
+                try Self.validateDevice(deviceID, expectedUID: session.deviceUID)
+            } catch {
+                removeDeviceOnQueue(deviceID)
+            }
+        }
+        guard AudioObjectAddPropertyListenerBlock(deviceID, &address, queue, listener) == noErr else {
+            throw OutputError.deviceMonitoringUnavailable
+        }
+        deviceListeners[deviceID] = listener
+    }
+
+    private func removeDeviceListener(for deviceID: AudioDeviceID) {
+        guard let listener = deviceListeners.removeValue(forKey: deviceID) else { return }
+        var address = Self.deviceAliveAddress
+        AudioObjectRemovePropertyListenerBlock(deviceID, &address, queue, listener)
+    }
+
+    private func removeDeviceOnQueue(_ deviceID: AudioDeviceID) {
+        guard let session = sessions.removeValue(forKey: deviceID) else { return }
+        for key in session.routeKeys {
+            deviceByRouteKey.removeValue(forKey: key)
+        }
+        session.stop()
+        removeDeviceListener(for: deviceID)
     }
 
     func stopAll() {
@@ -67,13 +112,45 @@ final class CoreAudioOutputCoordinator {
             for session in sessions.values {
                 session.stop()
             }
+            for deviceID in Array(deviceListeners.keys) {
+                removeDeviceListener(for: deviceID)
+            }
             sessions.removeAll()
             deviceByRouteKey.removeAll()
         }
     }
 
+    private static var deviceAliveAddress: AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceIsAlive,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+    }
+
+    private static func validateDevice(_ deviceID: AudioDeviceID, expectedUID: String) throws {
+        var aliveAddress = deviceAliveAddress
+        var alive: UInt32 = 0
+        var aliveSize = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(deviceID, &aliveAddress, 0, nil, &aliveSize, &alive) == noErr,
+              alive == 1
+        else { throw OutputError.deviceUnavailable }
+
+        var uidAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceUID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var uid: Unmanaged<CFString>?
+        var uidSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        guard AudioObjectGetPropertyData(deviceID, &uidAddress, 0, nil, &uidSize, &uid) == noErr,
+              let uid, (uid.takeRetainedValue() as String) == expectedUID
+        else { throw OutputError.deviceChanged }
+    }
+
     private final class OutputSession {
         let deviceID: AudioDeviceID
+        let deviceUID: String
         let deviceChannelCount: Int
         let sampleRate: Double
         private var routes: [String: RouteRender]
@@ -89,6 +166,7 @@ final class CoreAudioOutputCoordinator {
 
         init(route: Route, render: @escaping RenderHandler) {
             deviceID = route.deviceID
+            deviceUID = route.deviceUID
             deviceChannelCount = route.deviceChannelCount
             sampleRate = route.sampleRate
             let prepared = RouteRender(key: route.key, channels: route.selectedChannels, render: render)
@@ -106,7 +184,7 @@ final class CoreAudioOutputCoordinator {
         }
 
         func canReuseHardware(for route: Route) -> Bool {
-            deviceID == route.deviceID && deviceChannelCount == route.deviceChannelCount &&
+            deviceID == route.deviceID && deviceUID == route.deviceUID && deviceChannelCount == route.deviceChannelCount &&
                 sampleRate == route.sampleRate
         }
 
@@ -250,12 +328,18 @@ final class CoreAudioOutputCoordinator {
 
     private enum OutputError: LocalizedError {
         case invalidRoute
+        case deviceUnavailable
+        case deviceChanged
+        case deviceMonitoringUnavailable
         case outputUnitUnavailable
         case audioStatus(OSStatus)
 
         var errorDescription: String? {
             switch self {
             case .invalidRoute: "The output route has invalid channels or format."
+            case .deviceUnavailable: "The selected output device is unavailable."
+            case .deviceChanged: "Core Audio reassigned the selected device ID. The output was stopped."
+            case .deviceMonitoringUnavailable: "The selected output device cannot be monitored for disconnection."
             case .outputUnitUnavailable: "The Core Audio HAL output unit is unavailable."
             case let .audioStatus(status): "Core Audio output failed with status \(status)."
             }

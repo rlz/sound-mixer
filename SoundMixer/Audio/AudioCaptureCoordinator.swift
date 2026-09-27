@@ -74,10 +74,13 @@ final class AudioCaptureCoordinator {
             if let session = processSessions.removeValue(forKey: id) {
                 session.stop()
             }
-            if let session = inputSessions.removeValue(forKey: id) {
+            let inputUID = id.hasPrefix("input:") ? String(id.dropFirst("input:".count)) : id
+            if let session = inputSessions.removeValue(forKey: inputUID) {
                 session.stop()
+                publish(inputUID, .stopped)
+            } else {
+                publish(id, .stopped)
             }
-            publish(id, .stopped)
         }
     }
 
