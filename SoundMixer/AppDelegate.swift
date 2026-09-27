@@ -736,7 +736,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 ))
             }
         case .remove:
-            guard let index = mix.inputs.firstIndex(where: { $0.source == reference }) else { throw BridgeError.invalidPayload }
+            guard let index = mix.inputs.firstIndex(where: { $0.source == reference }) else {
+                throw BridgeError.invalidPayload
+            }
             mix.inputs.remove(at: index)
         case .level:
             guard let index = mix.inputs.firstIndex(where: { $0.source == reference }), let level else { throw BridgeError.invalidPayload }

@@ -250,11 +250,7 @@ export const MixSourceList = memo(function MixSourceList() {
                                                                 command:
                                                                     "removeMixInput",
                                                                 ...selectedTarget,
-                                                                kind:
-                                                                    input.kind ===
-                                                                    "app"
-                                                                        ? "app"
-                                                                        : "inputDevice",
+                                                                kind: input.kind,
                                                                 sourceID:
                                                                     input.id,
                                                             },
