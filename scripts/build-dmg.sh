@@ -24,7 +24,7 @@ trap cleanup EXIT
 
 check_prerequisites() {
     local missing=0
-    for command_name in git xcodebuild xcode-select hdiutil npm node osascript ditto; do
+    for command_name in git xcodebuild xcode-select hdiutil diskutil npm node osascript ditto; do
         if ! command -v "$command_name" >/dev/null 2>&1; then
             echo "Required command '$command_name' is missing." >&2
             missing=1
@@ -123,7 +123,7 @@ build_tagged_dmg() {
     staged_image="$temporary_dir/RlzSoundMixer-${version}-staging.dmg"
     hdiutil create -quiet -volname "Rlz Sound Mixer ${version}" -srcfolder "$temporary_dir/image-root" \
         -fs HFS+ -format UDRW "$staged_image"
-    attach_output="$(hdiutil attach "$staged_image")"
+    attach_output="$(diskutil image attach "$staged_image")"
     mounted=1
     mounted_device="$(printf '%s\n' "$attach_output" | awk '/Apple_HFS/ { print $1; exit }')"
     mount_dir="$(printf '%s\n' "$attach_output" | sed -nE 's#^/dev/[^[:space:]]+[[:space:]]+Apple_HFS[[:space:]]+(/Volumes/.*)$#\1#p')"
