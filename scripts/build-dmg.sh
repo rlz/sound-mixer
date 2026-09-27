@@ -152,9 +152,10 @@ tell application "Finder"
             set statusbar visible of container window to false
             set bounds of container window to {100, 100, 900, 620}
             set icon size of icon view options of container window to 96
+            set arrangement of icon view options of container window to not arranged
             set background picture of icon view options of container window to file ".background:background.png"
-            set position of item "Rlz Sound Mixer.app" of container window to {718, 226}
-            set position of item "Applications" of container window to {386, 226}
+            set position of item "Rlz Sound Mixer.app" of container window to {291, 174}
+            set position of item "Applications" of container window to {117, 174}
             update without registering applications
             close
         end tell

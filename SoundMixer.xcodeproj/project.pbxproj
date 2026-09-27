@@ -220,7 +220,7 @@
                 GENERATE_INFOPLIST_FILE = NO;
                 INFOPLIST_FILE = SoundMixer/Info.plist;
                 MACOSX_DEPLOYMENT_TARGET = 15.0;
-                MARKETING_VERSION = 0.9.1;
+                MARKETING_VERSION = 0.9.0;
                 PRODUCT_BUNDLE_IDENTIFIER = ru.maslennikovdm.soundmixer;
                 PRODUCT_NAME = "Rlz Sound Mixer";
                 SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -237,7 +237,7 @@
                 GENERATE_INFOPLIST_FILE = NO;
                 INFOPLIST_FILE = SoundMixer/Info.plist;
                 MACOSX_DEPLOYMENT_TARGET = 15.0;
-                MARKETING_VERSION = 0.9.1;
+                MARKETING_VERSION = 0.9.0;
                 PRODUCT_BUNDLE_IDENTIFIER = ru.maslennikovdm.soundmixer;
                 PRODUCT_NAME = "Rlz Sound Mixer";
                 SWIFT_VERSION = 5.0;
