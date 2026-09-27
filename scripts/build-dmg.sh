@@ -5,11 +5,16 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 tag_prefix="v"
 temporary_dir=""
 mount_dir=""
+mounted_device=""
 mounted=0
 
 cleanup() {
     if [[ "$mounted" -eq 1 ]]; then
-        hdiutil detach -quiet "$mount_dir" >/dev/null 2>&1 || true
+        if [[ -n "$mount_dir" ]]; then
+            hdiutil detach -quiet "$mount_dir" >/dev/null 2>&1 || true
+        elif [[ -n "$mounted_device" ]]; then
+            hdiutil detach -quiet "$mounted_device" >/dev/null 2>&1 || true
+        fi
     fi
     if [[ -n "$temporary_dir" && -d "$temporary_dir" ]]; then
         rm -rf "$temporary_dir"
@@ -85,7 +90,7 @@ build_tagged_dmg() {
     local tag="${tag_prefix}${version}"
     local dmg_name="RlzSoundMixer-${version}.dmg"
     local output="$root/dist/$dmg_name"
-    local source_dir staged_image app_path temporary_output
+    local source_dir staged_image app_path temporary_output attach_output volume_name
 
     check_version "$version"
     if ! git -C "$root" rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
@@ -116,28 +121,36 @@ build_tagged_dmg() {
     ln -s /Applications "$temporary_dir/image-root/Applications"
 
     staged_image="$temporary_dir/RlzSoundMixer-${version}-staging.dmg"
-    mount_dir="$temporary_dir/mount"
-    mkdir -p "$mount_dir"
     hdiutil create -quiet -volname "Rlz Sound Mixer ${version}" -srcfolder "$temporary_dir/image-root" \
         -fs HFS+ -format UDRW "$staged_image"
-    hdiutil attach -quiet -nobrowse -mountpoint "$mount_dir" "$staged_image"
+    attach_output="$(hdiutil attach "$staged_image")"
     mounted=1
+    mounted_device="$(printf '%s\n' "$attach_output" | awk '/Apple_HFS/ { print $1; exit }')"
+    mount_dir="$(printf '%s\n' "$attach_output" | sed -nE 's#^/dev/[^[:space:]]+[[:space:]]+Apple_HFS[[:space:]]+(/Volumes/.*)$#\1#p')"
+    if [[ -z "$mount_dir" ]]; then
+        echo "Could not determine the DMG mount point from hdiutil output:" >&2
+        printf '%s\n' "$attach_output" >&2
+        exit 1
+    fi
+    volume_name="${mount_dir##*/}"
 
-    osascript <<APPLESCRIPT
+osascript <<APPLESCRIPT
 tell application "Finder"
-    tell disk "Rlz Sound Mixer ${version}"
-        open
-        set current view of container window to icon view
-        set toolbar visible of container window to false
-        set statusbar visible of container window to false
-        set bounds of container window to {100, 100, 900, 620}
-        set icon size of icon view options of container window to 96
-        set background picture of icon view options of container window to file ".background:background.png"
-        set position of item "Rlz Sound Mixer.app" of container window to {535, 290}
-        set position of item "Applications" of container window to {730, 290}
-        update without registering applications
-        close
-    end tell
+    with timeout of 30 seconds
+        tell disk "$volume_name"
+            open
+            set current view of container window to icon view
+            set toolbar visible of container window to false
+            set statusbar visible of container window to false
+            set bounds of container window to {100, 100, 900, 620}
+            set icon size of icon view options of container window to 96
+            set background picture of icon view options of container window to file ".background:background.png"
+            set position of item "Rlz Sound Mixer.app" of container window to {535, 290}
+            set position of item "Applications" of container window to {730, 290}
+            update without registering applications
+            close
+        end tell
+    end timeout
 end tell
 APPLESCRIPT
 
