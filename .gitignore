@@ -3,8 +3,10 @@ dist/
 DerivedData/
 .build/
 Web/node_modules/
+node_modules/
 Web/dist/
 Web/.vite/
+Website/.vite/
 .tools/
 xcuserdata/
 *.xcresult/
