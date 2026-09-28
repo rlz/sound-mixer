@@ -6,6 +6,7 @@
     "scripts": {
         "dev": "vite",
         "build": "tsc --noEmit && vite build && node scripts/prepare-local-html.mjs",
+        "build:website": "vite build --config website.vite.config.ts",
         "build:debug": "tsc --noEmit && NODE_ENV=development vite build --mode development && node scripts/prepare-local-html.mjs",
         "test": "node --test",
         "check": "npm run format:check && npm run lint && npm run build",

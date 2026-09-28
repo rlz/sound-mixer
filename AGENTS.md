@@ -16,7 +16,7 @@ These rules apply to the entire repository. User requirements and files in `requ
 - Validate source existence, channel compatibility, and absence of cycles before applying a mixing graph configuration.
 - Do not allocate memory, access files, log, block, or call WebKit inside an audio callback. Pass prepared snapshots of settings to the engine.
 - The WebKit bridge accepts only known messages after validating types and value ranges. The interface does not access Core Audio directly.
-- Store configuration locally with a schema version. During development, reject unsupported versions; add migration when released configurations must be preserved. Do not store secrets or audio data in it.
+- Store configuration locally with a schema version. Because Rlz Sound Mixer is published, preserve configurations from every supported released version: keep backward compatibility or migrate older schemas atomically before restoring the audio graph. Never discard an older released configuration just because its schema version changed. If a newer unsupported schema is encountered (for example, after downgrading), leave the file intact, keep mixing off, and show an actionable error. Do not store secrets or audio data in configuration.
 - The master switch and app termination stop Sound Mixer capture and output and release app-created taps and other audio resources. Do not leave changes to system output or volume after exit.
 - Save every accepted change automatically and atomically. At launch, read and validate the configuration before restoring the audio graph according to the saved master switch state.
 
@@ -40,6 +40,12 @@ These rules apply to the entire repository. User requirements and files in `requ
 ## Working on tasks
 
 - Take tasks from `todo.md` in dependency order, update their status after completion, and do not mark a task complete without meeting its acceptance criterion.
+- Never create a Git commit unless the user explicitly asks for a commit. Leave changes in the working tree for the user to review; approval of the implementation or request to publish does not authorize committing.
 - Document decisions for unspecified scenarios in the requirements before implementing them.
 - When the sandbox blocks a necessary command or file access, immediately request the required sandbox escalation with a concise justification and continue after it is approved. Do not spend time trying alternate cache paths or other workarounds first.
 - If Git cannot write its index in the sandbox, request the required escalation and continue the requested Git operation without narrating the routine index-lock failure.
+
+## Releases
+
+- Increase `MARKETING_VERSION` for every public app release and never reuse a version that has been published. Increase `CURRENT_PROJECT_VERSION` for every shipped build. Keep the app bundle version, release tag, and distributed artifact name in sync, and verify the version bump before preparing a release.
+- Before changing the configuration schema in a release, implement and verify migration from every released schema version that remains supported. A failed migration must leave the original configuration intact and keep mixing off with a clear error.

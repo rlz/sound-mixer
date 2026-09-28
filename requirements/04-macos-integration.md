@@ -8,6 +8,13 @@ The first release supports macOS 15 and later. The scaffold builds with Xcode 27
 
 The app is named `Rlz Sound Mixer` and uses bundle identifier `ru.maslennikovdm.soundmixer`. The unsigned development DMG is named `RlzSoundMixer-<MARKETING_VERSION>.dmg`; it contains the Release app bundle, an Applications shortcut, and a Finder background image. The Finder window bounds are 800×520 points, with a 32-point title bar and an 800×488-point icon canvas. The background image must therefore be exactly 800×488 pixels; the build rejects other dimensions rather than letting Finder crop the scene. Position the real Finder icons over the two wall frames, with a painted arrow from the app icon toward Applications. Keep the area behind the icon captions light enough for Finder's black text. Running `scripts/build-dmg.sh` without arguments requires a clean Git working tree, runs core and web tests and a Release build, then creates a `v<MARKETING_VERSION>` tag and packages only that tag's source tree. Running it with a version requires the corresponding `v<version>` tag and packages that tagged tree; it may recreate a DMG only when the destination file does not already exist. Public distribution signing and notarization are not part of this workflow yet.
 
+## Release versioning and configuration upgrades
+
+- Rlz Sound Mixer has been published. Increase `MARKETING_VERSION` for every public app release; never reuse a released marketing version. Increase `CURRENT_PROJECT_VERSION` for every shipped build.
+- Before release, verify that the bundle's short and build versions, the `v<MARKETING_VERSION>` Git tag, and the distributed artifact name agree.
+- Preserve saved configuration from every released schema version that remains supported, either by keeping compatible decoding or by migrating it forward. A migration validates the source and result and replaces the file atomically only after success.
+- When migration fails or this app encounters a newer unsupported schema, leave the user's file intact, keep mixing off, and show a clear recovery message. Do not silently reset or overwrite released user settings.
+
 ## Core Audio
 
 - Get input and output device lists and properties through Core Audio HAL; observe list and property changes.

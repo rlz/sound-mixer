@@ -1,0 +1,6 @@
+{
+    "private": true,
+    "scripts": {
+        "preview-site": "npm run dev --prefix Web -- --config website.vite.config.ts"
+    }
+}

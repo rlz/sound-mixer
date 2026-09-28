@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="theme-color" content="#020617" />
+        <meta
+            name="description"
+            content="Rlz Sound Mixer is a macOS app for routing and balancing audio from input devices, applications, and internal virtual buses."
+        />
+        <title>Rlz Sound Mixer</title>
+        <link rel="icon" type="image/svg+xml" href="./sound-mixer-mark.svg" />
+        <link rel="stylesheet" href="./tailwind.css" />
+    </head>
+    <body
+        class="min-h-screen bg-slate-950 font-sans text-slate-100 antialiased"
+    >
+        <header class="border-b border-slate-800 bg-slate-950">
+            <div
+                class="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-8"
+            >
+                <a
+                    class="flex items-center gap-3"
+                    href="#top"
+                    aria-label="Rlz Sound Mixer home"
+                >
+                    <span
+                        class="grid size-9 place-items-center rounded-lg bg-sky-400 text-slate-950"
+                    >
+                        <img
+                            class="size-5 shrink-0 object-contain"
+                            src="./sound-mixer-mark.svg"
+                            alt=""
+                        />
+                    </span>
+                    <span class="text-sm font-semibold tracking-wide"
+                        >Rlz Sound Mixer</span
+                    >
+                </a>
+                <nav
+                    class="flex items-center gap-4 text-xs text-slate-400 sm:gap-8 sm:text-sm"
+                    aria-label="Main navigation"
+                >
+                    <a
+                        class="hidden hover:text-slate-100 sm:inline"
+                        href="#screenshots"
+                        >Screenshots</a
+                    >
+                    <a class="hover:text-slate-100" href="#features"
+                        >Features</a
+                    >
+                    <a class="hover:text-slate-100" href="#requirements"
+                        >Requirements</a
+                    >
+                    <a
+                        class="hidden rounded-md border border-slate-700 px-3 py-2 text-slate-200 hover:border-slate-500 hover:bg-slate-900 sm:inline-flex"
+                        href="https://github.com/rlz/sound-mixer"
+                        >GitHub
+                        <span class="ml-2 text-sky-300" aria-hidden="true"
+                            >↗</span
+                        ></a
+                    >
+                </nav>
+            </div>
+        </header>
+
+        <main id="top" class="mx-auto max-w-6xl px-5 sm:px-8">
+            <section
+                class="grid gap-10 py-16 sm:py-24 lg:grid-cols-[1.2fr_0.8fr] lg:items-center"
+            >
+                <div>
+                    <p
+                        class="mb-5 flex items-center gap-2 text-xs font-medium tracking-[0.18em] text-sky-300 uppercase"
+                    >
+                        <span
+                            class="size-1.5 rounded-full bg-emerald-400"
+                        ></span>
+                        macOS audio routing
+                    </p>
+                    <h1
+                        class="max-w-3xl text-4xl leading-tight font-semibold tracking-tight text-white sm:text-6xl"
+                    >
+                        Rlz Sound Mixer
+                    </h1>
+                    <p class="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
+                        A desktop app for routing and balancing sound from input
+                        devices and individual applications to physical audio
+                        outputs.
+                    </p>
+                    <div class="mt-8 flex flex-wrap items-center gap-4">
+                        <a
+                            class="inline-flex min-h-11 items-center gap-3 rounded-md bg-sky-400 px-5 text-sm font-semibold text-slate-950 hover:bg-sky-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
+                            href="https://github.com/rlz/sound-mixer/releases/tag/v0.9.0"
+                            >Download v0.9.0
+                            <span aria-hidden="true">↓</span></a
+                        >
+                        <a
+                            class="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-700 px-4 text-sm font-medium text-slate-200 hover:border-slate-500 hover:bg-slate-900"
+                            href="https://github.com/rlz/sound-mixer"
+                            >Source on GitHub
+                            <span class="text-sky-300" aria-hidden="true"
+                                >↗</span
+                            ></a
+                        >
+                    </div>
+                    <p class="mt-5 text-xs text-slate-500">
+                        Release links will be updated when a new app version is
+                        published.
+                    </p>
+                </div>
+                <aside
+                    class="rounded-xl border border-slate-800 bg-slate-900/70 p-5 sm:p-6"
+                >
+                    <div
+                        class="flex items-center justify-between border-b border-slate-800 pb-4"
+                    >
+                        <h2 class="text-sm font-semibold text-slate-100">
+                            Project overview
+                        </h2>
+                        <span
+                            class="rounded-full border border-slate-700 px-2.5 py-1 font-mono text-[10px] text-slate-400"
+                            >v0.9.0</span
+                        >
+                    </div>
+                    <dl class="divide-y divide-slate-800 text-sm">
+                        <div class="grid grid-cols-[6.5rem_1fr] gap-3 py-3.5">
+                            <dt class="text-slate-500">Platform</dt>
+                            <dd class="text-slate-200">macOS 15 or later</dd>
+                        </div>
+                        <div class="grid grid-cols-[6.5rem_1fr] gap-3 py-3.5">
+                            <dt class="text-slate-500">Built with</dt>
+                            <dd class="text-slate-200">
+                                Swift, Core Audio, AppKit, WKWebView
+                            </dd>
+                        </div>
+                        <div class="grid grid-cols-[6.5rem_1fr] gap-3 py-3.5">
+                            <dt class="text-slate-500">Interface</dt>
+                            <dd class="text-slate-200">
+                                React, TypeScript, Tailwind CSS
+                            </dd>
+                        </div>
+                        <div class="grid grid-cols-[6.5rem_1fr] gap-3 py-3.5">
+                            <dt class="text-slate-500">Audio data</dt>
+                            <dd class="text-slate-200">
+                                Processed locally, not recorded to files
+                            </dd>
+                        </div>
+                    </dl>
+                </aside>
+            </section>
+
+            <section
+                id="screenshots"
+                class="scroll-mt-8 border-t border-slate-800 py-14 sm:py-20"
+            >
+                <div
+                    class="mb-7 flex flex-wrap items-end justify-between gap-4"
+                >
+                    <div>
+                        <p
+                            class="text-xs font-medium tracking-[0.16em] text-sky-300 uppercase"
+                        >
+                            Application
+                        </p>
+                        <h2
+                            class="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl"
+                        >
+                            Screenshots
+                        </h2>
+                    </div>
+                    <p class="max-w-md text-sm leading-6 text-slate-400">
+                        The full application window in three states: the main
+                        mixer, channel routing, and device settings.
+                    </p>
+                </div>
+                <div class="grid gap-5 lg:grid-cols-2">
+                    <figure
+                        class="flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900"
+                    >
+                        <img
+                            class="block aspect-[10/7] w-full bg-slate-950 object-contain"
+                            src="./screenshots/main-window.png"
+                            alt="Rlz Sound Mixer main window with output, mix, and input panels"
+                        />
+                        <figcaption
+                            class="grid h-14 shrink-0 place-items-center overflow-hidden border-t border-slate-800 px-4 text-xs leading-4 text-slate-400"
+                        >
+                            <span class="line-clamp-2">
+                                Main window · inputs, mixes, and outputs
+                            </span>
+                        </figcaption>
+                    </figure>
+                    <figure
+                        class="flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900"
+                    >
+                        <img
+                            class="block aspect-[10/7] w-full bg-slate-950 object-contain"
+                            src="./screenshots/channel-routing.png"
+                            alt="Full Rlz Sound Mixer window with the 2 by 2 channel routing matrix open"
+                        />
+                        <figcaption
+                            class="grid h-14 shrink-0 place-items-center overflow-hidden border-t border-slate-800 px-4 text-xs leading-4 text-slate-400"
+                        >
+                            <span class="line-clamp-2">
+                                Channel routing · input-to-output mapping and
+                                per-channel gain
+                            </span>
+                        </figcaption>
+                    </figure>
+                    <figure
+                        class="flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900"
+                    >
+                        <img
+                            class="block aspect-[10/7] w-full bg-slate-950 object-contain"
+                            src="./screenshots/device-settings.png"
+                            alt="Full Rlz Sound Mixer window with device settings open to virtual devices"
+                        />
+                        <figcaption
+                            class="grid h-14 shrink-0 place-items-center overflow-hidden border-t border-slate-800 px-4 text-xs leading-4 text-slate-400"
+                        >
+                            <span class="line-clamp-2">
+                                Device settings · system devices and internal
+                                virtual buses
+                            </span>
+                        </figcaption>
+                    </figure>
+                </div>
+            </section>
+
+            <section
+                id="features"
+                class="scroll-mt-8 border-t border-slate-800 py-14 sm:py-20"
+            >
+                <p
+                    class="text-xs font-medium tracking-[0.16em] text-sky-300 uppercase"
+                >
+                    What it does
+                </p>
+                <h2
+                    class="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl"
+                >
+                    Audio sources, mixes, and outputs
+                </h2>
+                <div class="mt-7 grid gap-4 md:grid-cols-3">
+                    <article
+                        class="rounded-xl border border-slate-800 bg-slate-900/70 p-5"
+                    >
+                        <div
+                            class="mb-4 grid size-9 place-items-center rounded-lg bg-sky-400/10 text-lg text-sky-300"
+                            aria-hidden="true"
+                        >
+                            ↗
+                        </div>
+                        <h3 class="text-sm font-semibold text-slate-100">
+                            Choose audio sources
+                        </h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-400">
+                            Use physical input devices, eligible running
+                            applications, and internal virtual buses as mix
+                            sources.
+                        </p>
+                    </article>
+                    <article
+                        class="rounded-xl border border-slate-800 bg-slate-900/70 p-5"
+                    >
+                        <div
+                            class="mb-4 grid size-9 place-items-center rounded-lg bg-emerald-400/10 text-lg text-emerald-300"
+                            aria-hidden="true"
+                        >
+                            ≋
+                        </div>
+                        <h3 class="text-sm font-semibold text-slate-100">
+                            Set levels per mix
+                        </h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-400">
+                            Balance sources independently for each destination.
+                            View signal meters and route channels where
+                            supported.
+                        </p>
+                    </article>
+                    <article
+                        class="rounded-xl border border-slate-800 bg-slate-900/70 p-5"
+                    >
+                        <div
+                            class="mb-4 grid size-9 place-items-center rounded-lg bg-amber-400/10 text-lg text-amber-300"
+                            aria-hidden="true"
+                        >
+                            ◎
+                        </div>
+                        <h3 class="text-sm font-semibold text-slate-100">
+                            Reuse internal buses
+                        </h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-400">
+                            Create a virtual bus inside the app and add its mix
+                            to another destination. It is not a macOS system
+                            device.
+                        </p>
+                    </article>
+                </div>
+            </section>
+
+            <section
+                id="requirements"
+                class="scroll-mt-8 border-t border-slate-800 py-14 sm:py-20"
+            >
+                <div class="grid gap-8 lg:grid-cols-[1fr_1fr]">
+                    <div>
+                        <p
+                            class="text-xs font-medium tracking-[0.16em] text-sky-300 uppercase"
+                        >
+                            System requirements
+                        </p>
+                        <h2
+                            class="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl"
+                        >
+                            For macOS 15 and later
+                        </h2>
+                        <ul
+                            class="mt-6 space-y-3 text-sm leading-6 text-slate-300"
+                        >
+                            <li class="flex gap-3">
+                                <span
+                                    class="mt-0.5 text-emerald-400"
+                                    aria-hidden="true"
+                                    >✓</span
+                                ><span>A Mac running macOS 15 or later.</span>
+                            </li>
+                            <li class="flex gap-3">
+                                <span
+                                    class="mt-0.5 text-emerald-400"
+                                    aria-hidden="true"
+                                    >✓</span
+                                ><span
+                                    >Microphone permission for physical input
+                                    capture.</span
+                                >
+                            </li>
+                            <li class="flex gap-3">
+                                <span
+                                    class="mt-0.5 text-emerald-400"
+                                    aria-hidden="true"
+                                    >✓</span
+                                ><span
+                                    >System Audio Recording permission for
+                                    application audio capture and some device
+                                    meters.</span
+                                >
+                            </li>
+                            <li class="flex gap-3">
+                                <span
+                                    class="mt-0.5 text-emerald-400"
+                                    aria-hidden="true"
+                                    >✓</span
+                                ><span
+                                    >No custom audio driver is required for the
+                                    app's internal virtual buses.</span
+                                >
+                            </li>
+                        </ul>
+                    </div>
+                    <aside
+                        class="rounded-xl border border-slate-800 bg-slate-900/70 p-5 sm:p-6"
+                    >
+                        <h3 class="text-sm font-semibold text-slate-100">
+                            Capture depends on macOS
+                        </h3>
+                        <p class="mt-3 text-sm leading-6 text-slate-400">
+                            Only eligible application audio exposed by macOS can
+                            be captured. Available device controls and channel
+                            layouts vary by hardware. Rlz Sound Mixer does not
+                            record audio to files or change the macOS default
+                            output.
+                        </p>
+                        <a
+                            class="mt-4 inline-flex items-center gap-2 text-sm font-medium text-sky-300 hover:text-sky-200"
+                            href="https://github.com/rlz/sound-mixer#current-behavior-and-limitations"
+                            >Read current limitations
+                            <span aria-hidden="true">↗</span></a
+                        >
+                    </aside>
+                </div>
+            </section>
+
+            <section
+                class="mb-14 rounded-xl border border-slate-800 bg-slate-900/70 p-6 sm:mb-20 sm:flex sm:items-center sm:justify-between sm:gap-8 sm:p-8"
+            >
+                <div>
+                    <p
+                        class="text-xs font-medium tracking-[0.16em] text-sky-300 uppercase"
+                    >
+                        Get the app
+                    </p>
+                    <h2
+                        class="mt-2 text-xl font-semibold tracking-tight text-white"
+                    >
+                        Rlz Sound Mixer v0.9.0
+                    </h2>
+                    <p class="mt-2 text-sm text-slate-400">
+                        Download the current release from GitHub.
+                    </p>
+                </div>
+                <a
+                    class="mt-5 inline-flex min-h-11 shrink-0 items-center gap-3 rounded-md bg-sky-400 px-5 text-sm font-semibold text-slate-950 hover:bg-sky-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 sm:mt-0"
+                    href="https://github.com/rlz/sound-mixer/releases/tag/v0.9.0"
+                    >View release v0.9.0 <span aria-hidden="true">↗</span></a
+                >
+            </section>
+        </main>
+
+        <footer class="border-t border-slate-800">
+            <div
+                class="mx-auto flex max-w-6xl flex-col gap-3 px-5 py-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-8"
+            >
+                <span>Rlz Sound Mixer · macOS audio routing app</span>
+                <a
+                    class="text-slate-400 hover:text-slate-100"
+                    href="https://github.com/rlz/sound-mixer"
+                    >Source code on GitHub
+                    <span class="text-sky-300" aria-hidden="true">↗</span></a
+                >
+            </div>
+        </footer>
+    </body>
+</html>
